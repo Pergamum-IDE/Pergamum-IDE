@@ -1,6 +1,7 @@
 import type { EditorId } from "../shared/editorId";
 import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
 import { currentDocumentContent } from "./currentDocument";
+import { markdownDocumentForEditor } from "./currentEditor";
 import {
   findGlossaryEntryOccurrences,
   type GlossaryOccurrenceDirection,
@@ -157,7 +158,11 @@ export async function resolveGlossaryOccurrenceTrackingSession(
     session.targetMarkdownEditorId
   );
 
-  if (!targetOpenDocument) {
+  const targetDocument = targetOpenDocument
+    ? markdownDocumentForEditor(targetOpenDocument.editor)
+    : null;
+
+  if (!targetDocument) {
     return { kind: "targetMissing" };
   }
 
@@ -170,6 +175,6 @@ export async function resolveGlossaryOccurrenceTrackingSession(
   return {
     kind: "resolved",
     session,
-    targetContent: currentDocumentContent(targetOpenDocument.editor.document)
+    targetContent: currentDocumentContent(targetDocument)
   };
 }

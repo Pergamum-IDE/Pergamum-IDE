@@ -1551,6 +1551,12 @@ label.settingsItemHeader {
   text-transform: uppercase;
 }
 
+/* #573 Slice 1: "Open in Tab" sits just before Close, at the inline end. */
+.glossaryEntryEditorPaneOpenTabButton {
+  margin-inline-start: auto;
+}
+
+.glossaryEntryEditorPaneOpenTabButton,
 .glossaryEntryEditorPaneCloseButton {
   flex: 0 0 auto;
   border: 0;
@@ -1563,6 +1569,7 @@ label.settingsItemHeader {
   cursor: pointer;
 }
 
+.glossaryEntryEditorPaneOpenTabButton:hover,
 .glossaryEntryEditorPaneCloseButton:hover {
   background: #eef3f8;
   color: #17212b;
@@ -6375,6 +6382,35 @@ label.settingsItemHeader {
   background: #fbeaea;
   border-color: #e3b3b3;
   color: #8f1b21;
+}
+
+/* #573 Slice 1: glossary Description tab placeholder body. */
+.glossaryDescriptionTab {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #ffffff;
+  padding: 28px 32px;
+  color: #52616f;
+}
+
+.glossaryDescriptionTabHeading {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.glossaryDescriptionTabSurface {
+  margin: 0 0 16px;
+  color: #17212b;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.glossaryDescriptionTabNotice {
+  margin: 0;
+  font-size: 13px;
 }
 
 /* #375: Glossary Management tab — reuses the Tag Manager's cell / drag-handle /

@@ -80,6 +80,8 @@ export function describeTabContextMenu(
   const kind: TabKind = tab.id.kind;
   const isProjectDocument = kind === "projectDocument";
   const isExternalFile = kind === "file";
+  // #573: a glossary Description tab has no backing file at all.
+  const isGlossaryDescription = kind === "glossaryDescription";
   const isReadOnlyProject = ctx.projectAccess?.kind === "readOnly";
 
   const index = ctx.allTabs.findIndex((candidate) =>
@@ -139,7 +141,15 @@ export function describeTabContextMenu(
 
   // --- rename / save as ----------------------------------------------------
   items.push(renameItem(isProjectDocument, isReadOnlyProject, tab.isDirty));
-  items.push(enabledItem("saveAs", "tabs.contextMenu.saveAs"));
+  items.push(
+    isGlossaryDescription
+      ? disabledItem(
+          "saveAs",
+          "tabs.contextMenu.saveAs",
+          "tabs.contextMenu.disabled.unsupportedForTab"
+        )
+      : enabledItem("saveAs", "tabs.contextMenu.saveAs")
+  );
 
   // --- copy group --------------------------------------------------------
   items.push(
@@ -166,7 +176,13 @@ export function describeTabContextMenu(
         )
   );
   items.push(
-    enabledItem("copyFileName", "tabs.contextMenu.copyFileName")
+    isGlossaryDescription
+      ? disabledItem(
+          "copyFileName",
+          "tabs.contextMenu.copyFileName",
+          "tabs.contextMenu.disabled.unsupportedForTab"
+        )
+      : enabledItem("copyFileName", "tabs.contextMenu.copyFileName")
   );
 
   return { items };
@@ -239,6 +255,8 @@ export function resolveTabCopyText(
       };
     case "untitled":
       return { absolute: null, relative: null, fileName: tab.title || null };
+    case "glossaryDescription":
+      return { absolute: null, relative: null, fileName: null };
   }
 }
 

@@ -219,10 +219,10 @@ export function hasDirtyOpenDocuments(state: OpenDocumentsState): boolean {
   return hasDirtyWorkingCopies(state);
 }
 
-function dirtyWorkingCopyScopeForEditor(
-  editor: CurrentEditor
+function dirtyWorkingCopyScopeForDocument(
+  document: CurrentDocument
 ): DirtyWorkingCopyScope {
-  switch (editor.document.kind) {
+  switch (document.kind) {
     case "project":
       return "projectDocument";
     case "file":
@@ -235,18 +235,22 @@ function dirtyWorkingCopyScopeForEditor(
 export function getDirtyWorkingCopies(
   state: OpenDocumentsState
 ): DirtyWorkingCopy[] {
-  return state.documents.flatMap((openDocument) =>
-    isCurrentEditorDirty(openDocument.editor)
+  return state.documents.flatMap((openDocument) => {
+    // #573 Slice 1: only Markdown editors own a working copy; a glossary
+    // Description tab is a read-only placeholder and never dirty.
+    const document = markdownDocumentForEditor(openDocument.editor);
+
+    return document && isCurrentEditorDirty(openDocument.editor)
       ? [
           {
             editorId: openDocument.id,
-            kind: openDocument.editor.kind,
-            scope: dirtyWorkingCopyScopeForEditor(openDocument.editor),
+            kind: "markdown" as const,
+            scope: dirtyWorkingCopyScopeForDocument(document),
             title: currentEditorTitle(openDocument.editor)
           }
         ]
-      : []
-  );
+      : [];
+  });
 }
 
 export function hasDirtyWorkingCopies(
@@ -498,7 +502,12 @@ export function closeOpenEditor(
 function isProjectScopedOpenEditor(openDocument: OpenDocument): boolean {
   const { editor } = openDocument;
 
-  return editor.document.kind === "project";
+  // #573: a glossary Description tab belongs to the project's glossary, so
+  // it closes with the project like a project document does.
+  return (
+    editor.kind === "glossaryDescription" ||
+    editor.document.kind === "project"
+  );
 }
 
 export function removeProjectScopedOpenEditors(

@@ -1022,6 +1022,10 @@ export const enTranslations = {
   "glossaryEditor.label": "Glossary editor",
   "glossaryEntryEditorPane.label": "Glossary Entry Editor",
   "glossaryEntryEditorPane.close": "Close",
+  "glossaryEntryEditorPane.openDescriptionTab": "Open in Tab",
+  "glossaryDescriptionTab.placeholder.heading": "Glossary Description Tab",
+  "glossaryDescriptionTab.placeholder.notice":
+    "The Description editor / preview will be implemented in a later slice. This tab is not editable yet.",
   "glossaryEntryEditorPane.resizeHandle": "Resize the Glossary Entry Editor pane",
   "glossaryEntryEditorPane.create.submit": "Create",
   "glossaryEntryEditorPane.create.failed":

@@ -42,6 +42,9 @@ interface GlossaryEntryEditorPaneProps {
   newFileLineEndingFallback: NewFileLineEnding;
   whitespaceSettings: ApplicationEditorWhitespaceSettings;
   undoHistoryMinDepth: number;
+  /** #573 Slice 1: open the edited entry's Description as an editor tab.
+   *  Only offered in edit mode (a create-mode draft has no entry id yet). */
+  onOpenDescriptionTab?: (entryId: GlossaryEntryId) => void;
   onClose: () => void;
 }
 
@@ -84,6 +87,7 @@ export const GlossaryEntryEditorPane = forwardRef<
     newFileLineEndingFallback,
     whitespaceSettings,
     undoHistoryMinDepth,
+    onOpenDescriptionTab,
     onClose
   },
   ref
@@ -100,6 +104,15 @@ export const GlossaryEntryEditorPane = forwardRef<
     >
       <div className="glossaryEntryEditorPaneHeader">
         <span className="glossaryEntryEditorPaneTitle">{label}</span>
+        {state.mode === "edit" && onOpenDescriptionTab ? (
+          <button
+            type="button"
+            className="glossaryEntryEditorPaneOpenTabButton"
+            onClick={() => onOpenDescriptionTab(state.entryId)}
+          >
+            {translate("glossaryEntryEditorPane.openDescriptionTab")}
+          </button>
+        ) : null}
         <button
           type="button"
           className="glossaryEntryEditorPaneCloseButton"

@@ -36,6 +36,8 @@ function editorLabel(editorId: EditorId): string {
       return `projectDocument-${editorId.relativePath}`;
     case "file":
       return `file-${editorId.path}`;
+    case "glossaryDescription":
+      return `glossaryDescription-${editorId.entryId}`;
   }
 }
 

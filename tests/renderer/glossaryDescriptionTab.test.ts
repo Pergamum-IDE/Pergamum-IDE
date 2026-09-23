@@ -1,0 +1,279 @@
+import { describe, expect, it } from "vitest";
+import type { GlossaryEntry } from "../../src/shared/glossary";
+import {
+  createGlossaryDescriptionEditorId,
+  createProjectDocumentEditorId,
+  deserializeEditorId,
+  editorIdEquals,
+  isProjectScopedEditorId,
+  serializeEditorId,
+  type ActiveProjectContext
+} from "../../src/shared/editorId";
+import { createProjectDocument } from "../../src/renderer/currentDocument";
+import {
+  createGlossaryDescriptionCurrentEditor,
+  createMarkdownCurrentEditor,
+  currentEditorProjectRelativePath,
+  currentEditorTitle,
+  editorIdForCurrentEditor,
+  glossaryDescriptionEditorTitle,
+  isCurrentEditorDirty,
+  markdownDocumentForEditor
+} from "../../src/renderer/currentEditor";
+import {
+  activeProjectDocumentRelativePath,
+  closeOpenEditor,
+  createInitialOpenDocumentsState,
+  documentTabs,
+  getDirtyWorkingCopies,
+  openOrActivateDocument,
+  openOrActivateEditor,
+  removeProjectScopedOpenEditors,
+  updateOpenDocument
+} from "../../src/renderer/openDocuments";
+import {
+  describeTabContextMenu,
+  resolveTabCopyText
+} from "../../src/renderer/documentTabContextMenu";
+import { buildSessionSnapshotInputs } from "../../src/renderer/session/sessionSnapshot";
+import { resolveCurrentEditor } from "../../src/renderer/resolveCurrentEditor";
+
+const projectContext: ActiveProjectContext = { rootPath: "C:/novel" };
+const entryIdA = "0190b6a1-1c2d-7e3f-8a4b-5c6d7e8f9a0b";
+const entryIdB = "0190b6a1-1c2d-7e3f-8a4b-5c6d7e8f9a0c";
+
+function glossaryEntry(id: string, representative: string): GlossaryEntry {
+  return {
+    id,
+    description: "説明",
+    atoms: [
+      {
+        id: "0190b6a1-1c2d-7e3f-8a4b-000000000001",
+        entryId: id,
+        sortOrder: 0,
+        value: representative,
+        matchFlags: 0,
+        createdAt: "2026-09-23T00:00:00.000Z",
+        updatedAt: "2026-09-23T00:00:00.000Z"
+      }
+    ],
+    tags: [],
+    createdAt: "2026-09-23T00:00:00.000Z",
+    updatedAt: "2026-09-23T00:00:00.000Z"
+  };
+}
+
+describe("glossaryDescription EditorId (#573 Slice 1)", () => {
+  it("serializes and deserializes canonically by entryId", () => {
+    const editorId = createGlossaryDescriptionEditorId(entryIdA);
+    const serialized = serializeEditorId(editorId);
+
+    expect(serialized).toBe(
+      JSON.stringify({ kind: "glossaryDescription", entryId: entryIdA })
+    );
+    expect(
+      editorIdEquals(deserializeEditorId(serialized, projectContext), editorId)
+    ).toBe(true);
+  });
+
+  it("rejects a non-UUIDv7 entryId and non-canonical keys", () => {
+    expect(() => createGlossaryDescriptionEditorId("not-an-id")).toThrow();
+    expect(() =>
+      deserializeEditorId(
+        JSON.stringify({ entryId: entryIdA, kind: "glossaryDescription" }),
+        projectContext
+      )
+    ).toThrow();
+  });
+
+  it("compares by entryId and never equals a document id", () => {
+    expect(
+      editorIdEquals(
+        createGlossaryDescriptionEditorId(entryIdA),
+        createGlossaryDescriptionEditorId(entryIdA)
+      )
+    ).toBe(true);
+    expect(
+      editorIdEquals(
+        createGlossaryDescriptionEditorId(entryIdA),
+        createGlossaryDescriptionEditorId(entryIdB)
+      )
+    ).toBe(false);
+    expect(
+      editorIdEquals(
+        createGlossaryDescriptionEditorId(entryIdA),
+        createProjectDocumentEditorId("a.md", projectContext)
+      )
+    ).toBe(false);
+  });
+
+  it("is project-scoped", () => {
+    expect(
+      isProjectScopedEditorId(createGlossaryDescriptionEditorId(entryIdA))
+    ).toBe(true);
+  });
+});
+
+describe("glossaryDescription CurrentEditor (#573 Slice 1)", () => {
+  it("titles the tab 語彙: <代表表記>", () => {
+    const editor = createGlossaryDescriptionCurrentEditor(
+      glossaryEntry(entryIdA, "アリス")
+    );
+
+    expect(currentEditorTitle(editor)).toBe("語彙: アリス");
+  });
+
+  it("falls back to 語彙 when the representative surface is blank", () => {
+    expect(glossaryDescriptionEditorTitle("   ")).toBe("語彙");
+  });
+
+  it("is never a Markdown document, never dirty, has no project path", () => {
+    const editor = createGlossaryDescriptionCurrentEditor(
+      glossaryEntry(entryIdA, "アリス")
+    );
+
+    expect(markdownDocumentForEditor(editor)).toBeNull();
+    expect(isCurrentEditorDirty(editor)).toBe(false);
+    expect(currentEditorProjectRelativePath(editor)).toBeNull();
+    expect(
+      editorIdEquals(
+        editorIdForCurrentEditor(editor, projectContext)!,
+        createGlossaryDescriptionEditorId(entryIdA)
+      )
+    ).toBe(true);
+  });
+});
+
+describe("glossaryDescription tabs in OpenDocuments (#573 Slice 1)", () => {
+  function openGlossary(
+    state = createInitialOpenDocumentsState(),
+    id = entryIdA,
+    representative = "アリス"
+  ) {
+    return openOrActivateEditor(
+      state,
+      createGlossaryDescriptionCurrentEditor(glossaryEntry(id, representative)),
+      projectContext
+    );
+  }
+
+  it("opens one tab per entry and focuses an existing tab on re-open", () => {
+    const opened = openGlossary();
+    const withDocument = openOrActivateDocument(
+      opened,
+      createProjectDocument(
+        { relativePath: "chapter.md", name: "chapter.md" },
+        "本文"
+      ),
+      projectContext
+    );
+    const reopened = openGlossary(withDocument);
+
+    expect(reopened.documents).toHaveLength(2);
+    expect(
+      editorIdEquals(
+        reopened.activeDocumentId!,
+        createGlossaryDescriptionEditorId(entryIdA)
+      )
+    ).toBe(true);
+
+    const withB = openGlossary(reopened, entryIdB, "ボブ");
+
+    expect(documentTabs(withB).map((tab) => tab.title)).toEqual([
+      "語彙: アリス",
+      "chapter.md",
+      "語彙: ボブ"
+    ]);
+  });
+
+  it("shows a clean, non-external tab", () => {
+    const [tab] = documentTabs(openGlossary());
+
+    expect(tab).toMatchObject({
+      title: "語彙: アリス",
+      isDirty: false,
+      isExternalMarkdownFile: false
+    });
+  });
+
+  it("is excluded from file-backed features", () => {
+    const state = openGlossary();
+
+    expect(activeProjectDocumentRelativePath(state)).toBeNull();
+    expect(getDirtyWorkingCopies(state)).toEqual([]);
+    expect(
+      updateOpenDocument(state, state.activeDocumentId!, () => {
+        throw new Error("must not be called for a glossary tab");
+      })
+    ).toEqual(state);
+    expect(
+      buildSessionSnapshotInputs("session", null, state, true).editors
+    ).toEqual([]);
+  });
+
+  it("closes like any other tab and with the project", () => {
+    const state = openGlossary();
+
+    expect(closeOpenEditor(state, state.activeDocumentId!).documents).toEqual(
+      []
+    );
+    expect(removeProjectScopedOpenEditors(state).documents).toEqual([]);
+  });
+
+  it("resolves only while already open", async () => {
+    const state = openGlossary();
+    const context = {
+      openDocumentsState: state,
+      project: null,
+      activeProjectContext: projectContext,
+      readProjectDocument: async () => {
+        throw new Error("unused");
+      }
+    };
+
+    await expect(
+      resolveCurrentEditor(createGlossaryDescriptionEditorId(entryIdA), context)
+    ).resolves.toMatchObject({ kind: "resolved" });
+    await expect(
+      resolveCurrentEditor(createGlossaryDescriptionEditorId(entryIdB), context)
+    ).resolves.toEqual({ kind: "notFound" });
+  });
+
+  it("disables file-only tab context menu items and copies nothing", () => {
+    const tabs = documentTabs(openGlossary());
+    const menu = describeTabContextMenu(tabs[0], {
+      allTabs: tabs,
+      projectAccess: null
+    });
+    const enabledById = Object.fromEntries(
+      menu.items.map((item) => [item.id, item.enabled])
+    );
+
+    expect(enabledById).toMatchObject({
+      close: true,
+      selectInFileExplorer: false,
+      renameFile: false,
+      saveAs: false,
+      copyAbsolutePath: false,
+      copyRelativePath: false,
+      copyFileName: false
+    });
+    expect(resolveTabCopyText(tabs[0], { projectRootPath: "C:/novel" })).toEqual(
+      { absolute: null, relative: null, fileName: null }
+    );
+  });
+
+  it("keeps Markdown editors as Markdown documents", () => {
+    const editor = createMarkdownCurrentEditor(
+      createProjectDocument(
+        { relativePath: "chapter.md", name: "chapter.md" },
+        "本文"
+      )
+    );
+
+    expect(markdownDocumentForEditor(editor)).toMatchObject({
+      kind: "project",
+      relativePath: "chapter.md"
+    });
+  });
+});

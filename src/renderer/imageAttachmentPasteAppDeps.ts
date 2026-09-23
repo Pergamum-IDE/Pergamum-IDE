@@ -32,6 +32,7 @@ import {
   isProjectCurrentDocument,
   updateCurrentDocumentContent
 } from "./currentDocument";
+import { markdownDocumentForEditor } from "./currentEditor";
 import type { OpenDocumentsState } from "./openDocuments";
 import { updateOpenEditor } from "./openDocuments";
 import type {
@@ -100,11 +101,14 @@ export function resolveImageAttachmentPasteTarget({
     (candidate) => serializeEditorId(candidate.id) === pending.sourceDocumentId
   );
 
-  if (!openDocument) {
+  const markdownDocument = openDocument
+    ? markdownDocumentForEditor(openDocument.editor)
+    : null;
+
+  if (!openDocument || !markdownDocument) {
     return { ok: false, reason: "targetDocumentUnavailable" };
   }
 
-  const markdownDocument = openDocument.editor.document;
   if (!isProjectCurrentDocument(markdownDocument)) {
     return { ok: false, reason: "projectNotOpen" };
   }
@@ -235,12 +239,13 @@ export function insertMarkdownImageLinkIntoTarget({
     (candidate) => serializeEditorId(candidate.id) === request.target.documentId
   );
 
-  if (!openDocument) {
-    return false;
-  }
+  const markdownDocument = openDocument
+    ? markdownDocumentForEditor(openDocument.editor)
+    : null;
 
-  const markdownDocument = openDocument.editor.document;
   if (
+    !openDocument ||
+    !markdownDocument ||
     !isProjectCurrentDocument(markdownDocument) ||
     currentProject?.accessMode.kind === "readOnly" ||
     isLifecycleCommitBarrierActive

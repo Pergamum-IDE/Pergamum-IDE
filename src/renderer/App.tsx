@@ -55,6 +55,7 @@ import {
 } from "../shared/commandRegistry";
 import {
   createEditorIdForPath,
+  createGlossaryDescriptionEditorId,
   createProjectDocumentEditorId,
   editorIdEquals,
   serializeEditorId,
@@ -174,6 +175,7 @@ import {
   serializeLineEndings
 } from "./lineEndingTracking";
 import {
+  createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
   currentEditorProjectRelativePath,
   currentEditorTitle,
@@ -918,8 +920,10 @@ function debugEditorIdKind(
   return editorId?.kind ?? "unknown";
 }
 
-function debugSaveTargetKind(editor: CurrentEditor): DebugLogSaveTargetKind {
-  return isProjectCurrentDocument(editor.document)
+function debugSaveTargetKind(
+  document: CurrentDocument
+): DebugLogSaveTargetKind {
+  return isProjectCurrentDocument(document)
     ? "projectDocument"
     : "standaloneMarkdown";
 }
@@ -4255,6 +4259,23 @@ export function App(): JSX.Element {
   // #436 Phase 8-0 PoC (Slice 8): load the entry an edit-mode pane targets.
   // A thin forward of the existing glossary IPC — `GlossaryEntryEditForm`
   // owns the loading / failed / ready state and the race guard.
+  // #573 Slice 1: open (or focus, if already open) the glossary Description
+  // tab for `entryId`. Identity is the entry id, so `applyEditor` activates an
+  // existing tab instead of adding a duplicate. Reads the renderer's
+  // already-loaded `glossaryEntries` — no new IPC.
+  function handleOpenGlossaryDescriptionTab(entryId: GlossaryEntryId): void {
+    const entry = glossaryEntries.find((candidate) => candidate.id === entryId);
+
+    if (!project || !entry) {
+      return;
+    }
+
+    openEditorFromUi(createGlossaryDescriptionEditorId(entry.id), {
+      history: "record",
+      resolvedEditor: createGlossaryDescriptionCurrentEditor(entry)
+    });
+  }
+
   async function handleLoadGlossaryEntryFromPane(
     entryId: GlossaryEntryId
   ): Promise<GlossaryEntry | null> {
@@ -7262,6 +7283,21 @@ export function App(): JSX.Element {
       return "ignored";
     }
 
+    // #573 Slice 1: a glossary Description tab has no file to save.
+    if (targetOpenDocument.editor.kind !== "markdown") {
+      logRendererDebugEvent({
+        level: "debug",
+        event: "save.skipped",
+        details: {
+          editorIdKind,
+          operation: "save",
+          result: "ignored",
+          reason: "unsupported_editor"
+        }
+      });
+      return "ignored";
+    }
+
     const targetEditor = targetOpenDocument.editor;
     const targetIsDirty = isCurrentEditorDirty(targetEditor);
     const targetCanSave = true;
@@ -7273,20 +7309,17 @@ export function App(): JSX.Element {
         editorIdKind,
         operation: "save",
         isDirty: targetIsDirty,
-        canSave: options.forceSaveAs
-          ? targetEditor.kind === "markdown"
-          : targetCanSave
+        canSave: targetCanSave
       }
     });
 
     const result = await saveInFlightGuard.run<SaveFileOutcome>(
       async () => {
         const saveTargetKind: DebugLogSaveTargetKind =
-          targetEditor.kind === "markdown" &&
-          (options.forceSaveAs ||
-            !isProjectCurrentDocument(targetEditor.document))
+          options.forceSaveAs ||
+          !isProjectCurrentDocument(targetEditor.document)
             ? "standaloneMarkdown"
-            : debugSaveTargetKind(targetEditor);
+            : debugSaveTargetKind(targetEditor.document);
 
         logRendererDebugEvent({
           level: "debug",
@@ -11644,7 +11677,8 @@ export function App(): JSX.Element {
                           effectiveSettings.preview.updateDelayMs
                         }
                         newFileLineEndingFallback={
-                          isMarkdownCurrentDocument(activeDocument.editor.document)
+                          activeMarkdownDocument &&
+                          isMarkdownCurrentDocument(activeMarkdownDocument)
                             ? effectiveSettings.markdownFiles.lineEnding
                             : effectiveSettings.textFiles.lineEnding
                         }
@@ -11842,6 +11876,7 @@ export function App(): JSX.Element {
                         undoHistoryMinDepth={
                           effectiveSettings.editor.undoHistoryMinDepth
                         }
+                        onOpenDescriptionTab={handleOpenGlossaryDescriptionTab}
                         onClose={() =>
                           void closeGlossaryEntryEditorPaneWithConfirm()
                         }

@@ -143,6 +143,7 @@ import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
 import { useHorizontalDrag } from "./useHorizontalDrag";
 import type { SoundFeedbackPlayer } from "./soundFeedback";
 import { clampMarkdownEditorPreviewRatio } from "./workbenchLayout";
+import { GlossaryDescriptionTabPlaceholder } from "./GlossaryDescriptionTabPlaceholder";
 
 const NARROW_MARKDOWN_WORKSPACE_MEDIA_QUERY = "(max-width: 760px)";
 
@@ -811,6 +812,13 @@ export function EditorSurface({
           }
           onViewportChanged={onViewportChanged}
           onPreviewScrollSyncEvent={onPreviewScrollSyncEvent}
+        />
+      );
+    case "glossaryDescription":
+      return (
+        <GlossaryDescriptionTabPlaceholder
+          editor={editor}
+          translate={translate}
         />
       );
   }

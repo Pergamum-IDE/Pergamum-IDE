@@ -61,6 +61,12 @@ function sessionEditorFromOpenEditor(
 ): SessionEditorInput | null {
   const viewStateKey = serializeEditorId(editorId);
 
+  // #573 Slice 1: glossary Description tabs are not persisted in the
+  // Session yet (session restore is a later slice).
+  if (editor.kind !== "markdown") {
+    return null;
+  }
+
   switch (editor.document.kind) {
     case "project":
       return {
