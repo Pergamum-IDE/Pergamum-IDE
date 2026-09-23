@@ -6,6 +6,8 @@ import { TableSizePopover } from "./TableSizePopover";
 import { HeadingLevelPopover } from "./HeadingLevelPopover";
 import { ToolbarCommandBox } from "./ToolbarCommandBox";
 import { PreviewRendererDropdown } from "./PreviewRendererDropdown";
+import { CalloutInsertDropdown } from "./CalloutInsertDropdown";
+import type { MarkdownCalloutType } from "../../shared/markdownCalloutMarkup";
 import type { PreviewRendererId } from "../../shared/settings";
 import type { QuickAccessPrefix } from "../quickAccessInputParser";
 import headingIconRaw from "../../../assets/icons/pergamum/toolbar/heading.svg?raw";
@@ -50,6 +52,9 @@ export interface EditorToolbarProps {
   canInsertImage: boolean;
   onOpenImageInsertion: (opener: Element) => void;
   onInsertTable: (columns: number, rows: number) => void;
+  /** #570: same Markdown-only gate as the table command. */
+  canInsertCallout: boolean;
+  onInsertCallout: (type: MarkdownCalloutType) => void;
   /** #531: shared enable gate for Ruby / Emphasis Mark — unlike
    *  `canUseMarkdownToolbarCommands`, this stays true on `.txt` documents,
    *  matching the existing Ctrl+R / Ctrl+. shortcuts' own applicability. */
@@ -98,6 +103,8 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   canInsertImage,
   onOpenImageInsertion,
   onInsertTable,
+  canInsertCallout,
+  onInsertCallout,
   hasEditableTextLikeDocument,
   onOpenRubyDialog,
   onOpenEmphasisDialog,
@@ -408,6 +415,14 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
               translate={translate}
             />
           )}
+        </div>
+
+        <div className="editorToolbarItem">
+          <CalloutInsertDropdown
+            disabled={!canInsertCallout}
+            onInsertCallout={onInsertCallout}
+            translate={translate}
+          />
         </div>
       </div>
 

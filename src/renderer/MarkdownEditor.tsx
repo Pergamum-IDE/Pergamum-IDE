@@ -13,7 +13,8 @@ import {
   type ChangeSpec,
   type AnnotationType,
   type StateField,
-  type Text
+  type Text,
+  type TransactionSpec
 } from "@codemirror/state";
 import {
   pergamumContextSurfaceAttribute,
@@ -53,6 +54,10 @@ import { applyHeadingToLine } from "../shared/markdownHeadingMarkup";
 import { buildMarkdownLink } from "../shared/markdownLinkMarkup";
 import { buildFencedCodeBlock } from "../shared/markdownCodeBlockMarkup";
 import { buildHorizontalRuleInsertion } from "../shared/markdownHorizontalRuleMarkup";
+import {
+  buildMarkdownCalloutBlock,
+  type MarkdownCalloutType
+} from "../shared/markdownCalloutMarkup";
 import {
   applyMarkdownListToLines,
   type MarkdownListKind
@@ -533,6 +538,12 @@ export interface MarkdownEditorParagraphIndentController {
    */
   insertCodeBlock(): boolean;
   /**
+   * #570: inserts a `> [!TYPE]` callout (see
+   * `markdownCalloutInsertionTransactionSpec`) as one undoable transaction,
+   * then focuses the editor so the body can be typed immediately.
+   */
+  insertCallout(type: MarkdownCalloutType): boolean;
+  /**
    * #533: applies (or, for a same-type touched selection, removes) a
    * Markdown list marker on every line touched by the current primary
    * selection (a single line when the selection is empty). See
@@ -652,6 +663,60 @@ function computeBlockInsertionPadding(
   }
 
   return { leadingLines, trailingLines };
+}
+
+/**
+ * #570: the single transaction for the callout toolbar command.
+ *
+ * - Empty selection: inserts the `> [!TYPE]\n> ` template at the cursor and
+ *   leaves the cursor after the body line's `> `.
+ * - Non-empty selection: line-based — the whole touched line range (a
+ *   selection ending at column 0 of a later line does not include that
+ *   line) becomes the callout body, each line prefixed with `> `.
+ *
+ * Both cases use the same blank-line padding as the other block insertions
+ * (table / horizontal rule / code block), so the callout never starts
+ * mid-line and following text never becomes a lazy continuation of it.
+ */
+export function markdownCalloutInsertionTransactionSpec(
+  state: EditorState,
+  type: MarkdownCalloutType
+): TransactionSpec {
+  const doc = state.doc;
+  const selection = state.selection.main;
+  let from = selection.from;
+  let to = selection.to;
+  let bodyLines: string[] = [];
+
+  if (!selection.empty) {
+    const firstLine = doc.lineAt(from);
+    let lastLine = doc.lineAt(to);
+    if (to === lastLine.from && lastLine.number > firstLine.number) {
+      lastLine = doc.line(lastLine.number - 1);
+    }
+    from = firstLine.from;
+    to = lastLine.to;
+    bodyLines = doc.sliceString(from, to).split("\n");
+  }
+
+  const { leadingLines, trailingLines } = computeBlockInsertionPadding(
+    doc,
+    from,
+    to
+  );
+  const { text, selectionOffsetFromInsertStart } = buildMarkdownCalloutBlock(
+    type,
+    bodyLines
+  );
+
+  return {
+    changes: { from, to, insert: leadingLines + text + trailingLines },
+    selection: {
+      anchor: from + leadingLines.length + selectionOffsetFromInsertStart
+    },
+    scrollIntoView: true,
+    userEvent: "input.replace"
+  };
 }
 
 export function markdownEditorInputSoundEventFromTransactions(
@@ -1772,6 +1837,17 @@ export function MarkdownEditor({
           scrollIntoView: true,
           userEvent: "input.replace"
         });
+
+        return true;
+      },
+      insertCallout: (type: MarkdownCalloutType): boolean => {
+        const view = viewRef.current;
+        if (!view || readOnlyRef.current) {
+          return false;
+        }
+
+        view.dispatch(markdownCalloutInsertionTransactionSpec(view.state, type));
+        view.focus();
 
         return true;
       },
