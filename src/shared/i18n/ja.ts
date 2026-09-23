@@ -1179,6 +1179,42 @@ export const jaTranslations = {
   "documentMap.page.currentOfTotal": "ページ {current} / {total}",
   "documentMap.page.option": "ページ {page}",
   "documentMap.rendering": "描画中…",
+  "documentMap.export.openButtonLabel": "文書マップをPNGとしてエクスポート",
+  "documentMap.export.dialogTitle": "文書マップエクスポート",
+  "documentMap.export.outputFolderLabel": "出力フォルダ",
+  "documentMap.export.browseButton": "参照",
+  "documentMap.export.baseFileNameLabel": "ベースファイル名",
+  "documentMap.export.baseFileNameError.empty": "ベースファイル名を入力してください",
+  "documentMap.export.baseFileNameError.invalidCharacter":
+    "使用できない文字が含まれています（< > : \" / \\ | ? *）",
+  "documentMap.export.baseFileNameError.controlCharacter":
+    "使用できない制御文字が含まれています",
+  "documentMap.export.baseFileNameError.trailingDotOrSpace":
+    "末尾にピリオドや空白は使用できません",
+  "documentMap.export.baseFileNameError.reservedName":
+    "この名前はシステムで予約されているため使用できません",
+  "documentMap.export.plannedOutputHeading": "出力予定のファイル",
+  "documentMap.export.headerToggleLabel": "すべての行の出力を切り替え",
+  "documentMap.export.columnPage": "ページ",
+  "documentMap.export.columnFileName": "ファイル名",
+  "documentMap.export.rowToggleLabel": "ページ{page}の出力を切り替え",
+  "documentMap.export.exportingStatus": "エクスポート中…",
+  "documentMap.export.successStatus": "エクスポートが完了しました",
+  "documentMap.export.exportButton": "エクスポート",
+  "documentMap.export.closeButton": "閉じる",
+  "documentMap.export.writeFailed": "{fileName} の書き込みに失敗しました（{reason}）",
+  "documentMap.export.renderFailed": "{fileName} の生成に失敗しました。再試行してください",
+  "documentMap.export.failureReason.rejected": "保護された保存先",
+  "documentMap.export.failureReason.permissionDenied": "アクセス権限がありません",
+  "documentMap.export.failureReason.noSpace": "空き容量不足",
+  "documentMap.export.failureReason.readOnlyFilesystem":
+    "読み取り専用のファイルシステム",
+  "documentMap.export.failureReason.invalidRequest": "不正なリクエスト",
+  "documentMap.export.failureReason.unknown": "不明なエラー",
+  "documentMap.export.overwriteConfirm.title": "上書きの確認",
+  "documentMap.export.overwriteConfirm.message":
+    "{count}件のファイルが既に存在します。上書きしますか？",
+  "documentMap.export.overwriteConfirm.confirm": "上書き",
   "imageInsertion.overwriteDialog.title": "画像ファイルを上書きしますか？",
   "imageInsertion.overwriteDialog.message":
     "以下のファイルは既に存在します。続行すると上書きされます。",

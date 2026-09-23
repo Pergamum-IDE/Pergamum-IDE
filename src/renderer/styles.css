@@ -3221,8 +3221,12 @@ label.settingsItemHeader {
   appearance: none;
 }
 
-/* #375: "Render tags" multi-select row — fixed above the scrolling map body. */
+/* #375: "Render tags" multi-select row — fixed above the scrolling map body.
+   #537: also hosts the PNG export icon button, to the tag filter's inline-end. */
 .documentMapControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
   padding: 6px 10px;
   border-bottom: 1px solid var(--workspace-sidebar-border);
@@ -3233,8 +3237,215 @@ label.settingsItemHeader {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 1;
   min-width: 0;
   font-size: 12px;
+}
+
+/* #537: Document Map PNG export entry point, sized like the File Explorer's
+   own toolbar icon buttons (.fileExplorerToolbarButton). */
+.documentMapExportButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  inline-size: 24px;
+  block-size: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--workspace-sidebar-item-foreground);
+  padding: 0;
+}
+
+.documentMapExportButton:not(:disabled):hover {
+  background: var(--workspace-sidebar-hover);
+}
+
+.documentMapExportButton:focus-visible {
+  outline: 2px solid var(--workspace-sidebar-focus-ring);
+  outline-offset: -2px;
+}
+
+.documentMapExportButton:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.documentMapExportButtonIcon {
+  display: inline-flex;
+  inline-size: 16px;
+  block-size: 16px;
+  pointer-events: none;
+}
+
+.documentMapExportButtonIcon svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/* #537: Document Map PNG export dialog. */
+.documentMapPngExportDialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-inline-size: 420px;
+}
+
+.documentMapPngExportControl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.documentMapPngExportControlLabel {
+  font-size: 0.85rem;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.documentMapPngExportInputWithButton {
+  display: flex;
+  gap: 6px;
+}
+
+.documentMapPngExportInput {
+  flex: 1;
+  min-inline-size: 0;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: 4px;
+  background-color: var(--color-bg-input, #fff);
+  color: var(--color-text-main, #333);
+}
+
+.documentMapPngExportInput:disabled {
+  opacity: 0.6;
+}
+
+.documentMapPngExportFieldError {
+  font-size: 12px;
+  color: var(--color-text-danger, #d9534f);
+}
+
+.documentMapPngExportPlannedOutput {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.documentMapPngExportTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  max-block-size: 260px;
+  overflow-y: auto;
+  display: block;
+}
+
+.documentMapPngExportTable thead,
+.documentMapPngExportTable tbody {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.documentMapPngExportTable th,
+.documentMapPngExportTable td {
+  text-align: start;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--workspace-sidebar-border);
+}
+
+.documentMapPngExportTable th:first-child,
+.documentMapPngExportTable td:first-child {
+  inline-size: 48px;
+}
+
+.documentMapPngExportTable th:nth-child(2),
+.documentMapPngExportTable td:nth-child(2) {
+  inline-size: 64px;
+}
+
+.documentMapPngExportStatus {
+  font-size: 0.85rem;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.documentMapPngExportError {
+  color: var(--color-text-danger, #d9534f);
+}
+
+/* #537 follow-up: toggle sliders for the planned-output header/row controls,
+   mirroring the Export Wizard's own switch
+   (.exportConfirmationDialogIncludeSwitch/Input/Track/Thumb). */
+.documentMapPngExportSwitch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 40px;
+  block-size: 22px;
+  cursor: pointer;
+}
+
+.documentMapPngExportSwitchInput {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+
+.documentMapPngExportSwitchTrack {
+  position: relative;
+  display: inline-block;
+  inline-size: 36px;
+  block-size: 20px;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 999px;
+  background: var(--workspace-sidebar-divider);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.documentMapPngExportSwitchThumb {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  inline-size: 14px;
+  block-size: 14px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 32, 0.28);
+  transition: inset-inline-start 120ms ease;
+}
+
+.documentMapPngExportSwitchInput:checked + .documentMapPngExportSwitchTrack {
+  border-color: var(--app-dialog-confirm-background);
+  background: var(--app-dialog-confirm-background);
+}
+
+.documentMapPngExportSwitchInput[data-document-map-export-header-state="mixed"]
+  + .documentMapPngExportSwitchTrack {
+  border-color: var(--app-dialog-icon-warning);
+  background: var(--app-dialog-warning-header-background);
+}
+
+.documentMapPngExportSwitchInput:checked
+  + .documentMapPngExportSwitchTrack
+  .documentMapPngExportSwitchThumb {
+  inset-inline-start: 18px;
+}
+
+.documentMapPngExportSwitchInput:focus-visible + .documentMapPngExportSwitchTrack {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: 2px;
+}
+
+.documentMapPngExportSwitchInput:disabled + .documentMapPngExportSwitchTrack {
+  opacity: 0.5;
 }
 
 .documentMapTagFilterLabel {

@@ -113,6 +113,10 @@ import {
 } from "./dialog/BulkTextImportDialog";
 import { ExportConfirmationDialog } from "./dialog/ExportConfirmationDialog";
 import {
+  DocumentMapPngExportDialog,
+  type DocumentMapPngExportSnapshot
+} from "./dialog/DocumentMapPngExportDialog";
+import {
   createTxtUtf8ExportText,
   type ExportTxtExecutionRequest
 } from "./exportTxt";
@@ -146,6 +150,7 @@ import {
   createFileDocument,
   createProjectDocument,
   currentDocumentContent,
+  currentDocumentTitle,
   currentDocumentWorkingStateEquals,
   currentProjectRelativePath,
   displayName,
@@ -1373,6 +1378,11 @@ export function App(): JSX.Element {
     readonly origin: ExportOrigin;
     readonly candidates: readonly ExportCandidateListItem[];
   } | null>(null);
+  // #537: a frozen snapshot captured at the moment the Document Map's
+  // save/export icon is clicked — see `DocumentMapPngExportSnapshot`'s own
+  // doc comment for why this is never re-derived while the dialog is open.
+  const [documentMapPngExportSnapshot, setDocumentMapPngExportSnapshot] =
+    useState<DocumentMapPngExportSnapshot | null>(null);
   // #384: Command Palette `%` project-search request handed to the Search pane
   // (also #457: Ctrl+Shift+F / Ctrl+Shift+H, which additionally sets `tab`).
   // `token` is a session-monotonic counter so a repeat `%` re-applies.
@@ -11013,6 +11023,40 @@ export function App(): JSX.Element {
     }
   }
 
+  // #537: the Document Map PNG export dialog's all-or-cancel overwrite
+  // confirmation for its dry-run-detected existing files.
+  async function confirmDocumentMapPngOverwrite(
+    existingFileCount: number
+  ): Promise<boolean> {
+    try {
+      const result = await confirmDialog({
+        title: translate("documentMap.export.overwriteConfirm.title"),
+        message: {
+          kind: "plainText",
+          text: translate("documentMap.export.overwriteConfirm.message", {
+            count: existingFileCount
+          })
+        },
+        icon: {
+          kind: "warning",
+          tooltip: translate("documentMap.export.overwriteConfirm.title")
+        },
+        clipboardText: null,
+        cancelLabel: translate("common.cancel"),
+        tone: "destructive",
+        confirmLabel: translate("documentMap.export.overwriteConfirm.confirm")
+      });
+
+      return result === "confirm";
+    } catch (error) {
+      if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {
+        return false;
+      }
+
+      throw error;
+    }
+  }
+
   async function handleExportConfirmationTxtExport(
     request: ExportTxtExecutionRequest
   ): Promise<ExportTxtUtf8Result> {
@@ -11426,6 +11470,12 @@ export function App(): JSX.Element {
                       documentMapEditorVisibleRange={markdownVisibleRange}
                       documentMapSettings={effectiveSettings.documentMap}
                       onDocumentMapNavigateToLine={scrollActiveMarkdownEditorToLine}
+                      documentMapActiveDocumentName={
+                        activeMarkdownDocument
+                          ? currentDocumentTitle(activeMarkdownDocument)
+                          : null
+                      }
+                      onExportDocumentMapPng={setDocumentMapPngExportSnapshot}
                       onNavigateGlossaryOccurrence={
                         navigateGlossaryOccurrenceFromSidebar
                       }
@@ -11919,6 +11969,17 @@ export function App(): JSX.Element {
           onClose={() => setExportConfirmationState(null)}
         />
       ) : null}
+
+      <DocumentMapPngExportDialog
+        snapshot={documentMapPngExportSnapshot}
+        translate={translate}
+        opener={null}
+        onClose={() => setDocumentMapPngExportSnapshot(null)}
+        onSelectFolder={(req) => window.pergamum.files.selectExportFolder(req)}
+        onCheckFileExists={(req) => window.pergamum.files.checkFileExists(req)}
+        onExportPng={(req) => window.pergamum.files.exportPng(req)}
+        onConfirmOverwrite={confirmDocumentMapPngOverwrite}
+      />
 
       <BulkTextImportDialog
         isOpen={isBulkTextImportDialogOpen}

@@ -254,7 +254,8 @@ export const FILE_CHANNELS = {
   exportPdfCombined: "files:exportPdfCombined",
   selectExportFolder: "files:selectExportFolder",
   getDocumentsPath: "files:getDocumentsPath",
-  checkFileExists: "files:checkFileExists"
+  checkFileExists: "files:checkFileExists",
+  exportPng: "files:exportPng"
 } as const;
 
 export const PROJECT_CHANNELS = {
@@ -660,6 +661,33 @@ export interface CheckFileExistsRequest {
 export interface CheckFileExistsResult {
   readonly exists: boolean;
 }
+
+/**
+ * #537: Document Map PNG export — one page per call. `pngBytes` crosses the
+ * IPC boundary as a `Uint8Array` (structured-clone, never base64-encoded);
+ * the main process wraps it with `Buffer.from(...)` before writing.
+ */
+export interface ExportPngRequest {
+  readonly filePath: string;
+  readonly pngBytes: Uint8Array;
+}
+
+export type ExportPngFailureReason =
+  | "rejected"
+  | "permissionDenied"
+  | "noSpace"
+  | "readOnlyFilesystem"
+  | "invalidRequest"
+  | "unknown";
+
+export type ExportPngResult =
+  | {
+      readonly ok: true;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: ExportPngFailureReason;
+    };
 
 export interface ExportTxtUtf8Request {
   readonly defaultFileName: string;
@@ -1311,6 +1339,7 @@ export interface PergamumApi {
     checkFileExists: (
       request: CheckFileExistsRequest
     ) => Promise<CheckFileExistsResult>;
+    exportPng: (request: ExportPngRequest) => Promise<ExportPngResult>;
   };
   projects: {
     createProject: () => Promise<ProjectOpenResult>;

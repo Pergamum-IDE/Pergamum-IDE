@@ -82,7 +82,7 @@ export type FileExplorerNameValidationResult =
  * True when the string contains NUL or any other C0 control / DEL — none
  * of which may reach a filesystem call.
  */
-function containsControlCharacter(value: string): boolean {
+export function containsControlCharacter(value: string): boolean {
   for (const character of value) {
     const code = character.codePointAt(0) ?? 0;
     if (code <= 0x1f || code === 0x7f) {

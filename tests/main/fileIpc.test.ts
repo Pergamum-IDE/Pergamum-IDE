@@ -16,7 +16,8 @@ const fsMock = vi.hoisted(() => ({
 }));
 
 const atomicWriteMock = vi.hoisted(() => ({
-  writeFileAtomic: vi.fn<(target: string, data: string) => Promise<void>>()
+  writeFileAtomic:
+    vi.fn<(target: string, data: string | Buffer) => Promise<void>>()
 }));
 
 const projectIpcMock = vi.hoisted(() => ({
@@ -938,6 +939,81 @@ describe("file IPC", () => {
         expect(JSON.stringify(entry)).not.toContain(projectRootPath);
         expect(JSON.stringify(entry)).not.toContain(selectedPath);
       }
+    });
+  });
+
+  describe("exportPng (#537 Document Map PNG export)", () => {
+    it("writes the PNG bytes via writeFileAtomic, wrapped as a Buffer", async () => {
+      const exportPng = registeredHandler(FILE_CHANNELS.exportPng);
+      const pngBytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+
+      await expect(
+        exportPng(
+          { sender: {} },
+          { filePath: "D:\\Exports\\map_001.png", pngBytes }
+        )
+      ).resolves.toEqual({ ok: true });
+
+      expect(atomicWriteMock.writeFileAtomic).toHaveBeenCalledTimes(1);
+      const [writtenPath, writtenData] =
+        atomicWriteMock.writeFileAtomic.mock.calls[0];
+      expect(writtenPath).toBe("D:\\Exports\\map_001.png");
+      expect(Buffer.isBuffer(writtenData)).toBe(true);
+      expect(Uint8Array.from(writtenData as Buffer)).toEqual(pngBytes);
+    });
+
+    it("rejects a protected export target before writing", async () => {
+      projectIpcMock.currentActiveProjectFilePath.mockReturnValue(
+        "C:\\Novel\\Novel.pergamum"
+      );
+
+      const exportPng = registeredHandler(FILE_CHANNELS.exportPng);
+
+      await expect(
+        exportPng(
+          { sender: {} },
+          {
+            filePath: "C:\\Novel\\.pergamum.lock\\map_001.png",
+            pngBytes: new Uint8Array([1, 2, 3])
+          }
+        )
+      ).resolves.toEqual({ ok: false, reason: "rejected" });
+
+      expect(atomicWriteMock.writeFileAtomic).not.toHaveBeenCalled();
+    });
+
+    it("returns invalidRequest for a malformed request", async () => {
+      const exportPng = registeredHandler(FILE_CHANNELS.exportPng);
+
+      await expect(
+        exportPng({ sender: {} }, { filePath: "D:\\Exports\\map_001.png" })
+      ).resolves.toEqual({ ok: false, reason: "invalidRequest" });
+      await expect(
+        exportPng(
+          { sender: {} },
+          { filePath: "D:\\Exports\\map_001.png", pngBytes: "not-bytes" }
+        )
+      ).resolves.toEqual({ ok: false, reason: "invalidRequest" });
+
+      expect(atomicWriteMock.writeFileAtomic).not.toHaveBeenCalled();
+    });
+
+    it("maps a write failure to a stable reason without leaking the raw error", async () => {
+      const rawPath = "D:\\Exports\\secret_001.png";
+      atomicWriteMock.writeFileAtomic.mockRejectedValue(
+        Object.assign(new Error(`EACCES: permission denied, open '${rawPath}'`), {
+          code: "EACCES"
+        })
+      );
+
+      const exportPng = registeredHandler(FILE_CHANNELS.exportPng);
+      const result = await exportPng(
+        { sender: {} },
+        { filePath: rawPath, pngBytes: new Uint8Array([1, 2, 3]) }
+      );
+
+      expect(result).toEqual({ ok: false, reason: "permissionDenied" });
+      expect(JSON.stringify(result)).not.toContain(rawPath);
     });
   });
 });
