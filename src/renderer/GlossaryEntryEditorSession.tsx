@@ -21,13 +21,11 @@ import type {
   NewFileLineEnding
 } from "../shared/settings";
 import { GlossaryEditor } from "./GlossaryEditor";
+import { glossaryEntryMetadataDraftHandlers } from "./GlossaryEntryMetadataFields";
 import {
-  addGlossaryEntryDraftAtom,
   applyGlossaryEntryDraftSaveResult,
-  assignGlossaryEntryDraftTag,
   createGlossaryEntryDraft,
   createNewGlossaryEntryDraft,
-  deleteGlossaryEntryDraftAtom,
   glossaryEntryDraftCreateInput,
   glossaryEntryDraftIsNew,
   glossaryEntryDraftUpdateInput,
@@ -35,11 +33,6 @@ import {
   isGlossaryEntryDraftDirty,
   markGlossaryEntryDraftSaveFailed,
   markGlossaryEntryDraftSaving,
-  reorderAssignedGlossaryEntryDraftTags,
-  reorderGlossaryEntryDraftAtom,
-  unassignGlossaryEntryDraftTag,
-  updateGlossaryEntryDraftAtomMatchFlags,
-  updateGlossaryEntryDraftAtomValue,
   updateGlossaryEntryDraftDescription,
   type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
@@ -350,38 +343,7 @@ export const GlossaryEntryEditorSession = forwardRef<
             updateGlossaryEntryDraftDescription(current, description)
           )
         }
-        onAddAtom={() => updateDraft(addGlossaryEntryDraftAtom)}
-        onChangeAtomValue={(atomId, value) =>
-          updateDraft((current) =>
-            updateGlossaryEntryDraftAtomValue(current, atomId, value)
-          )
-        }
-        onChangeAtomMatchFlags={(atomId, matchFlags) =>
-          updateDraft((current) =>
-            updateGlossaryEntryDraftAtomMatchFlags(current, atomId, matchFlags)
-          )
-        }
-        onDeleteAtom={(atomId) =>
-          updateDraft((current) => deleteGlossaryEntryDraftAtom(current, atomId))
-        }
-        onReorderAtom={(atomId, toIndex) =>
-          updateDraft((current) =>
-            reorderGlossaryEntryDraftAtom(current, atomId, toIndex)
-          )
-        }
-        onAssignTag={(tagId, toIndex) =>
-          updateDraft((current) =>
-            assignGlossaryEntryDraftTag(current, tagId, toIndex)
-          )
-        }
-        onUnassignTag={(tagId) =>
-          updateDraft((current) => unassignGlossaryEntryDraftTag(current, tagId))
-        }
-        onReorderAssignedTag={(tagId, toIndex) =>
-          updateDraft((current) =>
-            reorderAssignedGlossaryEntryDraftTags(current, tagId, toIndex)
-          )
-        }
+        {...glossaryEntryMetadataDraftHandlers(updateDraft)}
         onOpenTagManager={onOpenTagManager}
         onDeleteEntry={() => void handleDelete()}
         readOnly={readOnly}

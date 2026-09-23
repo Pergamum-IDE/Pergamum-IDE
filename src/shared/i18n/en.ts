@@ -1023,6 +1023,11 @@ export const enTranslations = {
   "glossaryEntryEditorPane.label": "Glossary Entry Editor",
   "glossaryEntryEditorPane.close": "Close",
   "glossaryEntryEditorPane.openDescriptionTab": "Open in Tab",
+  "glossaryDescriptionTab.metadata.heading": "Glossary Entry",
+  "glossaryDescriptionTab.metadata.summary.representative": "Representative: {value}",
+  "glossaryDescriptionTab.metadata.summary.atomCount": "Surfaces: {count}",
+  "glossaryDescriptionTab.metadata.summary.tags": "Tags: {tags}",
+  "glossaryDescriptionTab.metadata.summary.noTags": "Tags: none",
   "glossaryEntryEditorPane.resizeHandle": "Resize the Glossary Entry Editor pane",
   "glossaryEntryEditorPane.create.submit": "Create",
   "glossaryEntryEditorPane.create.failed":

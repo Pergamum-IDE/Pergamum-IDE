@@ -59,7 +59,8 @@ function allSourceText(): string {
  * handle's `onKeyDown` implements Arrow Up / Down reorder for its own
  * `<button>` while that handle is focused — a keyboard fallback for the D&D
  * reorder, scoped to the handle, not a document-level/global shortcut
- * listener.
+ * listener. #573 Slice 5 moved that atom list (unchanged) into
+ * GlossaryEntryMetadataFields.tsx, which is exempt for the same reason.
  *
  * GlossaryTagManager.tsx (#375) is the same category once more: the per-row
  * tag drag handle's `onKeyDown` implements Arrow Up / Down reorder for its own
@@ -149,6 +150,7 @@ const onKeyDownExemptFileNames = new Set([
   "DocumentTabBar.tsx",
   "FileExplorer.tsx",
   "GlossaryEditor.tsx",
+  "GlossaryEntryMetadataFields.tsx",
   "GlossaryTagManager.tsx",
   "GlossaryEntryTagAssignmentEditor.tsx",
   "DocumentMapSettingsSection.tsx",

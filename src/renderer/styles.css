@@ -6384,6 +6384,81 @@ label.settingsItemHeader {
   color: #8f1b21;
 }
 
+/* #573 Slice 5: the glossary Description tab's collapsible metadata area,
+   above the Description editor + preview. Capped so the Description stays
+   the main work area; scrolls internally when expanded. */
+.glossaryDescriptionMetadataPanel {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-block-size: 45%;
+  overflow: auto;
+  border-block-end: 1px solid #e3e8ee;
+  background: #fbfcfd;
+}
+
+.glossaryDescriptionMetadataHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding-block: 4px;
+  padding-inline: 8px 16px;
+}
+
+.glossaryDescriptionMetadataToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+  padding-block: 4px;
+  padding-inline: 6px 8px;
+  cursor: pointer;
+}
+
+.glossaryDescriptionMetadataToggle:hover {
+  background: #eef3f8;
+  color: #17212b;
+}
+
+.glossaryDescriptionMetadataToggleIcon {
+  display: inline-block;
+  transition: transform 120ms ease;
+}
+
+.glossaryDescriptionMetadataToggleIcon:dir(rtl) {
+  transform: scaleX(-1);
+}
+
+.glossaryDescriptionMetadataPanel[data-expanded="true"]
+  .glossaryDescriptionMetadataToggleIcon {
+  transform: rotate(90deg);
+}
+
+.glossaryDescriptionMetadataSummary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  min-width: 0;
+  color: #52616f;
+  font-size: 12px;
+}
+
+.glossaryDescriptionMetadataSummaryInvalid {
+  color: #8f1b21;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.glossaryDescriptionMetadataBody {
+  padding-block: 8px 0;
+  padding-inline: 16px;
+}
+
 /* #375: Glossary Management tab — reuses the Tag Manager's cell / drag-handle /
    icon-button styles; only the wrapper + the 9-column row grid are its own. */
 .glossaryEntryManagerTab {

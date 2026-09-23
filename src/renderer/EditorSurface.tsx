@@ -34,6 +34,9 @@ import {
   markdownDocumentForEditor,
   type CurrentEditor
 } from "./currentEditor";
+import { GlossaryDescriptionMetadataPanel } from "./GlossaryDescriptionMetadataPanel";
+import type { GlossaryEntryDraft } from "./glossaryEntryDraft";
+import type { GlossaryTag } from "../shared/glossary";
 import {
   createCurrentDocumentMarkdownSurfaceSource,
   createGlossaryDescriptionMarkdownSurfaceSource,
@@ -452,8 +455,22 @@ export function useMemoizedPreviewRender(
   }, [previewSourceContent, resolutionKind, resolutionSourcePath, previewRenderer, calloutLabels]);
 }
 
+/** #573 Slice 5: what a glossary Description tab's metadata panel needs. */
+export interface GlossaryDescriptionMetadataConfig {
+  /** Every tag defined in the project, for the attach/detach picker. */
+  availableTags: readonly GlossaryTag[];
+  /** Apply one draft mutation to the glossary tab for `entryId`. */
+  onUpdateDraft: (
+    entryId: string,
+    update: (draft: GlossaryEntryDraft) => GlossaryEntryDraft
+  ) => void;
+  onOpenTagManager: () => void;
+}
+
 interface EditorSurfaceProps {
   editor: CurrentEditor;
+  /** #573 Slice 5: omitted = no metadata panel on glossary tabs. */
+  glossaryDescriptionMetadata?: GlossaryDescriptionMetadataConfig;
   /**
    * #505 Phase 0: gates the (high-frequency, per-scroll-event)
    * `preview.scrollSync.scrollEvent.classified` diagnostic's layout reads —
@@ -670,6 +687,7 @@ interface EditorSurfaceProps {
 
 export function EditorSurface({
   editor,
+  glossaryDescriptionMetadata,
   isDebugModeEnabled,
   isSyncScrollEditorToPreviewEnabled,
   isSyncScrollPreviewToEditorEnabled,
@@ -750,10 +768,33 @@ export function EditorSurface({
   );
   const isGlossaryDescription = editor.kind === "glossaryDescription";
 
-  // #573 Slice 3: both editor kinds share ONE MarkdownEditorSurface, so
+  // #573 Slice 5: session-local (not persisted), shared by every glossary
+  // Description tab; collapsed by default so the Description stays primary.
+  const [isGlossaryMetadataExpanded, setIsGlossaryMetadataExpanded] =
+    useState(false);
+
+  // #573 Slice 3: both editor kinds share ONE MarkdownEditorSurface at a
+  // stable position (after the optional glossary metadata panel), so
   // switching between a document tab and a glossary Description tab behaves
   // like switching between two document tabs.
   return (
+    <>
+      {editor.kind === "glossaryDescription" && glossaryDescriptionMetadata ? (
+        <GlossaryDescriptionMetadataPanel
+          draft={editor.draft}
+          availableTags={glossaryDescriptionMetadata.availableTags}
+          translate={translate}
+          readOnly={isProjectOwnedReadOnly}
+          expanded={isGlossaryMetadataExpanded}
+          onToggleExpanded={() =>
+            setIsGlossaryMetadataExpanded((expanded) => !expanded)
+          }
+          onUpdateDraft={(update) =>
+            glossaryDescriptionMetadata.onUpdateDraft(editor.entryId, update)
+          }
+          onOpenTagManager={glossaryDescriptionMetadata.onOpenTagManager}
+        />
+      ) : null}
       <MarkdownEditorSurface
           source={markdownSurfaceSource}
           isDebugModeEnabled={isDebugModeEnabled}
@@ -831,6 +872,7 @@ export function EditorSurface({
           onViewportChanged={onViewportChanged}
           onPreviewScrollSyncEvent={onPreviewScrollSyncEvent}
         />
+    </>
   );
 }
 

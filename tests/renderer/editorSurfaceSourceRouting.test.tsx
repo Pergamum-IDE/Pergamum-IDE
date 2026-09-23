@@ -341,6 +341,48 @@ describe("EditorSurface source routing (#573 Slice 2)", () => {
     expect(changes.at(-1)).toContain("> [!WARNING]");
   });
 
+  it("shows the metadata panel above the editor only for a glossary tab", () => {
+    const onUpdateDraft = vi.fn();
+    const overrides: Partial<SurfaceProps> = {
+      glossaryDescriptionMetadata: {
+        availableTags: [],
+        onUpdateDraft,
+        onOpenTagManager: vi.fn()
+      }
+    };
+    const surface = mount(
+      createGlossaryDescriptionCurrentEditor(glossaryEntry),
+      "glossary",
+      overrides
+    );
+    const panel = surface.container.querySelector(
+      ".glossaryDescriptionMetadataPanel"
+    );
+
+    expect(panel).not.toBeNull();
+    // Above (before) the editor / preview workspace.
+    expect(panel?.nextElementSibling?.classList.contains("workspace")).toBe(
+      true
+    );
+
+    act(() => {
+      surface.container
+        .querySelector<HTMLButtonElement>(".glossaryDescriptionMetadataToggle")!
+        .click();
+    });
+    act(() => {
+      surface.container
+        .querySelector<HTMLButtonElement>(".glossaryEditorAddAtom")!
+        .click();
+    });
+    expect(onUpdateDraft).toHaveBeenCalledWith(entryId, expect.any(Function));
+
+    surface.rerender(projectEditor("a.md", "本文"), "a", overrides);
+    expect(
+      surface.container.querySelector(".glossaryDescriptionMetadataPanel")
+    ).toBeNull();
+  });
+
   it("switches between a glossary Description tab and a document tab", () => {
     const surface = mount(
       createGlossaryDescriptionCurrentEditor(glossaryEntry),

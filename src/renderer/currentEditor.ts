@@ -82,6 +82,22 @@ export function createGlossaryDescriptionCurrentEditor(
 }
 
 /**
+ * #573 Slice 5: apply one draft mutation (a metadata edit from the tab's
+ * metadata panel) to a glossary Description tab's draft. Any other editor is
+ * returned unchanged.
+ */
+export function updateGlossaryDescriptionEditorDraft(
+  editor: CurrentEditor,
+  update: (draft: GlossaryEntryDraft) => GlossaryEntryDraft
+): CurrentEditor {
+  if (editor.kind !== "glossaryDescription") {
+    return editor;
+  }
+
+  return { ...editor, draft: update(editor.draft) };
+}
+
+/**
  * #573 Slice 3: apply an editor text change to a glossary Description tab's
  * in-memory draft. Any other editor is returned unchanged.
  */

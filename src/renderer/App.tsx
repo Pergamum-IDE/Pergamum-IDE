@@ -75,6 +75,7 @@ import type {
   UpdateGlossaryEntryInput,
   UpdateGlossaryTagInput
 } from "../shared/glossary";
+import { parseGlossaryAtomValueConflictMessage } from "../shared/glossary";
 import type {
   ExecuteTextImportResult,
   PreviewTextImportFilesRequest,
@@ -178,6 +179,7 @@ import {
   applyGlossaryDescriptionEditorSaveResult,
   createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
+  updateGlossaryDescriptionEditorDraft,
   updateGlossaryDescriptionEditorText,
   currentEditorProjectRelativePath,
   currentEditorTitle,
@@ -261,6 +263,7 @@ import type { ImageInsertionCopyPlanEntry } from "../shared/api";
 import {
   EditorSurface,
   type DocumentOpenAggregateMetrics,
+  type GlossaryDescriptionMetadataConfig,
   type ViewportSizeDetails
 } from "./EditorSurface";
 import { EditorToolbar } from "./components/EditorToolbar";
@@ -4374,6 +4377,32 @@ export function App(): JSX.Element {
   // #436 Phase 8-0 PoC (Slice 8): load the entry an edit-mode pane targets.
   // A thin forward of the existing glossary IPC — `GlossaryEntryEditForm`
   // owns the loading / failed / ready state and the race guard.
+  // #573 Slice 5: a metadata edit from a glossary Description tab's metadata
+  // panel mutates THAT tab's own draft — the same draft Description edits and
+  // Ctrl+S use, so dirty / save / close confirm need nothing extra.
+  function updateGlossaryDescriptionDraft(
+    entryId: GlossaryEntryId,
+    update: (draft: GlossaryEntryDraft) => GlossaryEntryDraft
+  ): void {
+    if (!canMutateActiveWorkingCopy()) {
+      return;
+    }
+
+    setOpenDocumentsState((state) =>
+      updateOpenEditor(
+        state,
+        createGlossaryDescriptionEditorId(entryId),
+        (editor) => updateGlossaryDescriptionEditorDraft(editor, update)
+      )
+    );
+  }
+
+  const glossaryDescriptionMetadataConfig: GlossaryDescriptionMetadataConfig = {
+    availableTags: glossaryTags,
+    onUpdateDraft: updateGlossaryDescriptionDraft,
+    onOpenTagManager: openGlossaryTagManagerTab
+  };
+
   async function handleLoadGlossaryEntryFromPane(
     entryId: GlossaryEntryId
   ): Promise<GlossaryEntry | null> {
@@ -7756,9 +7785,24 @@ export function App(): JSX.Element {
           savedEntry = await handleSaveGlossaryEntryFromPane(
             glossaryEntryDraftUpdateInput(draft)
           );
-        } catch {
+        } catch (error) {
           // Status + save-failed dialog were already surfaced; the tab stays
-          // open and dirty with the user's edits intact.
+          // open and dirty with the user's edits intact. #573 Slice 5: a
+          // surface already used by another entry gets the same specific
+          // message the Glossary Entry Editor Pane shows.
+          const duplicateAtomValue =
+            error instanceof Error
+              ? parseGlossaryAtomValueConflictMessage(error.message)
+              : null;
+
+          if (duplicateAtomValue !== null) {
+            notificationController.notify({
+              message: translate(
+                "glossaryEntryEditorPane.saveFailed.duplicateAtomValue",
+                { value: duplicateAtomValue }
+              )
+            });
+          }
           return "failed";
         }
 
@@ -11834,6 +11878,9 @@ export function App(): JSX.Element {
                   ) : activeDocument ? (
                     <EditorSurface
                         editor={activeDocument.editor}
+                        glossaryDescriptionMetadata={
+                          glossaryDescriptionMetadataConfig
+                        }
                         isDebugModeEnabled={isDebugModeEnabled}
                         isSyncScrollEditorToPreviewEnabled={
                           effectiveSettings.preview.syncScrollEditorToPreview
