@@ -7,11 +7,19 @@ import type { SaveImageAttachmentPayload } from "../shared/imageAttachmentSaveRe
 import type { SaveImageAttachmentResult } from "../shared/api";
 import type { Translate } from "../shared/i18n";
 import type { EffectiveImageAttachmentSettings } from "../shared/settings";
-import { markdownImageLinkForAttachment } from "../shared/markdownImageLink";
+import {
+  markdownImageLinksForAttachmentsFromBase,
+  type MarkdownImageLinkBase
+} from "../shared/markdownImageLink";
 
 export interface ImageAttachmentPasteTarget {
   readonly documentId: string;
-  readonly markdownRelativePath: string;
+  /**
+   * #573 Slice 6: what the inserted link is relative to — the project
+   * document's own folder (`sourceFile`), or the project root for a glossary
+   * Description tab (`projectRoot`), matching each surface's Preview.
+   */
+  readonly imageLinkBase: MarkdownImageLinkBase;
   readonly documentName: string;
   readonly isActive: boolean;
   readonly position: number;
@@ -252,9 +260,9 @@ export async function runImageAttachmentPasteOrchestration(
       return "targetInvalidAfterSave";
     }
 
-    const markdownLink = markdownImageLinkForAttachment({
-      markdownRelativePath: targetBeforeInsert.target.markdownRelativePath,
-      imageRelativePath: saveResult.relativePath
+    const markdownLink = markdownImageLinksForAttachmentsFromBase({
+      base: targetBeforeInsert.target.imageLinkBase,
+      imageRelativePaths: [saveResult.relativePath]
     });
 
     const inserted = deps.insertMarkdownLink({

@@ -258,7 +258,10 @@ import { getCurrentActiveEditorSelectionText } from "./find/activeEditorSelectio
 import type { MarkdownEditorToolbarShortcutConfig } from "./editorMarkdownToolbarShortcuts";
 import type { HeadingLevel } from "../shared/markdownHeadingMarkup";
 import type { MarkdownListKind } from "../shared/markdownListMarkup";
-import { markdownImageLinksForAttachments } from "../shared/markdownImageLink";
+import {
+  markdownImageLinksForAttachmentsFromBase,
+  type MarkdownImageLinkBase
+} from "../shared/markdownImageLink";
 import type { ImageInsertionCopyPlanEntry } from "../shared/api";
 import {
   EditorSurface,
@@ -2883,9 +2886,12 @@ export function App(): JSX.Element {
   // #535: narrower than `canUseMarkdownToolbarCommands` — the inserted
   // Markdown image link's relative path only makes sense for a project-owned
   // document (the attachment folder itself is always project-relative).
-  // #573: stays false for a glossary Description tab (no CurrentDocument).
+  // #573 Slice 6: a glossary Description tab also inserts images, with links
+  // relative to the project root (see `handleInsertImage`).
   const canInsertImage =
-    canUseMarkdownToolbarCommands && activeMarkdownDocument?.kind === "project";
+    canUseMarkdownToolbarCommands &&
+    (activeMarkdownDocument?.kind === "project" ||
+      isGlossaryDescriptionEditorActive);
   // #548: Preview availability is no longer gated by document extension or
   // renderer choice. The toggle controls only pane visibility; the renderer
   // dropdown controls how the current text-like document is interpreted.
@@ -3485,11 +3491,24 @@ export function App(): JSX.Element {
   // window, the info toast below explains why nothing was inserted.
   const handleInsertImage = useCallback(
     async (opener: Element | null) => {
+      // #573 Slice 6: the link base follows the surface's Preview — a
+      // project document's own folder, or the project root for a glossary
+      // Description tab (which has no source file).
       const doc = activeMarkdownDocument;
-      if (!doc || doc.kind !== "project") {
+      let imageLinkBase: MarkdownImageLinkBase;
+      if (doc?.kind === "project") {
+        imageLinkBase = {
+          kind: "sourceFile",
+          sourceMarkdownProjectRelativePath: doc.relativePath
+        };
+      } else if (currentEditor?.kind === "glossaryDescription") {
+        imageLinkBase = { kind: "projectRoot" };
+      } else {
         return;
       }
-      const markdownRelativePath = doc.relativePath;
+      // #573 Slice 6: the link is built for THIS editor, so it must still be
+      // the active one when the (async) copy completes.
+      const targetEditorId = activeDocument?.id ?? null;
 
       let saveDirectory = currentImageAttachmentSettings().saveDirectory;
 
@@ -3553,15 +3572,21 @@ export function App(): JSX.Element {
       }
 
       const selection = paragraphIndentControllerRef.current?.getSelection();
-      if (!selection) {
+      const currentActiveId = openDocumentsStateRef.current.activeDocumentId;
+      if (
+        !selection ||
+        targetEditorId === null ||
+        currentActiveId === null ||
+        !editorIdEquals(targetEditorId, currentActiveId)
+      ) {
         notifyImageAttachmentInfo(
           translate("imageInsertion.toast.targetChanged")
         );
         return;
       }
 
-      const linkText = markdownImageLinksForAttachments({
-        markdownRelativePath,
+      const linkText = markdownImageLinksForAttachmentsFromBase({
+        base: imageLinkBase,
         imageRelativePaths: copyResult.relativePaths
       });
 
@@ -3574,7 +3599,7 @@ export function App(): JSX.Element {
         notifyImageAttachmentSuccess(translate("imageInsertion.toast.inserted"));
       }
     },
-    [activeMarkdownDocument, translate]
+    [activeMarkdownDocument, activeDocument?.id, currentEditor?.kind, translate]
   );
 
   // #529 / #531: the keyboard-shortcut path for the Markdown-specific
@@ -11982,8 +12007,11 @@ export function App(): JSX.Element {
                           handleMarkdownEditorViewStateControllerChange
                         }
                         onImageAttachmentPaste={
-                          currentEditor?.kind === "markdown" &&
-                          activeMarkdownDocument?.kind === "project" &&
+                          // #573 Slice 6: a glossary Description tab pastes
+                          // too (links relative to the project root).
+                          (isGlossaryDescriptionEditorActive ||
+                            (currentEditor?.kind === "markdown" &&
+                              activeMarkdownDocument?.kind === "project")) &&
                           project?.accessMode.kind === "readWrite" &&
                           !isEditorReadOnly
                             ? handleImageAttachmentPaste

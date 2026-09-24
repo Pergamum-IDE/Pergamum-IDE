@@ -373,12 +373,11 @@ describe("App glossary Description wiring (#573 Slice 3)", () => {
     expect(block).not.toContain("window.pergamum.glossary");
   });
 
-  it("keeps image insertion and image paste file-backed only", () => {
+  // #573 Slice 6 enabled image paste / insertion for glossary tabs (project-
+  // root links); that wiring is covered by glossaryDescriptionImage.test.ts.
+  it("still limits file-backed image insertion to project documents", () => {
     expect(appSource).toContain(
-      'const canInsertImage =\n    canUseMarkdownToolbarCommands && activeMarkdownDocument?.kind === "project";'
-    );
-    expect(appSource).toContain(
-      'onImageAttachmentPaste={\n                          currentEditor?.kind === "markdown" &&\n                          activeMarkdownDocument?.kind === "project" &&'
+      'const canInsertImage =\n    canUseMarkdownToolbarCommands &&\n    (activeMarkdownDocument?.kind === "project" ||\n      isGlossaryDescriptionEditorActive);'
     );
   });
 });

@@ -17,7 +17,26 @@
  *
  * Pure string logic — no `node:path`, so `/` behavior is identical in the
  * renderer and the main process.
+ *
+ * #573 Slice 6: a glossary Description has no source file; its links are
+ * built from the project ROOT instead (see {@link MarkdownImageLinkBase}) —
+ * the same base its Preview resolves them from.
  */
+
+import type { ProjectLocalImageResolutionContext } from "./projectLocalImageLink";
+
+/**
+ * #573 Slice 6: what an inserted image link is relative to — deliberately
+ * the SAME shape as the Preview's {@link ProjectLocalImageResolutionContext}
+ * (minus `none`), so a surface builds links from exactly the base its
+ * Preview resolves them against:
+ *   - `sourceFile`  — a project Markdown document: its own folder.
+ *   - `projectRoot` — a glossary Description (no source file): the root.
+ */
+export type MarkdownImageLinkBase = Exclude<
+  ProjectLocalImageResolutionContext,
+  { kind: "none" }
+>;
 
 function toPosixSegments(relativePath: string): string[] {
   return relativePath
@@ -115,6 +134,34 @@ export function markdownImageLinkForAttachment(input: {
     input.imageRelativePath
   );
   return buildMarkdownImageLink(destination);
+}
+
+/** Project-root-relative directory a {@link MarkdownImageLinkBase} anchors at. */
+function markdownImageLinkBaseDirectory(base: MarkdownImageLinkBase): string {
+  return base.kind === "sourceFile"
+    ? projectRelativeDirname(base.sourceMarkdownProjectRelativePath)
+    : "";
+}
+
+/**
+ * #573 Slice 6: {@link markdownImageLinksForAttachments} generalized to a
+ * {@link MarkdownImageLinkBase}. For `sourceFile` it is byte-identical to the
+ * document pipeline; for `projectRoot` each destination is the image's
+ * project-root-relative path.
+ */
+export function markdownImageLinksForAttachmentsFromBase(input: {
+  readonly base: MarkdownImageLinkBase;
+  readonly imageRelativePaths: readonly string[];
+}): string {
+  const baseDirectory = markdownImageLinkBaseDirectory(input.base);
+
+  return input.imageRelativePaths
+    .map((imageRelativePath) =>
+      buildMarkdownImageLink(
+        projectRelativeLinkPath(baseDirectory, imageRelativePath)
+      )
+    )
+    .join("\n\n");
 }
 
 /**
