@@ -1727,6 +1727,8 @@ export const jaTranslations = {
   "status.recoveryRestoreFailed": "一部の項目を復元できませんでした",
   "status.recoveryGlossaryOtherProject":
     "別のプロジェクトの語彙は復元できません。そのプロジェクトを開いてから復元してください",
+  "status.recoveryGlossaryTagsRemoved":
+    "復旧した語彙から、削除済みのタグ {count} 件を除外しました。",
   "status.recoveryGlossaryTabBusy":
     "「{name}」に未保存の変更があるため復元しませんでした。保存または破棄してから復元してください",
   "status.recoveryRestored": "{count} 件を .recovered ファイルとして復元しました",

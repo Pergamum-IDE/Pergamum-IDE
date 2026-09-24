@@ -6,8 +6,12 @@ import {
   glossaryRecoveryPayloadText,
   isNewGlossaryRecoveryPayload,
   parseGlossaryRecoveryDraft,
-  serializeGlossaryRecoveryDraft
+  sanitizeGlossaryRecoveryDraftTags,
+  serializeGlossaryRecoveryDraft,
+  type GlossaryRecoveryDraft
 } from "../../src/shared/glossaryRecoveryDraft";
+import { enTranslations } from "../../src/shared/i18n/en";
+import { jaTranslations } from "../../src/shared/i18n/ja";
 import { recoveryGlossaryDocumentKey } from "../../src/shared/recoveryDocument";
 import {
   createGlossaryDescriptionCurrentEditor,
@@ -321,6 +325,181 @@ describe("restoring a glossary Recovery draft (#573 Slice 9)", () => {
   });
 });
 
+describe("validating recovered tag ids (#574 Slice 3)", () => {
+  const tagA = "0190b6a1-1c2d-7e3f-8a4b-00000000b001";
+  const tagDeleted = "0190b6a1-1c2d-7e3f-8a4b-00000000b0de";
+  const tagB = "0190b6a1-1c2d-7e3f-8a4b-00000000b002";
+
+  function recoveryDraftWithTags(
+    base: GlossaryRecoveryDraft,
+    tagIds: readonly string[]
+  ): GlossaryRecoveryDraft {
+    return { ...base, tagIds: [...tagIds] };
+  }
+
+  it("drops only the missing ids, keeping valid ones in their order", () => {
+    const base = glossaryRecoveryDraftFromEditor(editedEditor());
+    const draft = recoveryDraftWithTags(base, [tagB, tagDeleted, tagA]);
+    const result = sanitizeGlossaryRecoveryDraftTags(draft, [tagA, tagB]);
+
+    expect(result.draft.tagIds).toEqual([tagB, tagA]);
+    expect(result.removedTagIds).toEqual([tagDeleted]);
+    // Nothing else of the draft changes; the input is not mutated.
+    expect(result.draft).toEqual({ ...draft, tagIds: [tagB, tagA] });
+    expect(draft.tagIds).toEqual([tagB, tagDeleted, tagA]);
+  });
+
+  it("returns the draft untouched when every tag still exists", () => {
+    const draft = recoveryDraftWithTags(
+      glossaryRecoveryDraftFromEditor(editedEditor()),
+      [tagA, tagB]
+    );
+    const result = sanitizeGlossaryRecoveryDraftTags(draft, new Set([tagA, tagB]));
+
+    expect(result.draft).toBe(draft);
+    expect(result.removedTagIds).toEqual([]);
+  });
+
+  it("all tags deleted → an empty tag list", () => {
+    const draft = recoveryDraftWithTags(
+      glossaryRecoveryDraftFromEditor(editedEditor()),
+      [tagA, tagDeleted]
+    );
+    const result = sanitizeGlossaryRecoveryDraftTags(draft, []);
+
+    expect(result.draft.tagIds).toEqual([]);
+    expect(result.removedTagIds).toEqual([tagA, tagDeleted]);
+  });
+
+  it("existing entry: restored tab keeps Description / atoms / identity, saves only valid tags", () => {
+    const base = glossaryRecoveryDraftFromEditor(editedEditor());
+    const { draft } = sanitizeGlossaryRecoveryDraftTags(
+      recoveryDraftWithTags(base, [tagDeleted, tagA]),
+      [tagA]
+    );
+    const editor = glossaryEditorFromRecoveryDraft(draft, entry(), entryId);
+
+    expect(editor.entryId).toBe(entryId);
+    expect(editor.draft.description).toBe("復旧したい説明");
+    expect(editor.draft.atoms.map((atom) => atom.value)).toEqual(["王都", "みやこ"]);
+    expect(editor.draft.tagIds).toEqual([tagA]);
+    expect(draft.entryId).toBe(base.entryId);
+    expect(draft.baseUpdatedAt).toBe(base.baseUpdatedAt);
+    expect(isCurrentEditorDirty(editor)).toBe(true);
+    expect(glossaryEntryDraftUpdateInput(editor.draft)).toMatchObject({
+      id: entryId,
+      description: "復旧したい説明",
+      tagIds: [tagA]
+    });
+  });
+
+  it("never-saved new entry: restored tab saves only valid tags", () => {
+    const base = glossaryRecoveryDraftFromEditor(
+      createNewGlossaryDescriptionCurrentEditor("新語", localId)
+    );
+    const { draft } = sanitizeGlossaryRecoveryDraftTags(
+      recoveryDraftWithTags(base, [tagA, tagDeleted, tagB]),
+      [tagA, tagB]
+    );
+    const editor = glossaryEditorFromRecoveryDraft(draft, null, localId);
+
+    expect(draft.localId).toBe(base.localId);
+    expect(glossaryEntryDraftIsNew(editor.draft)).toBe(true);
+    expect(editor.representativeSurface).toBe("新語");
+    expect(glossaryEntryDraftCreateInput(editor.draft).tagIds).toEqual([tagA, tagB]);
+  });
+
+  it("deleted entry restored as new: saves only valid tags", () => {
+    const base = glossaryRecoveryDraftFromEditor(editedEditor());
+    const { draft, removedTagIds } = sanitizeGlossaryRecoveryDraftTags(
+      recoveryDraftWithTags(base, [tagDeleted]),
+      [tagA]
+    );
+    const editor = glossaryEditorFromRecoveryDraft(draft, null, localId);
+
+    expect(removedTagIds).toEqual([tagDeleted]);
+    expect(glossaryEntryDraftIsNew(editor.draft)).toBe(true);
+    expect(glossaryEntryDraftCreateInput(editor.draft)).toEqual({
+      description: "復旧したい説明",
+      atoms: [
+        { value: "王都", matchFlags: 0 },
+        { value: "みやこ", matchFlags: 0 }
+      ],
+      tagIds: []
+    });
+  });
+});
+
+describe("App glossary Recovery tag validation wiring (#574 Slice 3)", () => {
+  const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+
+  function block(start: string, end: string): string {
+    const startIndex = appSource.indexOf(start);
+    const endIndex = appSource.indexOf(end, startIndex + start.length);
+
+    expect(startIndex).toBeGreaterThan(-1);
+    expect(endIndex).toBeGreaterThan(startIndex);
+    return appSource.slice(startIndex, endIndex);
+  }
+
+  it("validates against fresh tags before opening any tab; the sanitized draft is what opens", () => {
+    const restoreBlock = block(
+      "async function restoreGlossaryRecoveryCandidate(",
+      "async function openRecoveredGlossaryDraft("
+    );
+    const draftCaseIndex = restoreBlock.indexOf('case "draft":');
+    const listTagsIndex = restoreBlock.indexOf("window.pergamum.glossary.listTags()");
+    const sanitizeIndex = restoreBlock.indexOf("sanitizeGlossaryRecoveryDraftTags(");
+    const openIndex = restoreBlock.indexOf(
+      "await openRecoveredGlossaryDraft(sanitized.draft)"
+    );
+
+    expect(draftCaseIndex).toBeGreaterThan(-1);
+    expect(listTagsIndex).toBeGreaterThan(draftCaseIndex);
+    expect(sanitizeIndex).toBeGreaterThan(listTagsIndex);
+    expect(openIndex).toBeGreaterThan(sanitizeIndex);
+    // A failed tag read keeps the row (no tab, no finalize).
+    expect(restoreBlock).toContain(
+      'setStatus({ key: "status.recoveryRestoreFailed" });\n      return notRestored("kept");\n    }\n\n    const sanitized'
+    );
+    expect(restoreBlock).toContain('outcome === "opened" ? sanitized.removedTagIds.length : 0');
+    expect(restoreBlock).not.toContain("glossaryEditorFromRecoveryDraft(");
+  });
+
+  it("every open path uses the validated draft only", () => {
+    const openBlock = block(
+      "async function openRecoveredGlossaryDraft(",
+      "async function handleRecoveryRestoreSelected("
+    );
+
+    expect(openBlock).toContain("draft: GlossaryRecoveryDraft");
+    expect(openBlock).not.toContain("read.result");
+    expect(openBlock).not.toContain("readGlossaryCandidateDraft");
+    expect(openBlock).toContain("glossaryEditorFromRecoveryDraft(draft, null, localId)");
+  });
+
+  it("notifies the count once; restored candidates are still finalized", () => {
+    const selectedBlock = block(
+      "async function handleRecoveryRestoreSelected(",
+      "async function getRecoveryReportTextForDialog"
+    );
+
+    expect(selectedBlock).toContain("removedGlossaryTagCount += removedTagCount;");
+    expect(selectedBlock).toContain('key: "status.recoveryGlossaryTagsRemoved"');
+    expect(selectedBlock).toContain("values: { count: removedGlossaryTagCount }");
+    expect(selectedBlock).toContain("recoveryIds: glossaryOpenedIds");
+  });
+
+  it("has ja / en notice text with the count only", () => {
+    expect(jaTranslations["status.recoveryGlossaryTagsRemoved"]).toBe(
+      "復旧した語彙から、削除済みのタグ {count} 件を除外しました。"
+    );
+    expect(enTranslations["status.recoveryGlossaryTagsRemoved"]).toBe(
+      "Removed {count} deleted tag(s) from the recovered glossary entry."
+    );
+  });
+});
+
 describe("App glossary Recovery wiring (#573 Slice 9)", () => {
   const appSource = readFileSync("src/renderer/App.tsx", "utf8");
 
@@ -360,7 +539,9 @@ describe("App glossary Recovery wiring (#573 Slice 9)", () => {
     expect(restoreBlock).toContain(
       'setStatus({ key: "status.recoveryGlossaryOtherProject" });'
     );
-    expect(restoreBlock).toContain('case "invalid":\n        return "fallback";');
+    expect(restoreBlock).toContain(
+      'case "invalid":\n        return notRestored("fallback");'
+    );
     expect(restoreBlock).toContain(
       "if (openTab && isCurrentEditorDirty(openTab.editor)) {"
     );

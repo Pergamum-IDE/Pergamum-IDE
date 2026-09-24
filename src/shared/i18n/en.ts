@@ -1728,6 +1728,8 @@ export const enTranslations = {
   "status.recoveryRestoreFailed": "Some items could not be restored",
   "status.recoveryGlossaryOtherProject":
     "Glossary entries from another project cannot be restored here. Open that project, then restore",
+  "status.recoveryGlossaryTagsRemoved":
+    "Removed {count} deleted tag(s) from the recovered glossary entry.",
   "status.recoveryGlossaryTabBusy":
     "\"{name}\" has unsaved changes, so it was not restored. Save or discard them, then restore",
   "status.recoveryRestored": "Restored {count} item(s) as .recovered files",

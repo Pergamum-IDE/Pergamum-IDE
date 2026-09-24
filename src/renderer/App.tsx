@@ -329,6 +329,10 @@ import {
   glossaryEditorFromRecoveryDraft,
   recoveryDocumentKeyForGlossaryEditor
 } from "./recovery/glossaryRecovery";
+import {
+  sanitizeGlossaryRecoveryDraftTags,
+  type GlossaryRecoveryDraft
+} from "../shared/glossaryRecoveryDraft";
 import { RecoveryCandidateDialog } from "./recovery/RecoveryCandidateDialog";
 import {
   createRecoveryCommandTitles,
@@ -5216,11 +5220,28 @@ export function App(): JSX.Element {
   //     Ctrl+S creates the entry; nothing is written to the DB here).
   // Returns whether a tab opened, the row should fall back to `.recovered.md`,
   // or it is kept for later.
+  // #574 Slice 3: the recovered draft's tag ids are validated against the
+  // project's CURRENT tags before any tab opens — a tag deleted after the
+  // snapshot is dropped (only the tag id; Description / atoms / search
+  // settings / identity are kept), so the restored tab can still be saved.
+  // Applies to every path below (existing entry, never-saved entry, deleted
+  // entry recovered as new). `removedTagCount` is reported only when a tab
+  // actually opened.
   async function restoreGlossaryRecoveryCandidate(
     recoveryId: string
-  ): Promise<"opened" | "fallback" | "kept"> {
+  ): Promise<{
+    readonly outcome: "opened" | "fallback" | "kept";
+    readonly removedTagCount: number;
+  }> {
+    const notRestored = (
+      outcome: "fallback" | "kept"
+    ): { readonly outcome: "fallback" | "kept"; readonly removedTagCount: 0 } => ({
+      outcome,
+      removedTagCount: 0
+    });
+
     if (isLifecycleCommitBarrierActiveNow()) {
-      return "kept";
+      return notRestored("kept");
     }
 
     let read: Awaited<
@@ -5233,26 +5254,55 @@ export function App(): JSX.Element {
       });
     } catch {
       setStatus({ key: "status.recoveryRestoreFailed" });
-      return "kept";
+      return notRestored("kept");
     }
 
     if (!read.ok) {
-      return "kept";
+      return notRestored("kept");
     }
 
     switch (read.result.kind) {
       case "missing":
-        return "kept";
+        return notRestored("kept");
       case "differentProject":
         setStatus({ key: "status.recoveryGlossaryOtherProject" });
-        return "kept";
+        return notRestored("kept");
       case "invalid":
-        return "fallback";
+        return notRestored("fallback");
       case "draft":
         break;
     }
 
-    const { draft } = read.result;
+    let existingTagIds: string[];
+
+    try {
+      existingTagIds = (await window.pergamum.glossary.listTags()).map(
+        (tag) => tag.id
+      );
+    } catch {
+      // Cannot validate the tags — keep the row rather than open a tab that
+      // might not be savable.
+      setStatus({ key: "status.recoveryRestoreFailed" });
+      return notRestored("kept");
+    }
+
+    const sanitized = sanitizeGlossaryRecoveryDraftTags(
+      read.result.draft,
+      existingTagIds
+    );
+    const outcome = await openRecoveredGlossaryDraft(sanitized.draft);
+
+    return {
+      outcome,
+      removedTagCount:
+        outcome === "opened" ? sanitized.removedTagIds.length : 0
+    };
+  }
+
+  // #573 Slice 9: open a (validated) recovered draft as a dirty glossary tab.
+  async function openRecoveredGlossaryDraft(
+    draft: GlossaryRecoveryDraft
+  ): Promise<"opened" | "kept"> {
     let currentEntry: GlossaryEntry | null = null;
 
     if (draft.entryId !== null) {
@@ -5351,18 +5401,31 @@ export function App(): JSX.Element {
     const glossaryFallbackIds = new Set<string>();
     const glossaryOpenedIds: string[] = [];
 
+    let removedGlossaryTagCount = 0;
+
     for (const recoveryId of recoveryIds) {
       if (byId.get(recoveryId)?.documentType !== "glossary.description") {
         continue;
       }
 
-      const outcome = await restoreGlossaryRecoveryCandidate(recoveryId);
+      const { outcome, removedTagCount } =
+        await restoreGlossaryRecoveryCandidate(recoveryId);
 
       if (outcome === "opened") {
         glossaryOpenedIds.push(recoveryId);
+        removedGlossaryTagCount += removedTagCount;
       } else if (outcome === "fallback") {
         glossaryFallbackIds.add(recoveryId);
       }
+    }
+
+    // #574 Slice 3: a non-blocking notice — the count only, never tag labels
+    // or Description text. Restoring still counts as a success (finalized).
+    if (removedGlossaryTagCount > 0) {
+      setStatus({
+        key: "status.recoveryGlossaryTagsRemoved",
+        values: { count: removedGlossaryTagCount }
+      });
     }
 
     if (glossaryOpenedIds.length > 0) {
