@@ -2,6 +2,7 @@ import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import editIcon from "../../assets/icons/feather/global/edit-2.svg?raw";
 import deleteIcon from "../../assets/icons/feather/glossary/delete.svg?raw";
 import exportIcon from "../../assets/icons/codicons/dialog/export.svg?raw";
+import gripperIconRaw from "../../assets/icons/codicons/dialog/gripper.svg?raw";
 import {
   representativeGlossaryAtom,
   type GlossaryEntry,
@@ -54,10 +55,6 @@ interface GlossaryEntryManagerProps {
  *  File Explorer / tab / atom / tag reorder drags. */
 const ENTRY_REORDER_MIME = "application/x-pergamum-glossary-entry-reorder";
 
-/** The grab-to-reorder glyph shown at the head of every entry row. Shared with
- *  the Tag Manager. */
-const ENTRY_DRAG_HANDLE_GLYPH = "⣿";
-
 /** `2026-09-03T12:34:56.000Z` → `2026-09-03`. Display-only; save values are
  *  never touched. Falls back to the raw string for a non-ISO value. */
 function formatEntryTimestamp(iso: string): string {
@@ -86,7 +83,7 @@ const TABLE_COLUMN_KEYS = [
 /**
  * #375: the Glossary Management tab — a table-shaped surface for the glossary
  * ENTRIES themselves
- * (`[⣿ handle][entry][tags][tag count][atoms][created][updated][edit][export][delete]`),
+ * (`[drag handle][entry][tags][tag count][atoms][created][updated][edit][export][delete]`),
  * with drag-handle reorder of the project-wide `glossary_entries.sort_order`.
  * An "Add entry" primary action sits top-left (not a page heading). Clicking a
  * row opens that entry's glossary Description tab (#573 Slice 7); the
@@ -291,7 +288,7 @@ export function GlossaryEntryManager({
                       }
                     }}
                   >
-                    <span aria-hidden="true">{ENTRY_DRAG_HANDLE_GLYPH}</span>
+                    <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: gripperIconRaw }} />
                   </button>
                 </span>
 

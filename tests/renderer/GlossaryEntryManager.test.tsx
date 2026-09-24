@@ -264,12 +264,12 @@ describe("GlossaryEntryManager (#375)", () => {
     expect(onOpenEntry).toHaveBeenCalledTimes(2);
   });
 
-  it("puts a ⣿ drag handle at the head of every row", () => {
+  it("puts a drag handle at the head of every row", () => {
     render({ entries: [entryA, entryB, entryC] });
     const rowHandles = handles();
     expect(rowHandles).toHaveLength(3);
     for (const handle of rowHandles) {
-      expect(handle.textContent).toBe("⣿");
+      expect(handle.querySelector("svg")).not.toBeNull();
       expect(handle.getAttribute("aria-label")).toBe(
         "glossary.entryManager.dragHandle"
       );

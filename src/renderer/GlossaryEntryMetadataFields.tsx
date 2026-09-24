@@ -1,5 +1,6 @@
 import { useState } from "react";
 import deleteIcon from "../../assets/icons/feather/glossary/delete.svg?raw";
+import gripperIconRaw from "../../assets/icons/codicons/dialog/gripper.svg?raw";
 import type { GlossaryTag } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import { pergamumContextSurfaceAttribute } from "../shared/editContextMenu";
@@ -21,9 +22,6 @@ import {
 /** Private DataTransfer type — keeps atom reorder drags from mixing with
  *  File Explorer / tab reorder drags. */
 const ATOM_REORDER_MIME = "application/x-pergamum-glossary-atom-reorder";
-
-/** The grab-to-reorder glyph shown at the head of every atom row. */
-const ATOM_DRAG_HANDLE_GLYPH = "⣿"; // ⣿
 
 /**
  * The atom / tag editing callbacks, one per draft mutation — used by the
@@ -235,7 +233,7 @@ export function GlossaryEntryMetadataFields({
                       }
                     }}
                   >
-                    <span aria-hidden="true">{ATOM_DRAG_HANDLE_GLYPH}</span>
+                    <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: gripperIconRaw }} />
                   </button>
                   {index === 0 ? (
                     <span className="glossaryEditorAtomRepresentativeBadge">

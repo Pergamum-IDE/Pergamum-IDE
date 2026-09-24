@@ -128,7 +128,7 @@ describe("GlossaryEntryMetadataFields (#375)", () => {
     expect(markup).not.toContain("warningPolicy");
   });
 
-  it("renders a ⣿ drag handle per atom row and no ↑ / ↓ move buttons", () => {
+  it("renders a drag handle per atom row and no ↑ / ↓ move buttons", () => {
     const markup = render(createGlossaryEntryDraft(entry()));
 
     // One labelled handle per atom (2 atoms in the fixture).

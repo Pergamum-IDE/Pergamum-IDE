@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import editIcon from "../../assets/icons/feather/global/edit-2.svg?raw";
 import deleteIcon from "../../assets/icons/feather/glossary/delete.svg?raw";
+import gripperIconRaw from "../../assets/icons/codicons/dialog/gripper.svg?raw";
 import type {
   CreateGlossaryTagInput,
   GlossaryTag,
@@ -49,9 +50,6 @@ interface GlossaryTagManagerProps {
  *  Explorer / tab / atom reorder drags. */
 const TAG_REORDER_MIME = "application/x-pergamum-glossary-tag-reorder";
 
-/** The grab-to-reorder glyph shown at the head of every tag row. */
-const TAG_DRAG_HANDLE_GLYPH = "⣿";
-
 /** `2026-09-03T12:34:56.000Z` → `2026-09-03`. Display-only; save values are
  *  never touched. Falls back to the raw string for a non-ISO value. */
 function formatTagTimestamp(iso: string): string {
@@ -75,7 +73,7 @@ const TABLE_COLUMN_KEYS = [
 
 /**
  * #375: the Glossary Tag Manager tab — a table-shaped management surface
- * (`[⣿ handle][chip][description][entries][created][updated][edit][delete]`),
+ * (`[drag handle][chip][description][entries][created][updated][edit][delete]`),
  * an "Add tag" primary action (top-left, not a page heading), a modal
  * {@link GlossaryTagEditor} for create / edit, and drag-handle reorder of the
  * tag `sortOrder`. Delete goes back to the host for the shared destructive
@@ -283,7 +281,7 @@ export function GlossaryTagManager({
                     }
                   }}
                 >
-                  <span aria-hidden="true">{TAG_DRAG_HANDLE_GLYPH}</span>
+                  <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: gripperIconRaw }} />
                 </button>
               </span>
               <span role="cell" className="glossaryTagManagerCell">
