@@ -1015,7 +1015,7 @@ export const jaTranslations = {
   "glossaryDescriptionTab.metadata.summary.atomCount": "表記: {count}",
   "glossaryDescriptionTab.metadata.summary.tags": "タグ: {tags}",
   "glossaryDescriptionTab.metadata.summary.noTags": "タグ: なし",
-  "glossaryEntryEditorPane.saveFailed.duplicateAtomValue":
+  "glossaryEditor.saveFailed.duplicateAtomValue":
     "同じ表記の語彙Atom「{value}」がすでに存在します。",
   "glossaryTagEditor.background": "背景色",
   "glossaryTagEditor.cancel": "キャンセル",

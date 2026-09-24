@@ -66,7 +66,7 @@ const workspaceSidebarRequiredDefaults = {
   glossaryRefreshToken: 0,
   fileExplorerCreateEntryRequest: null,
   onFileExplorerCreateEntryRequestHandled: () => undefined,
-  onOpenGlossaryCreateEntryPane: () => undefined,
+  onOpenNewGlossaryEntryTab: () => undefined,
   glossaryActiveDocumentContent: null,
   onNavigateGlossaryOccurrence: () => undefined
 };
@@ -922,7 +922,7 @@ describe("workspace navigation", () => {
         activeDocumentContent: null,
         translate,
         onActivateEntry: () => undefined,
-        onOpenCreateEntryPane: () => undefined,
+        onOpenNewEntryTab: () => undefined,
         onNavigateOccurrence: () => undefined
       })
     );

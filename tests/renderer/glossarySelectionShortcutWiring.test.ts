@@ -15,11 +15,11 @@ function region(source: string, header: string, length = 1200): string {
 // through EditorSurface's `onGlossarySelectionShortcut` prop to
 // `handleGlossarySelectionShortcut` in App.tsx, which dispatches the new
 // `glossary.openFromEditorSelection` command. The command's controller
-// (`openGlossaryEntryEditorPaneFromSelection`, shared with a future
+// (`openGlossaryEntryTabFromSelection`, shared with a future
 // right-click entry point) resolves the target via
-// `resolveGlossaryEntryEditorPaneTargetFromSelection` against the live
+// `resolveGlossaryEntryTargetFromSelection` against the live
 // `glossaryEntries` list, then routes through the SAME dirty-confirm
-// transition every other "open create/edit pane" caller already uses.
+// tab-open route every other "open / create glossary entry" caller uses.
 describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
   it("EditorSurface JSX wires onGlossarySelectionShortcut to handleGlossarySelectionShortcut", () => {
     const source = appSource();
@@ -42,7 +42,7 @@ describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
 
     expect(body).toContain("executeUiCommand(");
     expect(body).toContain(
-      "glossaryEntryEditorPaneCommandIds.openFromEditorSelection"
+      "glossaryEntryTabCommandIds.openFromEditorSelection"
     );
     expect(body).toContain("selectedText");
   });
@@ -50,12 +50,12 @@ describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
   it("the command controller routes Ctrl+G to the glossary Description tab resolver (#573 Slice 7)", () => {
     const body = region(
       appSource(),
-      "registerGlossaryEntryEditorPaneCommands(",
+      "registerGlossaryEntryTabCommands(",
       1400
     );
 
     expect(body).toContain(
-      "openGlossaryEntryEditorPaneFromSelection: async (selectedText) => {\n          await openGlossaryDescriptionTabFromSelection(selectedText);"
+      "openGlossaryEntryTabFromSelection: async (selectedText) => {\n          await openGlossaryDescriptionTabFromSelection(selectedText);"
     );
   });
 
@@ -66,7 +66,7 @@ describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
       1200
     );
 
-    expect(body).toContain("resolveGlossaryEntryEditorPaneTargetFromSelection(");
+    expect(body).toContain("resolveGlossaryEntryTargetFromSelection(");
     expect(body).toContain("glossaryEntries");
     // All 3 resolution outcomes are handled.
     expect(body).toContain('resolution.kind === "ambiguous"');

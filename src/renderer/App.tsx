@@ -403,12 +403,12 @@ import {
 // has a new home.
 import {
   DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
-  createGlossaryEntryEditorPaneCommandTitles,
-  glossaryEntryEditorPaneCommandIds,
+  createGlossaryEntryTabCommandTitles,
+  glossaryEntryTabCommandIds,
   presetRepresentativeOrDefault,
-  registerGlossaryEntryEditorPaneCommands
-} from "./glossaryEntryEditorPaneCommands";
-import { resolveGlossaryEntryEditorPaneTargetFromSelection } from "./glossarySelectionResolution";
+  registerGlossaryEntryTabCommands
+} from "./glossaryEntryTabCommands";
+import { resolveGlossaryEntryTargetFromSelection } from "./glossarySelectionResolution";
 import {
   EditorNavigation,
   type EditorResolveResult,
@@ -1267,7 +1267,7 @@ export function App(): JSX.Element {
   async function openGlossaryDescriptionTabFromSelection(
     selectedText: string
   ): Promise<void> {
-    const resolution = resolveGlossaryEntryEditorPaneTargetFromSelection(
+    const resolution = resolveGlossaryEntryTargetFromSelection(
       selectedText,
       glossaryEntries
     );
@@ -1292,7 +1292,7 @@ export function App(): JSX.Element {
   // when/isEnabled/logging path every other UI-triggered command does.
   function handleGlossarySelectionShortcut(selectedText: string): void {
     executeUiCommand(
-      glossaryEntryEditorPaneCommandIds.openFromEditorSelection,
+      glossaryEntryTabCommandIds.openFromEditorSelection,
       { source: "editorSurface" },
       selectedText
     );
@@ -3864,20 +3864,20 @@ export function App(): JSX.Element {
     // points (Glossary side pane "語彙を追加", Glossary Management add / edit,
     // Ctrl+G). Their command ids predate #573 and are kept stable; they now
     // open glossary Description tabs instead of the removed bottom pane.
-    registerGlossaryEntryEditorPaneCommands(
+    registerGlossaryEntryTabCommands(
       registry,
       {
-        openGlossaryEntryCreatePane: (options) => {
+        openNewGlossaryEntryTab: (options) => {
           openNewGlossaryDescriptionTab(options.presetRepresentative);
         },
-        openGlossaryEntryEditPane: async (options) => {
+        openGlossaryEntryTab: async (options) => {
           await openGlossaryDescriptionTab(options.entryId);
         },
-        openGlossaryEntryEditorPaneFromSelection: async (selectedText) => {
+        openGlossaryEntryTabFromSelection: async (selectedText) => {
           await openGlossaryDescriptionTabFromSelection(selectedText);
         }
       },
-      createGlossaryEntryEditorPaneCommandTitles(translate)
+      createGlossaryEntryTabCommandTitles(translate)
     );
     // #457: Ctrl+Shift+F / Ctrl+Shift+H - application-menu accelerators
     // only (palette-hidden, same rationale as Ctrl+G above), since they
@@ -4208,9 +4208,9 @@ export function App(): JSX.Element {
   // #436 Slice 3 / #573 Slice 7: the Glossary side pane's "語彙を追加" opens a
   // new, unsaved glossary Description tab (nothing is written to the DB until
   // its first save).
-  function openGlossaryCreateEntryPaneFromSidebar(): void {
+  function openNewGlossaryEntryTabFromSidebar(): void {
     executeUiCommand(
-      glossaryEntryEditorPaneCommandIds.openCreatePane,
+      glossaryEntryTabCommandIds.openNewEntryTab,
       { source: "workspaceSidebar" },
       {
         source: "glossary-pane",
@@ -4432,7 +4432,7 @@ export function App(): JSX.Element {
   // edit action opens (or focuses) that entry's tab.
   function handleAddGlossaryEntryFromManager(): void {
     executeUiCommand(
-      glossaryEntryEditorPaneCommandIds.openCreatePane,
+      glossaryEntryTabCommandIds.openNewEntryTab,
       { source: "editorSurface" },
       {
         source: "glossary-settings",
@@ -4443,7 +4443,7 @@ export function App(): JSX.Element {
 
   function handleEditGlossaryEntryFromManager(entryId: GlossaryEntryId): void {
     executeUiCommand(
-      glossaryEntryEditorPaneCommandIds.openEditPane,
+      glossaryEntryTabCommandIds.openEntryTab,
       { source: "editorSurface" },
       { source: "glossary-settings", entryId }
     );
@@ -7930,7 +7930,7 @@ export function App(): JSX.Element {
           if (duplicateAtomValue !== null) {
             notificationController.notify({
               message: translate(
-                "glossaryEntryEditorPane.saveFailed.duplicateAtomValue",
+                "glossaryEditor.saveFailed.duplicateAtomValue",
                 { value: duplicateAtomValue }
               )
             });
@@ -12216,8 +12216,8 @@ export function App(): JSX.Element {
                           entryId
                         );
                       }}
-                      onOpenGlossaryCreateEntryPane={
-                        openGlossaryCreateEntryPaneFromSidebar
+                      onOpenNewGlossaryEntryTab={
+                        openNewGlossaryEntryTabFromSidebar
                       }
                       glossaryActiveDocumentContent={
                         activeMarkdownDocument

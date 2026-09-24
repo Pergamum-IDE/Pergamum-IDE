@@ -383,7 +383,7 @@ describe("App glossary Description wiring (#573 Slice 3)", () => {
   it("routes editor text changes of a glossary tab into its in-memory draft", () => {
     const block = appSource.slice(
       appSource.indexOf("function setActiveDocumentContent"),
-      appSource.indexOf("function openGlossaryCreateEntryPaneFromSidebar")
+      appSource.indexOf("function openNewGlossaryEntryTabFromSidebar")
     );
 
     expect(block).toContain(

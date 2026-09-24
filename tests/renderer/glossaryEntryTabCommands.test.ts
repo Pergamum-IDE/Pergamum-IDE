@@ -2,26 +2,26 @@ import { describe, expect, it } from "vitest";
 import { CommandRegistry } from "../../src/shared/commandRegistry";
 import type { Translate } from "../../src/shared/i18n";
 import {
-  createGlossaryEntryEditorPaneCommandTitles,
-  glossaryEntryEditorPaneCommandIds,
-  registerGlossaryEntryEditorPaneCommands,
-  type GlossaryEntryEditorPaneCommandController
-} from "../../src/renderer/glossaryEntryEditorPaneCommands";
+  createGlossaryEntryTabCommandTitles,
+  glossaryEntryTabCommandIds,
+  registerGlossaryEntryTabCommands,
+  type GlossaryEntryTabCommandController
+} from "../../src/renderer/glossaryEntryTabCommands";
 
 const translate: Translate = (key) => key;
 const executionOptions = { source: "unknown" } as const;
 
 const titles = {
-  openCreatePane: "Open create pane",
-  openCreatePaneDescription: "Open create pane description",
-  openEditPane: "Open edit pane",
-  openEditPaneDescription: "Open edit pane description",
+  openNewEntryTab: "Open new entry tab",
+  openNewEntryTabDescription: "Open new entry tab description",
+  openEntryTab: "Open entry tab",
+  openEntryTabDescription: "Open entry tab description",
   openFromEditorSelection: "Open from editor selection",
   openFromEditorSelectionDescription: "Open from editor selection description"
 };
 
 function recordingController(): {
-  controller: GlossaryEntryEditorPaneCommandController;
+  controller: GlossaryEntryTabCommandController;
   calls: string[];
 } {
   const calls: string[] = [];
@@ -29,41 +29,41 @@ function recordingController(): {
   return {
     calls,
     controller: {
-      openGlossaryEntryCreatePane: (options) => {
+      openNewGlossaryEntryTab: (options) => {
         calls.push(`create:${options.source}:${options.presetRepresentative ?? ""}`);
       },
-      openGlossaryEntryEditPane: (options) => {
+      openGlossaryEntryTab: (options) => {
         calls.push(`edit:${options.source}:${options.entryId}`);
       },
-      openGlossaryEntryEditorPaneFromSelection: (selectedText) => {
+      openGlossaryEntryTabFromSelection: (selectedText) => {
         calls.push(`fromSelection:${selectedText}`);
       }
     }
   };
 }
 
-describe("glossary entry editor pane commands — Slice 2 (#436)", () => {
+describe("glossary entry tab commands — Slice 2 (#436, renamed #574 Slice 5)", () => {
   it("registers the create / edit / open-from-selection commands under the glossary domain (#573 Slice 7: no closePane)", () => {
     const registry = new CommandRegistry();
     const { controller } = recordingController();
 
-    registerGlossaryEntryEditorPaneCommands(registry, controller, titles);
+    registerGlossaryEntryTabCommands(registry, controller, titles);
 
     expect(registry.list().map((command) => command.id)).toEqual([
-      glossaryEntryEditorPaneCommandIds.openCreatePane,
-      glossaryEntryEditorPaneCommandIds.openEditPane,
-      glossaryEntryEditorPaneCommandIds.openFromEditorSelection
+      glossaryEntryTabCommandIds.openNewEntryTab,
+      glossaryEntryTabCommandIds.openEntryTab,
+      glossaryEntryTabCommandIds.openFromEditorSelection
     ]);
-    expect(Object.keys(glossaryEntryEditorPaneCommandIds)).not.toContain(
+    expect(Object.keys(glossaryEntryTabCommandIds)).not.toContain(
       "closePane"
     );
-    expect(glossaryEntryEditorPaneCommandIds.openCreatePane).toBe(
+    expect(glossaryEntryTabCommandIds.openNewEntryTab).toBe(
       "glossary.openCreateEntryPane"
     );
-    expect(glossaryEntryEditorPaneCommandIds.openEditPane).toBe(
+    expect(glossaryEntryTabCommandIds.openEntryTab).toBe(
       "glossary.openEditEntryPane"
     );
-    expect(glossaryEntryEditorPaneCommandIds.openFromEditorSelection).toBe(
+    expect(glossaryEntryTabCommandIds.openFromEditorSelection).toBe(
       "glossary.openFromEditorSelection"
     );
   });
@@ -72,7 +72,7 @@ describe("glossary entry editor pane commands — Slice 2 (#436)", () => {
     const registry = new CommandRegistry();
     const { controller } = recordingController();
 
-    registerGlossaryEntryEditorPaneCommands(registry, controller, titles);
+    registerGlossaryEntryTabCommands(registry, controller, titles);
 
     for (const command of registry.list()) {
       expect(command.palette).toEqual({ visible: false });
@@ -83,20 +83,20 @@ describe("glossary entry editor pane commands — Slice 2 (#436)", () => {
     const registry = new CommandRegistry();
     const { controller, calls } = recordingController();
 
-    registerGlossaryEntryEditorPaneCommands(registry, controller, titles);
+    registerGlossaryEntryTabCommands(registry, controller, titles);
 
     await registry.execute(
-      glossaryEntryEditorPaneCommandIds.openCreatePane,
+      glossaryEntryTabCommandIds.openNewEntryTab,
       executionOptions,
       { source: "glossary-pane" }
     );
     await registry.execute(
-      glossaryEntryEditorPaneCommandIds.openEditPane,
+      glossaryEntryTabCommandIds.openEntryTab,
       executionOptions,
       { source: "glossary-settings", entryId: "entry-9" }
     );
     await registry.execute(
-      glossaryEntryEditorPaneCommandIds.openFromEditorSelection,
+      glossaryEntryTabCommandIds.openFromEditorSelection,
       executionOptions,
       "アリス"
     );
@@ -109,12 +109,12 @@ describe("glossary entry editor pane commands — Slice 2 (#436)", () => {
   });
 
   it("derives command titles through translate", () => {
-    expect(createGlossaryEntryEditorPaneCommandTitles(translate)).toEqual({
-      openCreatePane: "command.glossary.openCreateEntryPane",
-      openCreatePaneDescription:
+    expect(createGlossaryEntryTabCommandTitles(translate)).toEqual({
+      openNewEntryTab: "command.glossary.openCreateEntryPane",
+      openNewEntryTabDescription:
         "command.glossary.openCreateEntryPane.description",
-      openEditPane: "command.glossary.openEditEntryPane",
-      openEditPaneDescription: "command.glossary.openEditEntryPane.description",
+      openEntryTab: "command.glossary.openEditEntryPane",
+      openEntryTabDescription: "command.glossary.openEditEntryPane.description",
       openFromEditorSelection: "command.glossary.openFromEditorSelection",
       openFromEditorSelectionDescription:
         "command.glossary.openFromEditorSelection.description"

@@ -12,7 +12,7 @@ import { registerDebugLogCommands } from "../../src/renderer/debugLogCommands";
 import { registerEditorCommands } from "../../src/renderer/editorCommands";
 import { registerFileExplorerCommands } from "../../src/renderer/fileExplorerCommands";
 import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
-import { registerGlossaryEntryEditorPaneCommands } from "../../src/renderer/glossaryEntryEditorPaneCommands";
+import { registerGlossaryEntryTabCommands } from "../../src/renderer/glossaryEntryTabCommands";
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 import { registerGlossaryOccurrencesCommands } from "../../src/renderer/glossaryOccurrencesCommands";
 import { registerProjectSearchSelectionShortcutCommands } from "../../src/renderer/projectSearchSelectionShortcutCommands";
@@ -201,18 +201,18 @@ function buildCoreCommandRegistry(): CommandRegistry {
       manageEntriesDescription: "Manage glossary entries"
     }
   );
-  registerGlossaryEntryEditorPaneCommands(
+  registerGlossaryEntryTabCommands(
     registry,
     {
-      openGlossaryEntryCreatePane: () => undefined,
-      openGlossaryEntryEditPane: () => undefined,
-      openGlossaryEntryEditorPaneFromSelection: () => undefined
+      openNewGlossaryEntryTab: () => undefined,
+      openGlossaryEntryTab: () => undefined,
+      openGlossaryEntryTabFromSelection: () => undefined
     },
     {
-      openCreatePane: "Open create pane",
-      openCreatePaneDescription: "Open create pane",
-      openEditPane: "Open edit pane",
-      openEditPaneDescription: "Open edit pane",
+      openNewEntryTab: "Open new entry tab",
+      openNewEntryTabDescription: "Open new entry tab",
+      openEntryTab: "Open entry tab",
+      openEntryTabDescription: "Open entry tab",
       openFromEditorSelection: "Open from editor selection",
       openFromEditorSelectionDescription: "Open from editor selection"
     }

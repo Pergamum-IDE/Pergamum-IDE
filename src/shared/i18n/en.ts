@@ -1020,7 +1020,7 @@ export const enTranslations = {
   "glossaryDescriptionTab.metadata.summary.atomCount": "Surfaces: {count}",
   "glossaryDescriptionTab.metadata.summary.tags": "Tags: {tags}",
   "glossaryDescriptionTab.metadata.summary.noTags": "Tags: none",
-  "glossaryEntryEditorPane.saveFailed.duplicateAtomValue":
+  "glossaryEditor.saveFailed.duplicateAtomValue":
     'A glossary Atom "{value}" already exists.',
   "glossaryTagEditor.background": "Background color",
   "glossaryTagEditor.cancel": "Cancel",

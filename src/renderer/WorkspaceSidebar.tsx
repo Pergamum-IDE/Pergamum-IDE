@@ -123,7 +123,7 @@ interface WorkspaceSidebarProps {
   onActivateGlossaryEntry: (entryId: GlossaryEntryId) => void;
   /** #436 Slice 3: open a new, unsaved glossary Description tab from the
    *  Glossary side pane's "語彙を追加" button (#573 Slice 7). */
-  onOpenGlossaryCreateEntryPane: () => void;
+  onOpenNewGlossaryEntryTab: () => void;
   /** #375: active Markdown document body for glossary occurrence counts. */
   glossaryActiveDocumentContent: string | null;
   /** #375 Document Map: every project glossary entry (occurrence scan). */
@@ -252,7 +252,7 @@ export function WorkspaceSidebar({
   onFileExplorerMoveResultMessage,
   onFileExplorerExport,
   onActivateGlossaryEntry,
-  onOpenGlossaryCreateEntryPane,
+  onOpenNewGlossaryEntryTab,
   glossaryActiveDocumentContent,
   documentMapGlossaryEntries = [],
   documentMapGlossaryTags = [],
@@ -393,7 +393,7 @@ export function WorkspaceSidebar({
           activeDocumentContent={glossaryActiveDocumentContent}
           normalizeUnicodeToNfc={normalizeUnicodeToNfc}
           onActivateEntry={onActivateGlossaryEntry}
-          onOpenCreateEntryPane={onOpenGlossaryCreateEntryPane}
+          onOpenNewEntryTab={onOpenNewGlossaryEntryTab}
           onNavigateOccurrence={onNavigateGlossaryOccurrence}
         />
       );

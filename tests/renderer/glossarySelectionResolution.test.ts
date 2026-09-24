@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { GlossaryEntry } from "../../src/shared/glossary";
-import { DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE } from "../../src/renderer/glossaryEntryEditorPaneCommands";
+import { DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE } from "../../src/renderer/glossaryEntryTabCommands";
 import {
   normalizeGlossaryRepresentativeFromEditorSelection,
-  resolveGlossaryEntryEditorPaneTargetFromSelection
+  resolveGlossaryEntryTargetFromSelection
 } from "../../src/renderer/glossarySelectionResolution";
 
 const timestamp = "2026-01-01T00:00:00.000Z";
@@ -60,16 +60,16 @@ describe("normalizeGlossaryRepresentativeFromEditorSelection (#436 Slice 12)", (
   });
 });
 
-describe("resolveGlossaryEntryEditorPaneTargetFromSelection (#436 Slice 12)", () => {
+describe("resolveGlossaryEntryTargetFromSelection (#436 Slice 12)", () => {
   it("empty selection resolves to create with the default representative", () => {
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection(null, [])
+      resolveGlossaryEntryTargetFromSelection(null, [])
     ).toEqual({
       kind: "create",
       presetRepresentative: DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE
     });
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection("   \n  ", [])
+      resolveGlossaryEntryTargetFromSelection("   \n  ", [])
     ).toEqual({
       kind: "create",
       presetRepresentative: DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE
@@ -80,7 +80,7 @@ describe("resolveGlossaryEntryEditorPaneTargetFromSelection (#436 Slice 12)", ()
     const entries = [entry("e1", ["徳川家康", "家康"])];
 
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection("織田信長", entries)
+      resolveGlossaryEntryTargetFromSelection("織田信長", entries)
     ).toEqual({ kind: "create", presetRepresentative: "織田信長" });
   });
 
@@ -88,7 +88,7 @@ describe("resolveGlossaryEntryEditorPaneTargetFromSelection (#436 Slice 12)", ()
     const entries = [entry("e1", ["徳川家康", "家康"])];
 
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection("徳川家康", entries)
+      resolveGlossaryEntryTargetFromSelection("徳川家康", entries)
     ).toEqual({ kind: "edit", entryId: "e1" });
   });
 
@@ -96,7 +96,7 @@ describe("resolveGlossaryEntryEditorPaneTargetFromSelection (#436 Slice 12)", ()
     const entries = [entry("e1", ["徳川家康", "家康"])];
 
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection("家康", entries)
+      resolveGlossaryEntryTargetFromSelection("家康", entries)
     ).toEqual({ kind: "edit", entryId: "e1" });
   });
 
@@ -105,7 +105,7 @@ describe("resolveGlossaryEntryEditorPaneTargetFromSelection (#436 Slice 12)", ()
     const entries = [entry("e1", ["家康", "家康"])];
 
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection("家康", entries)
+      resolveGlossaryEntryTargetFromSelection("家康", entries)
     ).toEqual({ kind: "edit", entryId: "e1" });
   });
 
@@ -116,7 +116,7 @@ describe("resolveGlossaryEntryEditorPaneTargetFromSelection (#436 Slice 12)", ()
     ];
 
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection("家康", entries)
+      resolveGlossaryEntryTargetFromSelection("家康", entries)
     ).toEqual({ kind: "ambiguous", entryIds: ["e1", "e2"] });
   });
 
@@ -124,7 +124,7 @@ describe("resolveGlossaryEntryEditorPaneTargetFromSelection (#436 Slice 12)", ()
     const entries = [entry("e1", ["迷子たちと千年領主"])];
 
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection(
+      resolveGlossaryEntryTargetFromSelection(
         "迷子たちと\n千年領主",
         entries
       )
@@ -135,13 +135,13 @@ describe("resolveGlossaryEntryEditorPaneTargetFromSelection (#436 Slice 12)", ()
     const entries = [entry("e1", ["Alice"])];
 
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection("alice", entries)
+      resolveGlossaryEntryTargetFromSelection("alice", entries)
     ).toEqual({ kind: "create", presetRepresentative: "alice" });
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection("Alic", entries)
+      resolveGlossaryEntryTargetFromSelection("Alic", entries)
     ).toEqual({ kind: "create", presetRepresentative: "Alic" });
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection("Alice2", entries)
+      resolveGlossaryEntryTargetFromSelection("Alice2", entries)
     ).toEqual({ kind: "create", presetRepresentative: "Alice2" });
   });
 
@@ -168,7 +168,7 @@ describe("resolveGlossaryEntryEditorPaneTargetFromSelection (#436 Slice 12)", ()
     ];
 
     expect(
-      resolveGlossaryEntryEditorPaneTargetFromSelection("アリス", entries)
+      resolveGlossaryEntryTargetFromSelection("アリス", entries)
     ).toEqual({ kind: "edit", entryId: "e1" });
   });
 });
