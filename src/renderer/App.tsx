@@ -1728,7 +1728,16 @@ export function App(): JSX.Element {
         const active = activeOpenDocument(state);
         const editor = activeCurrentEditor(state);
 
-        if (!active || editor?.kind !== "markdown") {
+        // #574 Slice 1: a SAVED glossary Description tab's Description
+        // editor is captured too (it was excluded here, which is why its
+        // View State never reached the Session). A never-saved new-entry tab
+        // is not in the Session at all.
+        const hasSessionViewState =
+          editor?.kind === "markdown" ||
+          (editor?.kind === "glossaryDescription" &&
+            !glossaryEntryDraftIsNew(editor.draft));
+
+        if (!active || !hasSessionViewState) {
           return null;
         }
 

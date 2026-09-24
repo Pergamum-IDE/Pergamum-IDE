@@ -80,7 +80,7 @@ const viewState: SessionEditorViewState = {
 };
 
 describe("session schema: glossaryDescription (#573 Slice 8)", () => {
-  it("parses a glossary Description editor and identity, dropping any View State (deferred)", () => {
+  it("parses a glossary Description editor (with its View State, #574) and identity", () => {
     expect(
       parseSessionEditor({
         kind: "glossaryDescription",
@@ -88,12 +88,16 @@ describe("session schema: glossaryDescription (#573 Slice 8)", () => {
         entryId: entryA,
         viewState
       })
-    ).toEqual({
-      kind: "glossaryDescription",
-      order: 2,
-      entryId: entryA,
-      viewState: null
-    });
+    ).toEqual({ kind: "glossaryDescription", order: 2, entryId: entryA, viewState });
+    // A malformed View State only nulls the View State, never the tab.
+    expect(
+      parseSessionEditor({
+        kind: "glossaryDescription",
+        order: 0,
+        entryId: entryA,
+        viewState: { bogus: true }
+      })
+    ).toEqual({ kind: "glossaryDescription", order: 0, entryId: entryA, viewState: null });
     expect(
       parseSessionEditorIdentity({ kind: "glossaryDescription", entryId: entryA })
     ).toEqual({ kind: "glossaryDescription", entryId: entryA });
@@ -181,14 +185,14 @@ describe("session snapshot: glossaryDescription (#573 Slice 8)", () => {
     expect(serialized).not.toContain("draft");
   });
 
-  it("records no #273 View State for glossary tabs (deferred), leaving documents' untouched", () => {
+  it("overlays #273 View State for a SAVED glossary tab under its serialized EditorId (#574), documents unchanged", () => {
     const inputs = buildSessionSnapshotInputs("s", null, mixedState(), true);
     const glossaryKey = serializeEditorId(
       createGlossaryDescriptionEditorId(entryA)
     );
     const documentKey = inputs.editors[0].viewStateKey!;
 
-    expect(inputs.editors[1].viewStateKey).toBeNull();
+    expect(inputs.editors[1].viewStateKey).toBe(glossaryKey);
     const snapshot = buildRendererSessionSnapshot(
       inputs,
       new Map([
@@ -200,10 +204,19 @@ describe("session snapshot: glossaryDescription (#573 Slice 8)", () => {
       kind: "glossaryDescription",
       order: 1,
       entryId: entryA,
-      viewState: null
+      viewState
     });
-    // A document's View State is still overlaid as before.
     expect(snapshot.editors[0]).toMatchObject({ viewState });
+  });
+
+  it("never records a never-saved new-entry tab, nor its View State key (#574)", () => {
+    const inputs = buildSessionSnapshotInputs("s", null, mixedState(), true);
+    const newKey = serializeEditorId(createGlossaryDescriptionEditorId(localNew));
+
+    expect(inputs.editors).toHaveLength(2);
+    expect(inputs.editors.map((input) => input.viewStateKey)).not.toContain(
+      newKey
+    );
   });
 });
 
@@ -435,19 +448,48 @@ describe("cold start restore: glossaryDescription (#573 Slice 8)", () => {
     expect(getById).not.toHaveBeenCalled();
   });
 
-  it("does not restore a glossary tab's View State (deferred) — the tab itself still restores", async () => {
-    // Even a hand-built record carrying a View State is ignored.
-    const withViewState = {
-      ...gd(entryA, 0),
-      viewState
-    } as unknown as SessionEditor;
-    const { env } = await restore(record({ editors: [withViewState] }), entries);
+  it("carries a restored glossary tab's View State into pendingViewStates (#574)", async () => {
+    const { env } = await restore(
+      record({ editors: [{ ...gd(entryA, 0), viewState }] }),
+      entries
+    );
+
+    expect(env.openDocuments.documents).toHaveLength(1);
+    expect(
+      env.pendingViewStates.get(
+        serializeEditorId(createGlossaryDescriptionEditorId(entryA))
+      )
+    ).toEqual(viewState);
+  });
+
+  it("drops a deleted entry's View State along with the tab (#574)", async () => {
+    const gone = "0190b6a1-1c2d-7e3f-8a4b-5c6d7e8f00d4";
+    const { env } = await restore(
+      record({ editors: [{ ...gd(gone, 0), viewState }, pm("ch1.md", 1)] }),
+      entries
+    );
 
     expect(env.openDocuments.documents).toHaveLength(1);
     expect(
       env.pendingViewStates.has(
-        serializeEditorId(createGlossaryDescriptionEditorId(entryA))
+        serializeEditorId(createGlossaryDescriptionEditorId(gone))
       )
     ).toBe(false);
+  });
+});
+
+describe("App flush-time View State capture (#574 Slice 1)", () => {
+  it("captures the ACTIVE editor for Markdown and SAVED glossary tabs only", async () => {
+    const { readFileSync } = await import("node:fs");
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+    const start = appSource.indexOf("captureActiveEditorViewState: () => {");
+    const block = appSource.slice(start, appSource.indexOf("\n      }\n", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(block).toContain('editor?.kind === "markdown" ||');
+    expect(block).toContain(
+      '(editor?.kind === "glossaryDescription" &&\n            !glossaryEntryDraftIsNew(editor.draft))'
+    );
+    expect(block).toContain("key: serializeEditorId(active.id)");
   });
 });

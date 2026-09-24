@@ -63,8 +63,8 @@ function sessionEditorFromOpenEditor(
   const viewStateKey = serializeEditorId(editorId);
 
   // #573 Slice 8: a glossary Description tab is recorded by its entry id
-  // only (the entry is re-read on restore). #273 View State is deferred for
-  // glossary tabs, so it gets no View State key and stays `null`. A
+  // only (the entry is re-read on restore). #574 Slice 1: it carries #273
+  // View State under the same serialized-EditorId key as a document. A
   // never-saved new-entry tab has no entry to reopen — its content is
   // Recovery's job — so it is not recorded at all.
   if (editor.kind === "glossaryDescription") {
@@ -77,7 +77,7 @@ function sessionEditorFromOpenEditor(
             entryId: editor.entryId,
             viewState: null
           },
-          viewStateKey: null
+          viewStateKey
         };
   }
 
@@ -174,8 +174,7 @@ export function buildRendererSessionSnapshot(
 ): RendererSessionSnapshot {
   const editors: SessionEditor[] = inputs.editors.map(
     ({ editor, viewStateKey }) => {
-      // #573 Slice 8: glossary tabs never carry View State (deferred).
-      if (viewStateKey === null || editor.kind === "glossaryDescription") {
+      if (viewStateKey === null) {
         return editor;
       }
 

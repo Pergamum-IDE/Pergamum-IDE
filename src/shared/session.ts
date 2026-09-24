@@ -145,15 +145,14 @@ export interface SessionUntitledEditor extends SessionEditorFields {
  * (A pre-#436 `glossaryEntry` record is a different, retired kind and is
  * still simply dropped by the parser.)
  *
- * #273 Editor View State is OUT OF SCOPE for glossary tabs in Slice 8
- * (deferred): it is never recorded, and any persisted value is ignored.
+ * #574 Slice 1: carries #273 Editor View State of the Description editor
+ * (validated against the Description text on restore, like a document's).
  */
 export interface SessionGlossaryDescriptionEditor extends SessionEditorFields {
   readonly kind: "glossaryDescription";
   /** GlossaryEntryId — reopen locator AND resource identity. */
   readonly entryId: string;
-  /** Always `null` — View State is deferred for glossary tabs. */
-  readonly viewState: null;
+  readonly viewState: SessionEditorViewState | null;
 }
 
 export type SessionEditor =
@@ -442,14 +441,12 @@ export function parseSessionEditor(value: unknown): SessionEditor | null {
           }
         : null;
     case "glossaryDescription":
-      // View State is deferred for glossary tabs: never restored, so any
-      // persisted value is dropped here.
       return isIdentityString(value.entryId)
         ? {
             kind: "glossaryDescription",
             order,
             entryId: value.entryId,
-            viewState: null
+            viewState: parseSessionEditorViewState(value.viewState)
           }
         : null;
     default:
