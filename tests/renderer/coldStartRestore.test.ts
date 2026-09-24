@@ -116,6 +116,7 @@ function harness(
     readProjectDocumentContent: vi.fn(() => Promise.resolve("body\n")),
     readMarkdownFile: vi.fn(() => Promise.resolve(MD_FILE)),
     registerProjectDocumentPath: vi.fn(() => Promise.resolve(null)),
+    getGlossaryEntryById: vi.fn(() => Promise.resolve(null)),
     applyRestoredEnvironment: (env) => {
       // record the adoption order relative to apply
       applied.push(env);

@@ -209,9 +209,19 @@ describe("glossaryDescription tabs in OpenDocuments (#573 Slice 1)", () => {
         throw new Error("must not be called for a glossary tab");
       })
     ).toEqual(state);
+    // #573 Slice 8: recorded in the Session by entry id only.
     expect(
-      buildSessionSnapshotInputs("session", null, state, true).editors
-    ).toEqual([]);
+      buildSessionSnapshotInputs("session", null, state, true).editors.map(
+        ({ editor }) => editor
+      )
+    ).toEqual([
+      {
+        kind: "glossaryDescription",
+        order: 0,
+        entryId: entryIdA,
+        viewState: null
+      }
+    ]);
   });
 
   it("closes like any other tab and with the project", () => {
@@ -351,9 +361,19 @@ describe("glossaryDescription in-memory draft (#573 Slice 3)", () => {
         title: "語彙: アリス"
       }
     ]);
-    expect(buildSessionSnapshotInputs("session", null, next, true).editors).toEqual(
-      []
-    );
+    // #573 Slice 8: the Session keeps only the entry id, never the draft.
+    expect(
+      buildSessionSnapshotInputs("session", null, next, true).editors.map(
+        ({ editor }) => editor
+      )
+    ).toEqual([
+      {
+        kind: "glossaryDescription",
+        order: 0,
+        entryId: entryIdA,
+        viewState: null
+      }
+    ]);
   });
 });
 

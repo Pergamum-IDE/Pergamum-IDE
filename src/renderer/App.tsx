@@ -8546,6 +8546,8 @@ export function App(): JSX.Element {
       (await window.pergamum.projects.readProjectDocument(relativePath)).content,
     readMarkdownFile: (filePath) =>
       window.pergamum.files.readMarkdownFile(filePath),
+    // #573 Slice 8: restored glossary Description tabs re-read their entry.
+    getGlossaryEntryById: (entryId) => window.pergamum.glossary.getById(entryId),
     registerProjectDocumentPath: async (absolutePath) =>
       (await window.pergamum.projects.registerProjectDocumentPath(absolutePath))
         .relativePath,

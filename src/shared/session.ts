@@ -107,7 +107,8 @@ export interface SessionEditorViewState {
 export type SessionEditorKind =
   | "projectMarkdown"
   | "standaloneMarkdown"
-  | "untitled";
+  | "untitled"
+  | "glossaryDescription";
 
 interface SessionEditorFields {
   /** 0-based tab position. Also kept explicit so a partially-valid list
@@ -136,10 +137,30 @@ export interface SessionUntitledEditor extends SessionEditorFields {
   readonly viewState: SessionEditorViewState | null;
 }
 
+/**
+ * #573 Slice 8: a glossary Description tab for a SAVED glossary entry. Only
+ * the entry id is persisted — never the draft or the Description text (the
+ * entry is re-read from the project glossary on restore; unsaved content is
+ * Recovery's job). A never-saved new-entry tab is not recorded at all.
+ * (A pre-#436 `glossaryEntry` record is a different, retired kind and is
+ * still simply dropped by the parser.)
+ *
+ * #273 Editor View State is OUT OF SCOPE for glossary tabs in Slice 8
+ * (deferred): it is never recorded, and any persisted value is ignored.
+ */
+export interface SessionGlossaryDescriptionEditor extends SessionEditorFields {
+  readonly kind: "glossaryDescription";
+  /** GlossaryEntryId — reopen locator AND resource identity. */
+  readonly entryId: string;
+  /** Always `null` — View State is deferred for glossary tabs. */
+  readonly viewState: null;
+}
+
 export type SessionEditor =
   | SessionProjectMarkdownEditor
   | SessionStandaloneMarkdownEditor
-  | SessionUntitledEditor;
+  | SessionUntitledEditor
+  | SessionGlossaryDescriptionEditor;
 
 /**
  * Just enough to name which open editor was active — matched by identity
@@ -149,7 +170,8 @@ export type SessionEditor =
 export type SessionEditorIdentity =
   | { readonly kind: "projectMarkdown"; readonly relativePath: string }
   | { readonly kind: "standaloneMarkdown"; readonly filePath: string }
-  | { readonly kind: "untitled"; readonly untitledId: string };
+  | { readonly kind: "untitled"; readonly untitledId: string }
+  | { readonly kind: "glossaryDescription"; readonly entryId: string };
 
 // ---------------------------------------------------------------------------
 // Project context
@@ -419,6 +441,17 @@ export function parseSessionEditor(value: unknown): SessionEditor | null {
             viewState: parseSessionEditorViewState(value.viewState)
           }
         : null;
+    case "glossaryDescription":
+      // View State is deferred for glossary tabs: never restored, so any
+      // persisted value is dropped here.
+      return isIdentityString(value.entryId)
+        ? {
+            kind: "glossaryDescription",
+            order,
+            entryId: value.entryId,
+            viewState: null
+          }
+        : null;
     default:
       return null;
   }
@@ -434,6 +467,8 @@ export function sessionEditorIdentity(
       return { kind: "standaloneMarkdown", filePath: editor.filePath };
     case "untitled":
       return { kind: "untitled", untitledId: editor.untitledId };
+    case "glossaryDescription":
+      return { kind: "glossaryDescription", entryId: editor.entryId };
   }
 }
 
@@ -447,6 +482,8 @@ export function sessionEditorIdentityKey(
       return `standaloneMarkdown ${identity.filePath}`;
     case "untitled":
       return `untitled ${identity.untitledId}`;
+    case "glossaryDescription":
+      return `glossaryDescription ${identity.entryId}`;
   }
 }
 
@@ -476,6 +513,10 @@ export function parseSessionEditorIdentity(
     case "untitled":
       return isIdentityString(value.untitledId)
         ? { kind: "untitled", untitledId: value.untitledId }
+        : null;
+    case "glossaryDescription":
+      return isIdentityString(value.entryId)
+        ? { kind: "glossaryDescription", entryId: value.entryId }
         : null;
     default:
       return null;

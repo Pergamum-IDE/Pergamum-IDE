@@ -282,12 +282,16 @@ describe("glossaryDescription working copy (#573 Slice 4)", () => {
     expect(choiceDialog).toHaveBeenCalledTimes(1);
   });
 
-  it("stays out of Session and Recovery even while dirty", () => {
+  it("stays out of Recovery even while dirty; the Session records only its entry id (#573 Slice 8)", () => {
     const state = glossaryState(true);
 
     expect(
-      buildSessionSnapshotInputs("session", null, state, true).editors
-    ).toEqual([]);
+      buildSessionSnapshotInputs("session", null, state, true).editors.map(
+        ({ editor }) => editor
+      )
+    ).toEqual([
+      { kind: "glossaryDescription", order: 0, entryId, viewState: null }
+    ]);
     expect(
       buildRecoveryDirtyDocuments(state, {
         project: null,

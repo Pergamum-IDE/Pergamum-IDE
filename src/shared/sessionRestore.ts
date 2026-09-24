@@ -199,7 +199,7 @@ function basename(value: string): string {
 /**
  * The filename used for the deterministic active-editor fallback ordering.
  * `null` for kinds that never participate as a "file editor" fallback
- * (untitled).
+ * (untitled, glossary Description).
  */
 export function fallbackFilenameForSessionEditor(
   editor: SessionEditor
@@ -210,6 +210,7 @@ export function fallbackFilenameForSessionEditor(
     case "standaloneMarkdown":
       return basename(editor.filePath);
     case "untitled":
+    case "glossaryDescription":
       return null;
   }
 }
