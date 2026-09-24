@@ -81,6 +81,8 @@ export interface EditorToolbarProps {
    * and is unaffected by the Command Box's local mode state.
    */
   onOpenCommandPalette: (initialPrefix: QuickAccessPrefix) => void;
+  /** #574: locked to Markdown for glossaryDescription tabs. */
+  isGlossaryDescription?: boolean;
   translate: Translate;
 }
 
@@ -117,6 +119,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   isCommandPaletteOpen,
   commandPaletteLaunchAnimationDurationMs,
   onOpenCommandPalette,
+  isGlossaryDescription = false,
   translate
 }) => {
   const [isTablePopoverOpen, setIsTablePopoverOpen] = useState<boolean>(false);
@@ -484,9 +487,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
 
         <div className="editorToolbarItem">
           <PreviewRendererDropdown
-            selectedRenderer={selectedPreviewRenderer}
+            selectedRenderer={isGlossaryDescription ? "markdown" : selectedPreviewRenderer}
             defaultRenderer={defaultPreviewRenderer}
-            disabled={!canTogglePreview || !isPreviewVisible}
+            disabled={isGlossaryDescription || !canTogglePreview || !isPreviewVisible}
             onSelectRenderer={onSelectPreviewRenderer}
             translate={translate}
           />

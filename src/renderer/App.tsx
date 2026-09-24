@@ -12197,6 +12197,7 @@ export function App(): JSX.Element {
           effectiveSettings.commandPalette.launchAnimation.durationMs
         }
         onOpenCommandPalette={openCommandPaletteWithPrefix}
+        isGlossaryDescription={activeDocument?.editor.kind === "glossaryDescription"}
         translate={translate}
       />
 

@@ -352,6 +352,46 @@ describe("EditorToolbar", () => {
     expect(previewRendererTrigger().disabled).toBe(false);
   });
 
+  it("locks the Preview renderer dropdown to Markdown and disables it for glossaryDescription tabs while keeping preview toggle enabled", () => {
+    const props = renderToolbar({
+      isGlossaryDescription: true,
+      selectedPreviewRenderer: "aozoraHorizontal",
+      isPreviewVisible: true,
+      canTogglePreview: true
+    });
+
+    const trigger = previewRendererTrigger();
+    expect(trigger.disabled).toBe(true);
+    expect(trigger.textContent).toContain("Markdown");
+
+    const previewToggleBtn = toolbarButtons()[16];
+    expect(previewToggleBtn.disabled).toBe(false);
+    act(() => previewToggleBtn.click());
+    expect(props.onTogglePreview).toHaveBeenCalledOnce();
+  });
+
+  it("restores the configured preview renderer dropdown when switching from glossaryDescription to a normal document", () => {
+    renderToolbar({
+      isGlossaryDescription: true,
+      selectedPreviewRenderer: "aozoraHorizontal",
+      isPreviewVisible: true,
+      canTogglePreview: true
+    });
+
+    expect(previewRendererTrigger().disabled).toBe(true);
+    expect(previewRendererTrigger().textContent).toContain("Markdown");
+
+    renderToolbar({
+      isGlossaryDescription: false,
+      selectedPreviewRenderer: "aozoraHorizontal",
+      isPreviewVisible: true,
+      canTogglePreview: true
+    });
+
+    expect(previewRendererTrigger().disabled).toBe(false);
+    expect(previewRendererTrigger().textContent).toContain("青空文庫風・横書き");
+  });
+
   it("selects a temporary Preview renderer without changing the default renderer prop", () => {
     const onSelectPreviewRenderer = vi.fn();
     renderToolbar({
