@@ -1060,6 +1060,7 @@ export const jaTranslations = {
   "glossaryDescriptionTab.metadata.summary.atomCount": "表記: {count}",
   "glossaryDescriptionTab.metadata.summary.tags": "タグ: {tags}",
   "glossaryDescriptionTab.metadata.summary.noTags": "タグ: なし",
+  "glossaryDescriptionTab.metadataResizeHandle": "語彙情報パネルの高さを変更",
   "glossaryEditor.saveFailed.duplicateAtomValue":
     "同じ表記の語彙Atom「{value}」がすでに存在します。",
   "glossaryTagEditor.background": "背景色",

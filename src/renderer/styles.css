@@ -6329,15 +6329,18 @@ label.settingsItemHeader {
    above the Description editor + preview. Capped so the Description stays
    the main work area; scrolls internally when expanded. */
 .glossaryDescriptionMetadataPanel {
+  display: flex;
+  flex-direction: column;
   flex: 0 0 auto;
   min-width: 0;
   max-block-size: 45%;
-  overflow: auto;
+  overflow: hidden;
   border-block-end: 1px solid #e3e8ee;
   background: #fbfcfd;
 }
 
 .glossaryDescriptionMetadataHeader {
+  flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -6400,8 +6403,33 @@ label.settingsItemHeader {
 }
 
 .glossaryDescriptionMetadataBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
   padding-block: 8px 0;
   padding-inline: 16px;
+}
+
+.glossaryDescriptionMetadataBody[hidden] {
+  display: none;
+}
+
+.glossaryDescriptionMetadataResizeHandle {
+  block-size: 6px;
+  min-block-size: 6px;
+  flex: 0 0 auto;
+  border-top: 1px solid #e3e8ee;
+  background: transparent;
+  cursor: row-resize;
+  touch-action: none;
+  margin-top: 4px;
+}
+
+.glossaryDescriptionMetadataResizeHandle:hover,
+.glossaryDescriptionMetadataResizeHandle:active,
+.glossaryDescriptionMetadataResizeHandle:focus-visible {
+  background: var(--workspace-sidebar-focus-ring, #7aa7d9);
+  outline: none;
 }
 
 /* #375: Glossary Management tab — reuses the Tag Manager's cell / drag-handle /
