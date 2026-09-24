@@ -279,7 +279,9 @@ const pergamumApi: PergamumApi = {
     getReport: (language) =>
       ipcRenderer.invoke(RECOVERY_CHANNELS.getReport, language),
     hasRecoverableCandidates: () =>
-      ipcRenderer.invoke(RECOVERY_CHANNELS.hasRecoverableCandidates)
+      ipcRenderer.invoke(RECOVERY_CHANNELS.hasRecoverableCandidates),
+    readGlossaryCandidateDraft: (request) =>
+      ipcRenderer.invoke(RECOVERY_CHANNELS.readGlossaryCandidateDraft, request)
   },
   glossary: {
     create: (input) => ipcRenderer.invoke(GLOSSARY_CHANNELS.create, input),

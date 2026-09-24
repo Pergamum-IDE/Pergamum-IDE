@@ -340,6 +340,8 @@ export const jaTranslations = {
   "dialog.recovery.title": "未保存の編集内容を復元",
   "dialog.recovery.type.file": "ファイル",
   "dialog.recovery.type.untitled": "無題",
+  "dialog.recovery.type.glossary": "語彙",
+  "dialog.recovery.type.glossaryNew": "新規語彙",
   "dialog.paragraphIndent.remove.title": "段落字下げ一括削除",
   "dialog.paragraphIndent.result.message": "変更行数: {changedLineCount}\nスキップ行数: {skippedLineCount}\n空行数: {emptyLineCount}",
   "dialog.projectSwitchUnsaved.discardAndContinue": "変更を破棄して続行",
@@ -1722,6 +1724,10 @@ export const jaTranslations = {
   "status.recoveryBackupSaved": "復旧用バックアップを保存しました",
   "status.recoveryDiscarded": "{count} 件の復旧候補を破棄しました",
   "status.recoveryRestoreFailed": "一部の項目を復元できませんでした",
+  "status.recoveryGlossaryOtherProject":
+    "別のプロジェクトの語彙は復元できません。そのプロジェクトを開いてから復元してください",
+  "status.recoveryGlossaryTabBusy":
+    "「{name}」に未保存の変更があるため復元しませんでした。保存または破棄してから復元してください",
   "status.recoveryRestored": "{count} 件を .recovered ファイルとして復元しました",
   "status.saveCanceled": "保存をキャンセルしました",
   "status.saveFailed": "保存できませんでした: {message}",

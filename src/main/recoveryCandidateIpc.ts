@@ -11,6 +11,10 @@
  *   recovery:discardCandidates           — delete rows after the destructive
  *                                          confirmation
  *   recovery:getReport                   — body-free Recovery report text
+ *   recovery:readGlossaryCandidateDraft  — #573: explicit restore of ONE
+ *                                          glossary candidate — the only
+ *                                          handler that returns a Recovery
+ *                                          body (the validated draft)
  *
  * Every handler is Recovery-owner-only: a non-owner / unavailable instance
  * returns a silent `{ ok: false, skipped }`, opens nothing, writes nothing,
@@ -23,13 +27,16 @@ import type { IpcMain } from "electron";
 import { RECOVERY_CHANNELS } from "../shared/api";
 import { defaultLanguage, isLanguage } from "../shared/i18n";
 import type { RecoveryStoreStatus } from "../shared/recovery";
+import { parseGlossaryRecoveryDraft } from "../shared/glossaryRecoveryDraft";
 import {
   parseRecoveryDiscardRequest,
   parseRecoveryFinalizeRequest,
+  parseRecoveryGlossaryDraftRequest,
   parseRecoveryRestoreRequest,
   type RecoveryCandidateListResult,
   type RecoveryDiscardResult,
   type RecoveryFinalizeResult,
+  type RecoveryGlossaryDraftResult,
   type RecoveryHasRecoverableResult,
   type RecoveryMarkCandidatesSeenResult,
   type RecoveryReportResult,
@@ -44,6 +51,7 @@ import {
 } from "./recoveryCandidateSeenState";
 import {
   deletePreviousRunRecoveryRowsById,
+  getGlossaryRecoveryRow,
   getRecoveryRestoreRows,
   hasRecoverableCandidates,
   listRecoveryCandidates
@@ -78,6 +86,12 @@ export interface RecoveryCandidateIpcDeps {
   readonly registerRestoredProjectDocument?: (
     absolutePath: string
   ) => string | null;
+  /**
+   * #573 Slice 9: the currently open project's `.pergamum` path — a glossary
+   * candidate is restorable into a tab only for the project it was captured
+   * in. Omitted = no project is ever considered open.
+   */
+  readonly getCurrentProjectFilePath?: () => string | null;
 }
 
 type OwnerResolution =
@@ -364,6 +378,63 @@ export function registerRecoveryCandidateIpc(
       }
 
       return { ok: true, deleted, failed };
+    }
+  );
+
+  ipcMain.handle(
+    RECOVERY_CHANNELS.readGlossaryCandidateDraft,
+    (_event, rawRequest: unknown): RecoveryGlossaryDraftResult => {
+      const request = parseRecoveryGlossaryDraftRequest(rawRequest);
+      const owner = resolveRecoveryOwner(deps);
+
+      if (owner.kind === "skip") {
+        return { ok: false, skipped: owner.skipped };
+      }
+
+      if (!request) {
+        return { ok: true, result: { kind: "missing", recoveryId: "" } };
+      }
+
+      const { recoveryId } = request;
+      const row = getGlossaryRecoveryRow(
+        owner.database,
+        recoveryId,
+        deps.instanceRunId
+      );
+
+      if (!row) {
+        return { ok: true, result: { kind: "missing", recoveryId } };
+      }
+
+      const currentProjectFilePath = deps.getCurrentProjectFilePath?.() ?? null;
+
+      if (
+        row.projectFilePath === null ||
+        currentProjectFilePath === null ||
+        row.projectFilePath !== currentProjectFilePath
+      ) {
+        return { ok: true, result: { kind: "differentProject", recoveryId } };
+      }
+
+      const draft = parseGlossaryRecoveryDraft(row.payloadText);
+
+      if (!draft) {
+        return { ok: true, result: { kind: "invalid", recoveryId } };
+      }
+
+      logger.log({
+        level: "info",
+        event: "recovery.document.restored",
+        details: {
+          documentRef: logger.documentRefForKey(recoveryId),
+          result: "succeeded",
+          instanceRunId: deps.instanceRunId
+        }
+      });
+
+      // Two-phase restore as for files: the row is deleted only by
+      // `finalizeRestoredCandidates`, after the renderer opened the tab.
+      return { ok: true, result: { kind: "draft", recoveryId, draft } };
     }
   );
 

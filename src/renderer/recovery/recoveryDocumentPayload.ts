@@ -43,6 +43,7 @@ import {
   markdownDocumentForEditor
 } from "../currentEditor";
 import type { OpenDocumentsState } from "../openDocuments";
+import { buildGlossaryRecoveryPayload } from "./glossaryRecovery";
 
 export interface RecoveryDirtyDocument {
   readonly documentKey: string;
@@ -250,8 +251,10 @@ export function buildRecoveryDocumentPayload(
 }
 
 /**
- * Every currently-dirty Markdown working copy as a Recovery payload. Clean
- * documents and Glossary editors are excluded (nothing to protect).
+ * Every currently-dirty working copy as a Recovery payload: dirty Markdown
+ * documents and (#573 Slice 9) dirty glossary Description tabs — including
+ * never-saved new-entry tabs. Clean editors are excluded (nothing to
+ * protect).
  */
 export function buildRecoveryDirtyDocuments(
   openDocumentsState: OpenDocumentsState,
@@ -260,13 +263,14 @@ export function buildRecoveryDirtyDocuments(
   const dirty: RecoveryDirtyDocument[] = [];
 
   for (const openDocument of openDocumentsState.documents) {
-    const document = markdownDocumentForEditor(openDocument.editor);
-
-    if (!document || !isCurrentEditorDirty(openDocument.editor)) {
+    if (!isCurrentEditorDirty(openDocument.editor)) {
       continue;
     }
 
-    const payload = buildRecoveryDocumentPayload(document, context);
+    const document = markdownDocumentForEditor(openDocument.editor);
+    const payload = document
+      ? buildRecoveryDocumentPayload(document, context)
+      : buildGlossaryRecoveryPayload(openDocument.editor, context.project);
 
     if (payload) {
       dirty.push({ documentKey: payload.documentKey, payload });

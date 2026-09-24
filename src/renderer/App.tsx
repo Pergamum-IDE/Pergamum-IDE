@@ -315,6 +315,11 @@ import {
   recoveryDocumentKeyForDocument,
   recoveryDocumentKeyForProjectRelativePath
 } from "./recovery/recoveryDocumentPayload";
+import {
+  buildGlossaryRecoveryPayload,
+  glossaryEditorFromRecoveryDraft,
+  recoveryDocumentKeyForGlossaryEditor
+} from "./recovery/glossaryRecovery";
 import { RecoveryCandidateDialog } from "./recovery/RecoveryCandidateDialog";
 import {
   createRecoveryCommandTitles,
@@ -5175,6 +5180,130 @@ export function App(): JSX.Element {
     await discardRecoveryCandidates("all", recoveryIds);
   }
 
+  // #573 Slice 9: restore ONE glossary Recovery candidate into a dirty
+  // glossary Description tab. Main has already checked the row belongs to
+  // the open project and parsed the draft.
+  //   - saved entry still exists → that entry's tab (focused, or opened)
+  //     carrying the recovered draft; refused while that tab has unsaved
+  //     edits of its own (never silently overwritten — the row is kept),
+  //   - never-saved / deleted entry → an unsaved new-entry tab (first
+  //     Ctrl+S creates the entry; nothing is written to the DB here).
+  // Returns whether a tab opened, the row should fall back to `.recovered.md`,
+  // or it is kept for later.
+  async function restoreGlossaryRecoveryCandidate(
+    recoveryId: string
+  ): Promise<"opened" | "fallback" | "kept"> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return "kept";
+    }
+
+    let read: Awaited<
+      ReturnType<typeof window.pergamum.recovery.readGlossaryCandidateDraft>
+    >;
+
+    try {
+      read = await window.pergamum.recovery.readGlossaryCandidateDraft({
+        recoveryId
+      });
+    } catch {
+      setStatus({ key: "status.recoveryRestoreFailed" });
+      return "kept";
+    }
+
+    if (!read.ok) {
+      return "kept";
+    }
+
+    switch (read.result.kind) {
+      case "missing":
+        return "kept";
+      case "differentProject":
+        setStatus({ key: "status.recoveryGlossaryOtherProject" });
+        return "kept";
+      case "invalid":
+        return "fallback";
+      case "draft":
+        break;
+    }
+
+    const { draft } = read.result;
+    let currentEntry: GlossaryEntry | null = null;
+
+    if (draft.entryId !== null) {
+      try {
+        currentEntry = await window.pergamum.glossary.getById(draft.entryId);
+      } catch {
+        currentEntry = null;
+      }
+    }
+
+    if (currentEntry) {
+      const tabId = createGlossaryDescriptionEditorId(currentEntry.id);
+      const openTab = findOpenDocument(openDocumentsStateRef.current, tabId);
+
+      if (openTab && isCurrentEditorDirty(openTab.editor)) {
+        setStatus({
+          key: "status.recoveryGlossaryTabBusy",
+          values: { name: currentEditorTitle(openTab.editor) }
+        });
+        return "kept";
+      }
+
+      const recoveredEditor = glossaryEditorFromRecoveryDraft(
+        draft,
+        currentEntry,
+        currentEntry.id
+      );
+
+      if (openTab) {
+        // A clean tab (e.g. from session restore) takes the recovered draft
+        // — no duplicate tab for the same entry.
+        const replacement = replaceOpenEditor(
+          openDocumentsStateRef.current,
+          tabId,
+          recoveredEditor,
+          activeProjectContext
+        );
+
+        openDocumentsStateRef.current = replacement.state;
+        setOpenDocumentsState(replacement.state);
+        return (await openEditorFromExplicitActivation(tabId))
+          ? "opened"
+          : "kept";
+      }
+
+      return (await openEditorFromExplicitActivation(tabId, {
+        history: "record",
+        resolvedEditor: recoveredEditor
+      }))
+        ? "opened"
+        : "kept";
+    }
+
+    // Never saved, or the saved entry was deleted since: recover as a new,
+    // unsaved entry.
+    let localId = draft.localId ?? createUuidv7();
+
+    if (
+      hasOpenDocument(
+        openDocumentsStateRef.current,
+        createGlossaryDescriptionEditorId(localId)
+      )
+    ) {
+      localId = createUuidv7();
+    }
+
+    return (await openEditorFromExplicitActivation(
+      createGlossaryDescriptionEditorId(localId),
+      {
+        history: "record",
+        resolvedEditor: glossaryEditorFromRecoveryDraft(draft, null, localId)
+      }
+    ))
+      ? "opened"
+      : "kept";
+  }
+
   async function handleRecoveryRestoreSelected(
     recoveryIds: readonly string[]
   ): Promise<void> {
@@ -5188,6 +5317,39 @@ export function App(): JSX.Element {
         candidate
       ])
     );
+
+    // #573 Slice 9: glossary candidates restore into glossary Description
+    // tabs through their own explicit-restore IPC (two-phase: finalize only
+    // what opened). A payload that cannot become a tab falls back to the
+    // `.recovered.md` file path below — Description only, metadata lost.
+    const glossaryFallbackIds = new Set<string>();
+    const glossaryOpenedIds: string[] = [];
+
+    for (const recoveryId of recoveryIds) {
+      if (byId.get(recoveryId)?.documentType !== "glossary.description") {
+        continue;
+      }
+
+      const outcome = await restoreGlossaryRecoveryCandidate(recoveryId);
+
+      if (outcome === "opened") {
+        glossaryOpenedIds.push(recoveryId);
+      } else if (outcome === "fallback") {
+        glossaryFallbackIds.add(recoveryId);
+      }
+    }
+
+    if (glossaryOpenedIds.length > 0) {
+      try {
+        await window.pergamum.recovery.finalizeRestoredCandidates({
+          recoveryIds: glossaryOpenedIds
+        });
+      } catch {
+        // The recovered drafts are already open in tabs — a finalize failure
+        // just leaves the rows, which is safe.
+      }
+    }
+
     const items: { recoveryId: string; targetPath?: string }[] = [];
 
     for (const recoveryId of recoveryIds) {
@@ -5196,15 +5358,26 @@ export function App(): JSX.Element {
         continue;
       }
 
+      const isGlossaryFallback =
+        candidate.documentType === "glossary.description";
+
+      if (isGlossaryFallback && !glossaryFallbackIds.has(recoveryId)) {
+        continue;
+      }
+
       if (
         candidate.documentType === "markdown.untitled" ||
+        isGlossaryFallback ||
         !candidate.hasFilePath
       ) {
         // Untitled has no source directory — always ask for a save
         // location (project root is only the default). Cancel keeps the row.
-        const defaultPath = project
-          ? `${project.rootPath.replace(/[\\/]+$/, "")}/${candidate.displayName}`
+        const defaultName = isGlossaryFallback
+          ? `${candidate.displayName.replace(/[\\/:*?"<>|]/g, "_")}.md`
           : candidate.displayName;
+        const defaultPath = project
+          ? `${project.rootPath.replace(/[\\/]+$/, "")}/${defaultName}`
+          : defaultName;
         const selected =
           await window.pergamum.files.selectMarkdownSavePath(defaultPath);
         if (!selected) {
@@ -7550,6 +7723,12 @@ export function App(): JSX.Element {
     }
 
     const { draft } = openDocument.editor;
+    // #573 Slice 9: the Recovery row this save makes obsolete (a new entry's
+    // temporary-id row, or the entry's own row).
+    const preSaveRecoveryKey = recoveryDocumentKeyForGlossaryEditor(
+      openDocument.editor,
+      projectRef.current
+    );
 
     logRendererDebugEvent({
       level: "debug",
@@ -7652,6 +7831,34 @@ export function App(): JSX.Element {
               savedEditorId
             );
             editorNavigation.invalidateEditor(editorId);
+          }
+
+          // #573 Slice 9: Save-success Recovery cleanup, exactly like a
+          // Markdown save — edits typed during the save are re-captured under
+          // the (possibly new) entry key, then the pre-save row is retired.
+          if (preSaveRecoveryKey) {
+            const savedOpenDocument = findOpenDocument(
+              replacement.state,
+              createGlossaryDescriptionEditorId(savedEntry.id)
+            );
+            const savedEditor = savedOpenDocument?.editor ?? null;
+
+            recoveryPayloadCoordinator.onSaveSucceeded({
+              oldKey: preSaveRecoveryKey,
+              newKey: savedEditor
+                ? recoveryDocumentKeyForGlossaryEditor(
+                    savedEditor,
+                    projectRef.current
+                  )
+                : null,
+              postSavePayload:
+                savedEditor && isCurrentEditorDirty(savedEditor)
+                  ? buildGlossaryRecoveryPayload(
+                      savedEditor,
+                      projectRef.current
+                    )
+                  : null
+            });
           }
         }
         return "saved";

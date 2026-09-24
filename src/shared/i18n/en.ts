@@ -343,6 +343,8 @@ export const enTranslations = {
   "dialog.recovery.title": "Recover Unsaved Changes",
   "dialog.recovery.type.file": "File",
   "dialog.recovery.type.untitled": "Untitled",
+  "dialog.recovery.type.glossary": "Glossary",
+  "dialog.recovery.type.glossaryNew": "New glossary entry",
   "dialog.paragraphIndent.remove.title": "Remove Paragraph Indents",
   "dialog.paragraphIndent.result.message": "Changed lines: {changedLineCount}\nSkipped lines: {skippedLineCount}\nEmpty lines: {emptyLineCount}",
   "dialog.projectSwitchUnsaved.discardAndContinue": "Discard Changes and Continue",
@@ -1722,6 +1724,10 @@ export const enTranslations = {
   "status.recoveryBackupSaved": "Saved recovery backup.",
   "status.recoveryDiscarded": "Discarded {count} Recovery item(s)",
   "status.recoveryRestoreFailed": "Some items could not be restored",
+  "status.recoveryGlossaryOtherProject":
+    "Glossary entries from another project cannot be restored here. Open that project, then restore",
+  "status.recoveryGlossaryTabBusy":
+    "\"{name}\" has unsaved changes, so it was not restored. Save or discard them, then restore",
   "status.recoveryRestored": "Restored {count} item(s) as .recovered files",
   "status.saveCanceled": "Save canceled",
   "status.saveFailed": "Save failed: {message}",

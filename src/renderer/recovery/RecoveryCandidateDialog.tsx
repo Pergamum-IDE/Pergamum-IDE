@@ -555,7 +555,11 @@ export function RecoveryCandidateDialog({
                         {translate(
                           candidate.documentType === "markdown.untitled"
                             ? "dialog.recovery.type.untitled"
-                            : "dialog.recovery.type.file"
+                            : candidate.documentType === "glossary.description"
+                              ? candidate.glossaryEntryIsNew
+                                ? "dialog.recovery.type.glossaryNew"
+                                : "dialog.recovery.type.glossary"
+                              : "dialog.recovery.type.file"
                         )}
                       </td>
                       <td className="recoveryCandidateDialogPreview">

@@ -270,7 +270,10 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     // (createProjectDocument or createFileDocument), not one fixed
     // "await openDocument(createFileDocument(file))" call site.
     const openIdx = restoreFn.indexOf("await openDocument(");
-    const finalizeIdx = restoreFn.indexOf(
+    // #573 Slice 9: glossary candidates finalize earlier (their own
+    // two-phase restore into tabs), so the FILE restore's finalize is the
+    // last one.
+    const finalizeIdx = restoreFn.lastIndexOf(
       "window.pergamum.recovery.finalizeRestoredCandidates({"
     );
     expect(restoreIdx).toBeGreaterThan(-1);
@@ -278,6 +281,7 @@ describe("Recovery candidate dialog wiring (#287)", () => {
     expect(openIdx).toBeGreaterThan(readIdx);
     expect(finalizeIdx).toBeGreaterThan(openIdx);
     expect(restoreFn).toContain("recoveryIds: openedIds");
+    expect(restoreFn).toContain("recoveryIds: glossaryOpenedIds");
   });
 
   it("asks the File Explorer to re-list the directory of every restored in-project file (#344)", () => {

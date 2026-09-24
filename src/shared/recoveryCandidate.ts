@@ -13,6 +13,7 @@
  *     the report, never in the Session Store or project DB.
  */
 
+import type { GlossaryRecoveryDraft } from "./glossaryRecoveryDraft";
 import type {
   RecoveryDocumentEncoding,
   RecoveryDocumentLineEnd,
@@ -50,6 +51,12 @@ export interface RecoveryCandidate {
   readonly previewSnippet: string;
   readonly hasFilePath: boolean;
   readonly hasProjectFilePath: boolean;
+  /**
+   * #573 Slice 9: for a `glossary.description` row, whether it is a
+   * never-saved new entry (derived main-side from the payload). Absent for
+   * Markdown rows.
+   */
+  readonly glossaryEntryIsNew?: boolean;
 }
 
 export type RecoveryCandidateListResult =
@@ -167,6 +174,42 @@ export interface RecoveryFinalizeRequest {
 export type RecoveryFinalizeResult =
   | { readonly ok: true; readonly deleted: readonly string[] }
   | { readonly ok: false; readonly skipped: "not-owner" | "unavailable" };
+
+/**
+ * #573 Slice 9: explicit restore of ONE glossary Recovery candidate into a
+ * glossary Description tab. This is the only path on which a Recovery body
+ * (the validated draft) crosses to the renderer — never the candidate list.
+ */
+export interface RecoveryGlossaryDraftRequest {
+  readonly recoveryId: string;
+}
+
+export type RecoveryGlossaryDraftReadResult =
+  | {
+      readonly kind: "draft";
+      readonly recoveryId: string;
+      readonly draft: GlossaryRecoveryDraft;
+    }
+  /** The row belongs to a project that is not the one currently open. */
+  | { readonly kind: "differentProject"; readonly recoveryId: string }
+  /** The payload is not a restorable draft — `.recovered.md` fallback. */
+  | { readonly kind: "invalid"; readonly recoveryId: string }
+  /** No such previous-run glossary row. */
+  | { readonly kind: "missing"; readonly recoveryId: string };
+
+export type RecoveryGlossaryDraftResult =
+  | { readonly ok: true; readonly result: RecoveryGlossaryDraftReadResult }
+  | { readonly ok: false; readonly skipped: "not-owner" | "unavailable" };
+
+export function parseRecoveryGlossaryDraftRequest(
+  value: unknown
+): RecoveryGlossaryDraftRequest | null {
+  return isRecord(value) &&
+    nonEmptyString(value.recoveryId) &&
+    value.recoveryId.length <= 512
+    ? { recoveryId: value.recoveryId }
+    : null;
+}
 
 export interface RecoveryDiscardRequest {
   readonly recoveryIds: readonly string[];

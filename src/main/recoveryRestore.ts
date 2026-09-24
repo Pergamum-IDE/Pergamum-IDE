@@ -33,6 +33,7 @@ import type {
   RecoveryRestoreItemStatus
 } from "../shared/recoveryCandidate";
 import type { RecoveryDocumentType } from "../shared/recoveryDocument";
+import { glossaryRecoveryPayloadText } from "../shared/glossaryRecoveryDraft";
 
 /** A Recovery row reduced to what a restore write needs. */
 export interface RecoveryRestoreRow {
@@ -117,9 +118,13 @@ function result(
  * sibling — the ideal path itself is never overwritten.
  *
  * When no location can be resolved at all:
- *   - `markdown.untitled` → `"needs-destination"` (the renderer should have
- *     asked for one),
+ *   - `markdown.untitled` / `glossary.description` → `"needs-destination"`
+ *     (the renderer should have asked for one),
  *   - otherwise           → `"missing"`.
+ *
+ * #573 Slice 9: a `glossary.description` row only takes this path as the
+ * `.recovered.md` escape hatch (its normal restore is into a glossary tab).
+ * Only its Description is written — the metadata is lost here.
  */
 export async function restoreRecoveryRow(
   row: RecoveryRestoreRow,
@@ -138,7 +143,10 @@ export async function restoreRecoveryRow(
   if (!idealPath) {
     return result(
       row,
-      row.documentType === "markdown.untitled" ? "needs-destination" : "missing"
+      row.documentType === "markdown.untitled" ||
+        row.documentType === "glossary.description"
+        ? "needs-destination"
+        : "missing"
     );
   }
 
@@ -147,7 +155,12 @@ export async function restoreRecoveryRow(
       idealPath,
       fileSystem.exists
     );
-    await fileSystem.writeFileAtomic(recoveredPath, row.payloadText);
+    await fileSystem.writeFileAtomic(
+      recoveredPath,
+      row.documentType === "glossary.description"
+        ? glossaryRecoveryPayloadText(row.payloadText)
+        : row.payloadText
+    );
     return result(row, "written", recoveredPath);
   } catch {
     return result(row, "failed");

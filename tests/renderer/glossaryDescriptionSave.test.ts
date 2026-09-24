@@ -282,7 +282,7 @@ describe("glossaryDescription working copy (#573 Slice 4)", () => {
     expect(choiceDialog).toHaveBeenCalledTimes(1);
   });
 
-  it("stays out of Recovery even while dirty; the Session records only its entry id (#573 Slice 8)", () => {
+  it("records only its entry id in the Session (#573 Slice 8) and needs a project for Recovery (#573 Slice 9)", () => {
     const state = glossaryState(true);
 
     expect(
@@ -292,6 +292,8 @@ describe("glossaryDescription working copy (#573 Slice 4)", () => {
     ).toEqual([
       { kind: "glossaryDescription", order: 0, entryId, viewState: null }
     ]);
+    // #573 Slice 9: dirty glossary tabs are captured for Recovery — but
+    // only with an open project (their rows are project-scoped).
     expect(
       buildRecoveryDirtyDocuments(state, {
         project: null,

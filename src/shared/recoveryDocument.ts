@@ -13,8 +13,13 @@
  * that this file stays dependency-light.
  */
 
-/** `documents.document_type`. */
-export type RecoveryDocumentType = "markdown.file" | "markdown.untitled";
+/** `documents.document_type`. #573 Slice 9: `glossary.description` is a
+ *  dirty glossary Description tab; its `payload_text` is a
+ *  `GlossaryRecoveryDraft` JSON (see `glossaryRecoveryDraft.ts`). */
+export type RecoveryDocumentType =
+  | "markdown.file"
+  | "markdown.untitled"
+  | "glossary.description";
 
 /** `documents.document_encoding` — the attribute DETECTED from the source
  *  file, so a later restore can save it back the same way. `null` for
@@ -77,10 +82,33 @@ export function recoveryUntitledSourceUri(untitledId: string): string {
   return `untitled://${untitledId}`;
 }
 
+/**
+ * #573 Slice 9: a glossary Description draft's `document_key` — scoped to
+ * the project (by its `.pergamum` path, the same linkage Markdown rows use)
+ * and to either a saved entry id or a never-saved tab's temporary id. Never
+ * the representative surface.
+ */
+export function recoveryGlossaryDocumentKey(
+  projectFilePath: string,
+  target: { readonly kind: "entry" | "new"; readonly id: string }
+): string {
+  return `glossary:${target.kind}:${target.id}@${projectFilePath}`;
+}
+
+export function recoveryGlossarySourceUri(
+  target: { readonly kind: "entry" | "new"; readonly id: string }
+): string {
+  return `glossary://${target.kind}/${target.id}`;
+}
+
 export function isRecoveryDocumentType(
   value: unknown
 ): value is RecoveryDocumentType {
-  return value === "markdown.file" || value === "markdown.untitled";
+  return (
+    value === "markdown.file" ||
+    value === "markdown.untitled" ||
+    value === "glossary.description"
+  );
 }
 
 export function isRecoveryDocumentEncoding(
@@ -158,7 +186,11 @@ export function parseRecoveryDocumentPayload(
   // The key prefix and the type must agree — a mismatch means the caller
   // built an inconsistent identity.
   const expectedPrefix =
-    documentType === "markdown.untitled" ? "untitled:" : "file:";
+    documentType === "markdown.untitled"
+      ? "untitled:"
+      : documentType === "glossary.description"
+        ? "glossary:"
+        : "file:";
 
   if (!documentKey.startsWith(expectedPrefix)) {
     return null;
