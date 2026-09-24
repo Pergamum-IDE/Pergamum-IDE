@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent, type MouseEvent } from "react";
 import editIcon from "../../assets/icons/feather/global/edit-2.svg?raw";
 import deleteIcon from "../../assets/icons/feather/glossary/delete.svg?raw";
+import exportIcon from "../../assets/icons/codicons/dialog/export.svg?raw";
 import {
   representativeGlossaryAtom,
   type GlossaryEntry,
@@ -35,6 +36,11 @@ interface GlossaryEntryManagerProps {
     entryId: GlossaryEntryId,
     entryLabel: string
   ) => Promise<unknown> | void;
+  /**
+   * #574 Slice 6: open the Glossary Export Dialog for one entry (the
+   * representative surface is passed for the dialog's target / file name).
+   */
+  onExportEntry: (entryId: GlossaryEntryId, entryLabel: string) => void;
   /**
    * #375: persist a new project-wide entry order (drag handle / Arrow keys).
    * `entryIdsInOrder` lists every glossary entry exactly once; the host
@@ -73,17 +79,18 @@ const TABLE_COLUMN_KEYS = [
   "glossary.entryManager.columns.createdAt",
   "glossary.entryManager.columns.updatedAt",
   "glossary.entryManager.columns.edit",
+  "glossary.entryManager.columns.export",
   "glossary.entryManager.columns.delete"
 ] as const;
 
 /**
  * #375: the Glossary Management tab — a table-shaped surface for the glossary
  * ENTRIES themselves
- * (`[⣿ handle][entry][tags][tag count][atoms][created][updated][edit][delete]`),
+ * (`[⣿ handle][entry][tags][tag count][atoms][created][updated][edit][export][delete]`),
  * with drag-handle reorder of the project-wide `glossary_entries.sort_order`.
  * An "Add entry" primary action sits top-left (not a page heading). Clicking a
  * row opens that entry's glossary Description tab (#573 Slice 7); the
- * drag handle / edit / delete controls stop the click from bubbling so they
+ * drag handle / edit / export / delete controls stop the click from bubbling so they
  * never also open the editor. Edit / delete / create go back to the host. No
  * bulk operations, no column sort / resize.
  */
@@ -93,6 +100,7 @@ export function GlossaryEntryManager({
   onAddEntry,
   onOpenEntry,
   onDeleteEntry,
+  onExportEntry,
   onReorderEntries
 }: GlossaryEntryManagerProps): JSX.Element {
   // #375: transient drag state for entry reorder (D&D). `dropGap` is a slot
@@ -361,6 +369,25 @@ export function GlossaryEntryManager({
                     <span
                       aria-hidden="true"
                       dangerouslySetInnerHTML={{ __html: editIcon }}
+                    />
+                  </button>
+                </span>
+                {/* #574 Slice 6: Export sits between Edit and the
+                    destructive Delete (kept at the far end). */}
+                <span role="cell" className="glossaryTagManagerCell">
+                  <button
+                    type="button"
+                    className="glossaryTagManagerIconButton glossaryEntryManagerExportButton"
+                    aria-label={translate("glossary.entryManager.exportEntry")}
+                    title={translate("glossary.entryManager.exportEntry")}
+                    onClick={(event) => {
+                      stopRowActivation(event);
+                      onExportEntry(entry.id, surface);
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      dangerouslySetInnerHTML={{ __html: exportIcon }}
                     />
                   </button>
                 </span>

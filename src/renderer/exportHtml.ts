@@ -342,22 +342,42 @@ export function collectProjectLocalImagesForDocument(
     return { modifiedMarkdownText: doc.rawText || doc.text, assets: [] };
   }
 
-  const matches = extractProjectLocalImageLinks(doc.rawText);
+  return collectProjectLocalImagesForMarkdown(
+    doc.rawText,
+    {
+      kind: "sourceFile",
+      sourceMarkdownProjectRelativePath: doc.filePath
+    },
+    imageAssetFolderName
+  );
+}
+
+/**
+ * Rewrites every project-local image link in `rawText` to
+ * `<imageAssetFolderName>/<project-relative path>` and lists the files to
+ * copy there. `resolutionContext` decides what the links are relative to: a
+ * Markdown document's folder (`sourceFile`, #523) or — #574 Slice 6, the
+ * glossary Description — the project root (`projectRoot`).
+ */
+export function collectProjectLocalImagesForMarkdown(
+  rawText: string,
+  resolutionContext: ProjectLocalImageResolutionContext,
+  imageAssetFolderName: string
+): {
+  readonly modifiedMarkdownText: string;
+  readonly assets: readonly ExportImageAssetCopyItem[];
+} {
+  const matches = extractProjectLocalImageLinks(rawText);
   if (matches.length === 0) {
-    return { modifiedMarkdownText: doc.rawText, assets: [] };
+    return { modifiedMarkdownText: rawText, assets: [] };
   }
 
   const assets: ExportImageAssetCopyItem[] = [];
   let modifiedText = "";
   let lastIndex = 0;
 
-  const resolutionContext: ProjectLocalImageResolutionContext = {
-    kind: "sourceFile",
-    sourceMarkdownProjectRelativePath: doc.filePath
-  };
-
   for (const match of matches) {
-    modifiedText += doc.rawText.slice(lastIndex, match.from);
+    modifiedText += rawText.slice(lastIndex, match.from);
 
     const resolution = resolveProjectLocalImageSrc(
       match.src,
@@ -383,7 +403,7 @@ export function collectProjectLocalImagesForDocument(
     lastIndex = match.to;
   }
 
-  modifiedText += doc.rawText.slice(lastIndex);
+  modifiedText += rawText.slice(lastIndex);
 
   return {
     modifiedMarkdownText: modifiedText,

@@ -3171,6 +3171,87 @@ label.settingsItemHeader {
 }
 
 /* #537: Document Map PNG export dialog. */
+/* #574 Slice 6: Glossary Export Dialog (same layout as the Document Map PNG
+   export dialog below). */
+.glossaryExportDialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-inline-size: 420px;
+}
+
+.glossaryExportSummary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.glossaryExportSummary dt {
+  font-size: 0.85rem;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryExportSummary dd {
+  margin: 0;
+}
+
+.glossaryExportContentList {
+  margin: 0;
+  padding-inline-start: 1.2em;
+}
+
+.glossaryExportNote,
+.glossaryExportFieldHint,
+.glossaryExportStatus {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryExportControl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.glossaryExportControlLabel {
+  font-size: 0.85rem;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryExportInputWithButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.glossaryExportInput {
+  flex: 1;
+  min-inline-size: 0;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: 4px;
+  background-color: var(--color-bg-input, #fff);
+  color: var(--color-text-main, #333);
+}
+
+.glossaryExportInput:disabled {
+  opacity: 0.6;
+}
+
+.glossaryExportStatus {
+  overflow-wrap: anywhere;
+}
+
+.glossaryExportFieldError,
+.glossaryExportError {
+  font-size: 12px;
+  color: var(--color-text-danger, #d9534f);
+}
+
 .documentMapPngExportDialogBody {
   display: flex;
   flex-direction: column;
@@ -6324,7 +6405,7 @@ label.settingsItemHeader {
   display: grid;
   grid-template-columns:
     2.5rem minmax(7rem, 1.2fr) minmax(8rem, 1.8fr) 4rem 4rem 6rem 6rem 2.75rem
-    2.75rem;
+    4.5rem 2.75rem;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;

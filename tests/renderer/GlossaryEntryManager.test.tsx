@@ -87,6 +87,7 @@ function render(
     onAddEntry: vi.fn(),
     onOpenEntry: vi.fn(),
     onDeleteEntry: vi.fn().mockResolvedValue(undefined),
+    onExportEntry: vi.fn(),
     onReorderEntries: vi.fn().mockResolvedValue(undefined)
   };
   act(() => {
@@ -144,6 +145,7 @@ describe("GlossaryEntryManager (#375)", () => {
       "glossary.entryManager.columns.createdAt",
       "glossary.entryManager.columns.updatedAt",
       "glossary.entryManager.columns.edit",
+      "glossary.entryManager.columns.export",
       "glossary.entryManager.columns.delete"
     ]);
 
@@ -359,6 +361,34 @@ describe("GlossaryEntryManager (#375)", () => {
     });
     expect(onDeleteEntry).toHaveBeenCalledWith(entryA.id, "織田信長");
     expect(onOpenEntry).not.toHaveBeenCalled();
+  });
+
+  it("#574 Slice 6: export icon (codicon export.svg) opens the export flow for that row only", () => {
+    const { onOpenEntry, onDeleteEntry, onExportEntry } = render();
+    const [rowA] = dataRows();
+    const cells = Array.from(rowA.querySelectorAll('[role="cell"]'));
+    const exportButton = rowA.querySelector<HTMLButtonElement>(
+      ".glossaryEntryManagerExportButton"
+    )!;
+
+    // Edit | Export | Delete — Delete stays at the far end.
+    expect(cells.at(-3)?.querySelector(".glossaryEntryManagerEditButton")).not.toBeNull();
+    expect(cells.at(-2)?.contains(exportButton)).toBe(true);
+    expect(cells.at(-1)?.querySelector(".glossaryEntryManagerDeleteButton")).not.toBeNull();
+    expect(exportButton.getAttribute("aria-label")).toBe(
+      "glossary.entryManager.exportEntry"
+    );
+    expect(exportButton.querySelector("svg path")?.getAttribute("d")).toMatch(
+      /^M1\.5 2\.99976/
+    );
+
+    act(() => {
+      exportButton.click();
+    });
+    expect(onExportEntry).toHaveBeenCalledTimes(1);
+    expect(onExportEntry).toHaveBeenCalledWith(entryA.id, "織田信長");
+    expect(onOpenEntry).not.toHaveBeenCalled();
+    expect(onDeleteEntry).not.toHaveBeenCalled();
   });
 
   it("clicking the drag handle never opens the editor", () => {

@@ -141,6 +141,38 @@ function applyMermaidErrorState(
 }
 
 /**
+ * #574 Slice 6: render every Mermaid placeholder in a DETACHED container to
+ * its final static state (SVG, empty notice or error card) and resolve once
+ * all are done — for export, where the result is serialized as HTML instead
+ * of shown live (no generation / `isConnected` stale checks; no interactive
+ * `bindFunctions`). Same states and markup as the live preview.
+ */
+export async function renderMermaidDiagramsToStaticHtml(
+  container: HTMLElement,
+  idPrefix: string,
+  messages: MermaidPreviewMessages,
+  renderFn: MermaidRenderFn = defaultMermaidRender
+): Promise<void> {
+  const blocks = findMermaidPlaceholderContainers(container);
+
+  for (const [index, block] of blocks.entries()) {
+    const source = readMermaidSource(block).trim();
+
+    if (source.length === 0) {
+      applyMermaidEmptyState(block, messages);
+      continue;
+    }
+
+    try {
+      const result = await renderFn(`${idPrefix}-${index}`, source);
+      block.innerHTML = `<div class="markdownMermaidDiagram">${result.svg}</div>`;
+    } catch (error: unknown) {
+      applyMermaidErrorState(block, source, error, messages);
+    }
+  }
+}
+
+/**
  * Scans `container` for Mermaid placeholders and renders each one. Safe to
  * call unconditionally — a container with no placeholders is a no-op.
  *

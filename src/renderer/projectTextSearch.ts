@@ -224,6 +224,11 @@ export interface RunProjectGlossaryAtomSearchInput {
   readonly relationMode?: GlossarySearchRelationMode;
   readonly nearbySettings?: SearchNearbySettings;
   readonly isCancelled?: () => boolean;
+  /** #574 Slice 6: override the caps (see
+   *  {@link ScanProjectDocumentsInput.maxTotalMatches}) — the glossary export
+   *  counts every occurrence instead of listing the first ones. */
+  readonly maxTotalMatches?: number;
+  readonly maxMatchesPerFile?: number;
 }
 
 /**
@@ -249,6 +254,8 @@ export async function runProjectGlossaryAtomSearch(
     documents: input.documents,
     readText: input.readText,
     isCancelled: input.isCancelled,
+    maxTotalMatches: input.maxTotalMatches,
+    maxMatchesPerFile: input.maxMatchesPerFile,
     findMatches: (text, perFileLimit) =>
       findGlossaryAtomRelationMatches(text, terms, relationMode, {
         limit: perFileLimit,

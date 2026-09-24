@@ -247,6 +247,19 @@ import {
 } from "./dialog/appDialogTypes";
 import { runEditorCloseFlow } from "./documentTabCloseFlow";
 import {
+  GlossaryExportDialog,
+  type GlossaryExportDialogRequest
+} from "./dialog/GlossaryExportDialog";
+import type { GlossaryExportPlan } from "./glossaryExport/glossaryExportModel";
+import { renderGlossaryDescriptionForExport } from "./glossaryExport/glossaryExportHtml";
+import { countGlossaryEntryOccurrences } from "./glossaryExport/glossaryExportOccurrences";
+import {
+  runGlossaryExport,
+  type GlossaryExportRunResult
+} from "./glossaryExport/glossaryExportRunner";
+import { loadKatexExportCss } from "./glossaryExport/katexExportCss";
+import { markdownCalloutLabelsFor } from "./preview/markdownCallout";
+import {
   resolveDirtyWorkingCopies,
   type DirtyWorkingCopyResolutionResult
 } from "./dirtyWorkingCopyResolution";
@@ -1394,6 +1407,9 @@ export function App(): JSX.Element {
   // doc comment for why this is never re-derived while the dialog is open.
   const [documentMapPngExportSnapshot, setDocumentMapPngExportSnapshot] =
     useState<DocumentMapPngExportSnapshot | null>(null);
+  // #574 Slice 6: the Glossary Export Dialog's target (`null` = closed).
+  const [glossaryExportRequest, setGlossaryExportRequest] =
+    useState<GlossaryExportDialogRequest | null>(null);
   // #384: Command Palette `%` project-search request handed to the Search pane
   // (also #457: Ctrl+Shift+F / Ctrl+Shift+H, which additionally sets `tab`).
   // `token` is a session-monotonic counter so a repeat `%` re-applies.
@@ -4451,6 +4467,109 @@ export function App(): JSX.Element {
 
   // #375: Glossary Management tab — hard delete of an entry through the shared
   // destructive confirm dialog.
+  // #574 Slice 6: a Glossary Management row's Export action.
+  function handleExportGlossaryEntryFromManager(
+    entryId: GlossaryEntryId,
+    entryLabel: string
+  ): void {
+    setGlossaryExportRequest({ entryId, entryLabel });
+  }
+
+  async function confirmGlossaryExportOverwrite(): Promise<boolean> {
+    try {
+      return (
+        (await confirmDialog({
+          title: translate("glossaryExport.overwriteConfirm.title"),
+          message: {
+            kind: "plainText",
+            text: translate("glossaryExport.overwriteConfirm.message")
+          },
+          icon: {
+            kind: "warning",
+            tooltip: translate("dialog.icon.warning")
+          },
+          clipboardText: null,
+          cancelLabel: translate("common.cancel"),
+          tone: "destructive",
+          confirmLabel: translate("glossaryExport.overwriteConfirm.confirm")
+        })) === "confirm"
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  // #574 Slice 6: export ONE glossary entry as HTML. Uses the entry's SAVED
+  // state (a fresh `getById`, never an open tab's draft); occurrences are
+  // counted like the Search pane's glossary search; images and the file go
+  // through the existing #523 HTML export IPC. No entry content is logged.
+  async function exportGlossaryEntry(
+    plan: GlossaryExportPlan
+  ): Promise<GlossaryExportRunResult> {
+    const activeProject = project;
+    const activeContext = activeProjectContext;
+
+    if (!activeProject || !activeContext) {
+      return { ok: false, reason: "failed" };
+    }
+
+    return await runGlossaryExport(plan, {
+      getEntry: (entryId) => window.pergamum.glossary.getById(entryId),
+      countOccurrences: (entry) =>
+        countGlossaryEntryOccurrences({
+          entry,
+          documents: activeProject.documents,
+          readText: createProjectSearchReadText(activeContext)
+        }),
+      renderDescription: (description, imageAssetFolderName) =>
+        renderGlossaryDescriptionForExport(description, {
+          imageAssetFolderName,
+          calloutLabels: markdownCalloutLabelsFor(translate),
+          mermaidMessages: {
+            emptyMessage: translate("preview.mermaid.emptyMessage"),
+            errorMessage: translate("preview.mermaid.errorMessage"),
+            errorHint: translate("preview.mermaid.errorHint"),
+            showDetailsLabel: translate("preview.mermaid.showDetails")
+          }
+        }),
+      loadKatexCss: loadKatexExportCss,
+      labels: (occurrences) => ({
+        infoHeading: translate("glossaryExport.document.infoHeading"),
+        representative: translate("glossaryExport.document.representative"),
+        atoms: translate("glossaryExport.document.atoms"),
+        tags: translate("glossaryExport.document.tags"),
+        noTags: translate("glossaryExport.document.noTags"),
+        createdAt: translate("glossaryExport.document.createdAt"),
+        updatedAt: translate("glossaryExport.document.updatedAt"),
+        occurrencesHeading: translate(
+          "glossaryExport.document.occurrencesHeading"
+        ),
+        atomColumn: translate("glossaryExport.document.atomColumn"),
+        countColumn: translate("glossaryExport.document.countColumn"),
+        total: translate("glossaryExport.document.total"),
+        occurrenceScope: translate("glossaryExport.document.occurrenceScope", {
+          count: occurrences?.documentCount ?? 0
+        }),
+        occurrenceSkipped:
+          occurrences && occurrences.skippedFileCount > 0
+            ? translate("glossaryExport.document.occurrenceSkipped", {
+                count: occurrences.skippedFileCount
+              })
+            : null,
+        descriptionHeading: translate(
+          "glossaryExport.document.descriptionHeading"
+        ),
+        emptyDescription: translate("glossaryExport.document.emptyDescription")
+      }),
+      lang: displayLanguage,
+      writeHtml: (request) =>
+        window.pergamum.files.exportHtmlCombined({
+          ...request,
+          projectRootPath: activeProject.rootPath
+        })
+    });
+  }
+
   async function handleDeleteGlossaryEntryFromManager(
     entryId: string
   ): Promise<void> {
@@ -12338,6 +12457,7 @@ export function App(): JSX.Element {
                         onDeleteEntry={(entryId) =>
                           handleDeleteGlossaryEntryFromManager(entryId)
                         }
+                        onExportEntry={handleExportGlossaryEntryFromManager}
                         onReorderEntries={handleReorderGlossaryEntries}
                       />
                     </section>
@@ -12674,6 +12794,17 @@ export function App(): JSX.Element {
           onClose={() => setExportConfirmationState(null)}
         />
       ) : null}
+
+      <GlossaryExportDialog
+        request={glossaryExportRequest}
+        translate={translate}
+        opener={null}
+        onClose={() => setGlossaryExportRequest(null)}
+        onSelectFolder={(req) => window.pergamum.files.selectExportFolder(req)}
+        onCheckFileExists={(req) => window.pergamum.files.checkFileExists(req)}
+        onConfirmOverwrite={confirmGlossaryExportOverwrite}
+        onExport={exportGlossaryEntry}
+      />
 
       <DocumentMapPngExportDialog
         snapshot={documentMapPngExportSnapshot}
