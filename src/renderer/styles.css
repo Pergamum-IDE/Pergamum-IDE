@@ -5685,13 +5685,66 @@ label.settingsItemHeader {
   margin: 0;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 4px 10px;
+}
+
+.glossaryEditorAtomMatchFlags[data-expanded="false"] {
+  padding-block: 2px 4px;
 }
 
 .glossaryEditorAtomMatchFlags legend {
   padding: 0 4px;
   color: #6b7785;
   font-size: 12px;
+}
+
+.glossaryEditorAtomMatchFlagsToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.glossaryEditorAtomMatchFlagsToggle:hover {
+  background: #eef3f8;
+  color: #17212b;
+}
+
+.glossaryEditorAtomMatchFlagsToggleIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.glossaryEditorAtomMatchFlagsToggleIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.glossaryEditorAtomMatchFlagsToggleIcon:dir(rtl) {
+  transform: scaleX(-1);
+}
+
+.glossaryEditorAtomMatchFlagsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-block: 4px;
+}
+
+.glossaryEditorAtomMatchFlagsBody[hidden] {
+  display: none;
 }
 
 .glossaryEditorAtomMatchFlagsField {
@@ -6314,17 +6367,21 @@ label.settingsItemHeader {
 }
 
 .glossaryDescriptionMetadataToggleIcon {
-  display: inline-block;
-  transition: transform 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.glossaryDescriptionMetadataToggleIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .glossaryDescriptionMetadataToggleIcon:dir(rtl) {
   transform: scaleX(-1);
-}
-
-.glossaryDescriptionMetadataPanel[data-expanded="true"]
-  .glossaryDescriptionMetadataToggleIcon {
-  transform: rotate(90deg);
 }
 
 .glossaryDescriptionMetadataSummary {

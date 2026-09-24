@@ -163,6 +163,21 @@ describe("GlossaryDescriptionMetadataPanel (#573 Slice 5)", () => {
     ).toBe("代表: コードフェンス表記: 3タグ: Markdown, 記法");
   });
 
+  it("uses chevrons-right.svg when collapsed and chevrons-down.svg when expanded (#574)", () => {
+    const panel = mountPanel();
+    const iconSpan = panel.container.querySelector(
+      ".glossaryDescriptionMetadataToggleIcon"
+    );
+
+    expect(iconSpan?.innerHTML).toContain("feather-chevrons-right");
+    expect(iconSpan?.innerHTML).not.toContain("feather-chevrons-down");
+
+    panel.toggle();
+
+    expect(iconSpan?.innerHTML).toContain("feather-chevrons-down");
+    expect(iconSpan?.innerHTML).not.toContain("feather-chevrons-right");
+  });
+
   it("expands to the shared atom / match-flag / tag editor", () => {
     const panel = mountPanel();
     panel.toggle();

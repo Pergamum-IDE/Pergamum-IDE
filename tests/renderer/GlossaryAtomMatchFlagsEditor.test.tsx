@@ -17,8 +17,8 @@ import { GlossaryAtomMatchFlagsEditor } from "../../src/renderer/GlossaryAtomMat
 
 const translate: Translate = (key) => key;
 
-describe("GlossaryAtomMatchFlagsEditor (#375) — markup", () => {
-  it("renders the single-character checkbox plus a start / end boundary policy select", () => {
+describe("GlossaryAtomMatchFlagsEditor (#375, #574) — markup & collapsibility", () => {
+  it("starts collapsed by default with chevrons-right.svg and hidden body", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossaryAtomMatchFlagsEditor, {
         matchFlags: setGlossaryAtomBoundaryStartPolicy(
@@ -30,24 +30,13 @@ describe("GlossaryAtomMatchFlagsEditor (#375) — markup", () => {
       })
     );
 
-    expect(markup).toContain("glossaryEditor.atoms.matchFlags.singleCharacter");
-    expect(markup).toContain(
-      "glossaryEditor.atoms.matchFlags.boundaryStartPolicy"
-    );
-    expect(markup).toContain(
-      "glossaryEditor.atoms.matchFlags.boundaryEndPolicy"
-    );
-    expect(markup.match(/type="checkbox"/g)).toHaveLength(1);
-    expect(markup.match(/<select/g)).toHaveLength(2);
-    // start policy Auto → its <option value="1"> is selected.
-    expect(markup).toContain("glossaryEditor.atoms.matchFlags.boundaryPolicy.none");
-    expect(markup).toContain("glossaryEditor.atoms.matchFlags.boundaryPolicy.auto");
-    expect(markup).toContain(
-      "glossaryEditor.atoms.matchFlags.boundaryPolicy.strict"
-    );
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain('hidden=""');
+    expect(markup).toContain("feather-chevrons-right");
+    expect(markup).not.toContain("feather-chevrons-down");
   });
 
-  it("disables every control in read-only mode", () => {
+  it("disables every control in read-only mode when expanded", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossaryAtomMatchFlagsEditor, {
         matchFlags: 0,
@@ -62,7 +51,7 @@ describe("GlossaryAtomMatchFlagsEditor (#375) — markup", () => {
   });
 });
 
-describe("GlossaryAtomMatchFlagsEditor (#375) — interaction", () => {
+describe("GlossaryAtomMatchFlagsEditor (#375, #574) — interaction", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -86,7 +75,7 @@ describe("GlossaryAtomMatchFlagsEditor (#375) — interaction", () => {
     select.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  it("encodes the single-character bit and each boundary policy independently", () => {
+  it("toggles expanded state and reveals controls with chevrons-down.svg", () => {
     const onChange = vi.fn();
     act(() => {
       root.render(
@@ -97,6 +86,44 @@ describe("GlossaryAtomMatchFlagsEditor (#375) — interaction", () => {
         })
       );
     });
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      ".glossaryEditorAtomMatchFlagsToggle"
+    )!;
+    const body = container.querySelector<HTMLDivElement>(
+      ".glossaryEditorAtomMatchFlagsBody"
+    )!;
+    const iconSpan = container.querySelector<HTMLSpanElement>(
+      ".glossaryEditorAtomMatchFlagsToggleIcon"
+    )!;
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(body.hidden).toBe(true);
+    expect(iconSpan.innerHTML).toContain("feather-chevrons-right");
+
+    act(() => toggle.click());
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(body.hidden).toBe(false);
+    expect(iconSpan.innerHTML).toContain("feather-chevrons-down");
+  });
+
+  it("encodes the single-character bit and each boundary policy independently when expanded", () => {
+    const onChange = vi.fn();
+    act(() => {
+      root.render(
+        React.createElement(GlossaryAtomMatchFlagsEditor, {
+          matchFlags: 0,
+          translate,
+          onChange
+        })
+      );
+    });
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      ".glossaryEditorAtomMatchFlagsToggle"
+    )!;
+    act(() => toggle.click());
 
     const checkbox = container.querySelector<HTMLInputElement>(
       'input[type="checkbox"]'

@@ -1,3 +1,6 @@
+import { useId, useState } from "react";
+import chevronsDownIcon from "../../assets/icons/feather/glossary/chevrons-down.svg?raw";
+import chevronsRightIcon from "../../assets/icons/feather/glossary/chevrons-right.svg?raw";
 import {
   GlossaryAtomFlags,
   GlossaryBoundaryPolicy,
@@ -62,89 +65,114 @@ export function GlossaryAtomMatchFlagsEditor({
   readOnly = false,
   onChange
 }: GlossaryAtomMatchFlagsEditorProps): JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const bodyId = useId();
   const startPolicy = getGlossaryAtomBoundaryStartPolicy(matchFlags);
   const endPolicy = getGlossaryAtomBoundaryEndPolicy(matchFlags);
 
   return (
-    <fieldset className="glossaryEditorAtomMatchFlags">
-      <legend>{translate("glossaryEditor.atoms.matchFlags.heading")}</legend>
-
-      <label className="glossaryEditorAtomMatchFlagsField">
-        <input
-          type="checkbox"
-          checked={hasGlossaryAtomFlag(
-            matchFlags,
-            GlossaryAtomFlags.AllowSingleCharacterMatch
-          )}
-          disabled={readOnly}
-          onChange={(event) => {
-            if (!readOnly) {
-              onChange(
-                setGlossaryAtomFlag(
-                  matchFlags,
-                  GlossaryAtomFlags.AllowSingleCharacterMatch,
-                  event.target.checked
-                )
-              );
-            }
-          }}
-        />
-        <span>
-          {translate("glossaryEditor.atoms.matchFlags.singleCharacter")}
-        </span>
-      </label>
-
-      <label className="glossaryEditorAtomMatchFlagsField">
-        <span>
-          {translate("glossaryEditor.atoms.matchFlags.boundaryStartPolicy")}
-        </span>
-        <select
-          value={String(startPolicy)}
-          disabled={readOnly}
-          onChange={(event) => {
-            if (!readOnly) {
-              onChange(
-                setGlossaryAtomBoundaryStartPolicy(
-                  matchFlags,
-                  coerceBoundaryPolicyOption(event.target.value)
-                )
-              );
-            }
-          }}
+    <fieldset className="glossaryEditorAtomMatchFlags" data-expanded={expanded}>
+      <legend>
+        <button
+          type="button"
+          className="glossaryEditorAtomMatchFlagsToggle"
+          aria-expanded={expanded}
+          aria-controls={bodyId}
+          onClick={() => setExpanded((prev) => !prev)}
         >
-          {BOUNDARY_POLICY_OPTIONS.map((option) => (
-            <option key={option.value} value={String(option.value)}>
-              {translate(option.labelKey)}
-            </option>
-          ))}
-        </select>
-      </label>
+          <span
+            className="glossaryEditorAtomMatchFlagsToggleIcon"
+            aria-hidden="true"
+            dangerouslySetInnerHTML={{
+              __html: expanded ? chevronsDownIcon : chevronsRightIcon
+            }}
+          />
+          <span>{translate("glossaryEditor.atoms.matchFlags.heading")}</span>
+        </button>
+      </legend>
 
-      <label className="glossaryEditorAtomMatchFlagsField">
-        <span>
-          {translate("glossaryEditor.atoms.matchFlags.boundaryEndPolicy")}
-        </span>
-        <select
-          value={String(endPolicy)}
-          disabled={readOnly}
-          onChange={(event) => {
-            if (!readOnly) {
-              onChange(
-                setGlossaryAtomBoundaryEndPolicy(
-                  matchFlags,
-                  coerceBoundaryPolicyOption(event.target.value)
-                )
-              );
-            }
-          }}
-        >
-          {BOUNDARY_POLICY_OPTIONS.map((option) => (
-            <option key={option.value} value={String(option.value)}>
-              {translate(option.labelKey)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div
+        id={bodyId}
+        className="glossaryEditorAtomMatchFlagsBody"
+        hidden={!expanded}
+      >
+        <label className="glossaryEditorAtomMatchFlagsField">
+          <input
+            type="checkbox"
+            checked={hasGlossaryAtomFlag(
+              matchFlags,
+              GlossaryAtomFlags.AllowSingleCharacterMatch
+            )}
+            disabled={readOnly}
+            onChange={(event) => {
+              if (!readOnly) {
+                onChange(
+                  setGlossaryAtomFlag(
+                    matchFlags,
+                    GlossaryAtomFlags.AllowSingleCharacterMatch,
+                    event.target.checked
+                  )
+                );
+              }
+            }}
+          />
+          <span>
+            {translate("glossaryEditor.atoms.matchFlags.singleCharacter")}
+          </span>
+        </label>
+
+        <label className="glossaryEditorAtomMatchFlagsField">
+          <span>
+            {translate("glossaryEditor.atoms.matchFlags.boundaryStartPolicy")}
+          </span>
+          <select
+            value={String(startPolicy)}
+            disabled={readOnly}
+            onChange={(event) => {
+              if (!readOnly) {
+                onChange(
+                  setGlossaryAtomBoundaryStartPolicy(
+                    matchFlags,
+                    coerceBoundaryPolicyOption(event.target.value)
+                  )
+                );
+              }
+            }}
+          >
+            {BOUNDARY_POLICY_OPTIONS.map((option) => (
+              <option key={option.value} value={String(option.value)}>
+                {translate(option.labelKey)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="glossaryEditorAtomMatchFlagsField">
+          <span>
+            {translate("glossaryEditor.atoms.matchFlags.boundaryEndPolicy")}
+          </span>
+          <select
+            value={String(endPolicy)}
+            disabled={readOnly}
+            onChange={(event) => {
+              if (!readOnly) {
+                onChange(
+                  setGlossaryAtomBoundaryEndPolicy(
+                    matchFlags,
+                    coerceBoundaryPolicyOption(event.target.value)
+                  )
+                );
+              }
+            }}
+          >
+            {BOUNDARY_POLICY_OPTIONS.map((option) => (
+              <option key={option.value} value={String(option.value)}>
+                {translate(option.labelKey)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
     </fieldset>
   );
 }

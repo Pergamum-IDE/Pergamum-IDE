@@ -1,4 +1,6 @@
 import { useId } from "react";
+import chevronsDownIcon from "../../assets/icons/feather/glossary/chevrons-down.svg?raw";
+import chevronsRightIcon from "../../assets/icons/feather/glossary/chevrons-right.svg?raw";
 import type { GlossaryTag } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
@@ -67,9 +69,10 @@ export function GlossaryDescriptionMetadataPanel({
           <span
             className="glossaryDescriptionMetadataToggleIcon"
             aria-hidden="true"
-          >
-            ▸
-          </span>
+            dangerouslySetInnerHTML={{
+              __html: expanded ? chevronsDownIcon : chevronsRightIcon
+            }}
+          />
           <span className="glossaryDescriptionMetadataHeading">
             {translate("glossaryDescriptionTab.metadata.heading")}
           </span>
