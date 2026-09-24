@@ -18,13 +18,12 @@ interface GlossaryEntryManagerProps {
   translate: Translate;
   /**
    * Open the new-Glossary-Entry creation flow (top-left "Add entry").
-   * #436 Slice 4: opens the bottom Glossary Entry Editor Pane in create mode.
+   * #573 Slice 7: opens a new, unsaved glossary Description tab.
    */
   onAddEntry: () => void;
   /**
    * Open an entry for editing (row click / Enter / edit icon).
-   * #436 Slice 4: opens the bottom Glossary Entry Editor Pane in edit mode
-   * (no longer a glossary entry editor tab).
+   * #573 Slice 7: opens (or focuses) the entry's glossary Description tab.
    */
   onOpenEntry: (entryId: GlossaryEntryId) => void;
   /**
@@ -83,7 +82,7 @@ const TABLE_COLUMN_KEYS = [
  * (`[⣿ handle][entry][tags][tag count][atoms][created][updated][edit][delete]`),
  * with drag-handle reorder of the project-wide `glossary_entries.sort_order`.
  * An "Add entry" primary action sits top-left (not a page heading). Clicking a
- * row opens that entry in the Glossary Entry Editor Pane (#436 Slice 4); the
+ * row opens that entry's glossary Description tab (#573 Slice 7); the
  * drag handle / edit / delete controls stop the click from bubbling so they
  * never also open the editor. Edit / delete / create go back to the host. No
  * bulk operations, no column sort / resize.

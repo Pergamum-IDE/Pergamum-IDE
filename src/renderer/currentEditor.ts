@@ -19,6 +19,8 @@ import {
 import {
   applyGlossaryEntryDraftSaveResult,
   createGlossaryEntryDraft,
+  createNewGlossaryEntryDraft,
+  glossaryEntryDraftIsNew,
   isGlossaryEntryDraftDirty,
   updateGlossaryEntryDraftDescription,
   type GlossaryEntryDraft
@@ -98,6 +100,26 @@ export function updateGlossaryDescriptionEditorDraft(
 }
 
 /**
+ * #573 Slice 7: a tab for a NEW, not-yet-saved glossary entry (replacing the
+ * removed Glossary Entry Editor Pane's create mode). `localEntryId` is a fresh
+ * UUIDv7 used only as the tab's identity until the first save creates the
+ * entry and re-keys the tab (`applyGlossaryDescriptionEditorSaveResult`).
+ * Unsaved from the start, so it is dirty immediately.
+ */
+export function createNewGlossaryDescriptionCurrentEditor(
+  presetRepresentative: string,
+  localEntryId: string
+): GlossaryDescriptionCurrentEditor {
+  return {
+    kind: "glossaryDescription",
+    entryId: localEntryId,
+    representativeSurface: presetRepresentative.trim(),
+    draft: createNewGlossaryEntryDraft(presetRepresentative),
+    descriptionLineEndingBreaks: buildLineEndingBreakSet(analyzeLineEndings(""))
+  };
+}
+
+/**
  * #573 Slice 3: apply an editor text change to a glossary Description tab's
  * in-memory draft. Any other editor is returned unchanged.
  */
@@ -122,17 +144,25 @@ export function updateGlossaryDescriptionEditorText(
  * just saved. The CURRENT draft is kept (edits typed while the save was in
  * flight stay dirty against the new baseline); only its baseline and store
  * ids are updated. Any other editor is returned unchanged.
+ *
+ * #573 Slice 7: a NEW entry's tab (its first save just created the entry)
+ * also takes the created entry's id, so its EditorId becomes the real one.
  */
 export function applyGlossaryDescriptionEditorSaveResult(
   editor: CurrentEditor,
   savedEntry: GlossaryEntry
 ): CurrentEditor {
-  if (editor.kind !== "glossaryDescription" || editor.entryId !== savedEntry.id) {
+  if (
+    editor.kind !== "glossaryDescription" ||
+    (editor.entryId !== savedEntry.id &&
+      !glossaryEntryDraftIsNew(editor.draft))
+  ) {
     return editor;
   }
 
   return {
     ...editor,
+    entryId: savedEntry.id,
     representativeSurface: representativeGlossarySurface(savedEntry).trim(),
     draft: applyGlossaryEntryDraftSaveResult(editor.draft, savedEntry)
   };

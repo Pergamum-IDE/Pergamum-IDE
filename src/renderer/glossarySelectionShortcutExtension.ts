@@ -14,9 +14,8 @@
  * time can go stale across a remount. See that file's doc comment for the
  * full story — identical reasoning applies here. At most ONE
  * `MarkdownEditor` publishes into this slot (EditorSurface's document
- * editor); the Glossary description field's own `MarkdownEditor` (inside
- * `GlossaryEditor.tsx`) never receives this prop, so Ctrl+G stays inert
- * there — matching the Slice 12 spec's "Preview / settings / glossary pane
+ * editor); any other `MarkdownEditor` instance never receives this prop,
+ * so Ctrl+G stays inert there — matching the Slice 12 spec's "Preview / settings / glossary pane
  * 等が active → 原則として何もしない".
  *
  * Remediation note (post-Slice-12 review): publishing being instance-scoped

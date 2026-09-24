@@ -462,51 +462,16 @@ describe("App glossary Description save wiring (#573 Slice 4)", () => {
     expect(saveBlock).toContain('projectRef.current?.accessMode.kind !== "readWrite"');
     expect(saveBlock).toContain("glossaryEntryDraftValidity(draft)");
     expect(saveBlock).toContain(
-      "await handleSaveGlossaryEntryFromPane(\n            glossaryEntryDraftUpdateInput(draft)\n          )"
+      ": await updateGlossaryEntryFromDraft(\n                glossaryEntryDraftUpdateInput(draft)\n              );"
     );
     expect(saveBlock).toContain(
-      "applyGlossaryDescriptionEditorSaveResult(editor, savedEntry)"
+      "applyGlossaryDescriptionEditorSaveResult(\n              latestOpenDocument.editor,\n              savedEntry\n            )"
     );
     expect(saveBlock).not.toContain("window.pergamum.files");
     expect(saveBlock).not.toContain("window.pergamum.projects");
     expect(
       saveBlock.indexOf("glossaryEntryDraftValidity(draft)")
-    ).toBeLessThan(saveBlock.indexOf("handleSaveGlossaryEntryFromPane("));
-  });
-
-  it("redirects a pane edit of an entry open in a tab to that tab", () => {
-    const transitionBlock = block(
-      "async function transitionGlossaryEntryEditorPane(",
-      "async function closeGlossaryEntryEditorPaneWithConfirm"
-    );
-
-    expect(transitionBlock).toContain(
-      "createGlossaryDescriptionEditorId(next.entryId)"
-    );
-    expect(transitionBlock).toContain("openEditorFromUi(descriptionTabId);");
-    expect(
-      transitionBlock.indexOf("openEditorFromUi(descriptionTabId);")
-    ).toBeLessThan(
-      transitionBlock.indexOf("confirmGlossaryEntryEditorPaneDirtyIfNeeded()")
-    );
-  });
-
-  it("runs the pane's dirty confirm and closes the pane before opening the tab", () => {
-    const openBlock = block(
-      "async function handleOpenGlossaryDescriptionTab(",
-      "async function handleLoadGlossaryEntryFromPane"
-    );
-    const confirmIndex = openBlock.indexOf(
-      "await confirmGlossaryEntryEditorPaneDirtyIfNeeded()"
-    );
-
-    expect(confirmIndex).toBeGreaterThan(-1);
-    expect(openBlock.indexOf("window.pergamum.glossary.getById(entryId)")).toBeGreaterThan(
-      confirmIndex
-    );
-    expect(openBlock).toContain(
-      "setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());"
-    );
+    ).toBeLessThan(saveBlock.indexOf("updateGlossaryEntryFromDraft("));
   });
 
   it("keeps the glossary tab identity keyed by entry id", () => {

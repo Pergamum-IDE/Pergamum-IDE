@@ -47,21 +47,22 @@ describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
     expect(body).toContain("selectedText");
   });
 
-  it("the command controller routes through openGlossaryEntryEditorPaneFromSelection with source editor-selection", () => {
+  it("the command controller routes Ctrl+G to the glossary Description tab resolver (#573 Slice 7)", () => {
     const body = region(
       appSource(),
       "registerGlossaryEntryEditorPaneCommands(",
       1400
     );
 
-    expect(body).toContain("openGlossaryEntryEditorPaneFromSelection: async (selectedText) => {");
-    expect(body).toContain('"editor-selection"');
+    expect(body).toContain(
+      "openGlossaryEntryEditorPaneFromSelection: async (selectedText) => {\n          await openGlossaryDescriptionTabFromSelection(selectedText);"
+    );
   });
 
-  it("openGlossaryEntryEditorPaneFromSelection resolves via the pure resolver against glossaryEntries, then transitions", () => {
+  it("openGlossaryDescriptionTabFromSelection resolves via the pure resolver against glossaryEntries, then opens a tab", () => {
     const body = region(
       appSource(),
-      "async function openGlossaryEntryEditorPaneFromSelection(",
+      "async function openGlossaryDescriptionTabFromSelection(",
       1200
     );
 
@@ -70,15 +71,16 @@ describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
     // All 3 resolution outcomes are handled.
     expect(body).toContain('resolution.kind === "ambiguous"');
     expect(body).toContain('resolution.kind === "create"');
-    expect(body).toContain("transitionGlossaryEntryEditorPane(");
-    expect(body).toContain("openGlossaryEntryCreatePane({");
-    expect(body).toContain("openGlossaryEntryEditPane({");
-    // Ambiguous never silently picks a result — status only, no transition.
+    expect(body).toContain(
+      "openNewGlossaryDescriptionTab(resolution.presetRepresentative);"
+    );
+    expect(body).toContain(
+      "await openGlossaryDescriptionTab(resolution.entryId);"
+    );
+    // Ambiguous never silently picks a result — status only, no tab.
     expect(body).toContain(
       'setStatus({ key: "status.glossaryCreateFromSelectionAmbiguous" });'
     );
-    // Never touches pane state directly, bypassing the dirty confirm.
-    expect(body).not.toContain("setGlossaryEntryEditorPane(open");
   });
 
   it("i18n: the command title/description and the ambiguous-match status exist for ja and en", async () => {
@@ -129,7 +131,7 @@ describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
     );
   });
 
-  it("only EditorSurface's MarkdownEditor gets the shortcut — the Glossary description field stays inert", () => {
+  it("only EditorSurface's MarkdownEditor gets the shortcut", () => {
     const editorSurfaceSource = readFileSync(
       "src/renderer/EditorSurface.tsx",
       "utf8"
@@ -137,12 +139,6 @@ describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
     expect(editorSurfaceSource).toContain(
       "glossarySelectionShortcut={glossarySelectionShortcutConfig}"
     );
-
-    const glossaryEditorSource = readFileSync(
-      "src/renderer/GlossaryEditor.tsx",
-      "utf8"
-    );
-    expect(glossaryEditorSource).not.toContain("glossarySelectionShortcut");
   });
 
   it("does not implement the right-click context menu yet (Slice 12 non-goal)", () => {
@@ -156,12 +152,7 @@ describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
   it("regression: does not revive the old glossaryEntry tab or occurrence navigation UI", () => {
     const source = appSource();
     expect(source).not.toContain("function createGlossaryEntryFromSidebar");
-
-    const editorSource = readFileSync(
-      "src/renderer/GlossaryEditor.tsx",
-      "utf8"
-    );
-    expect(editorSource).not.toContain("onNavigateToPreviousOccurrence");
-    expect(editorSource).not.toContain("onNavigateToNextOccurrence");
+    expect(source).not.toContain("onNavigateToPreviousOccurrence");
+    expect(source).not.toContain("onNavigateToNextOccurrence");
   });
 });

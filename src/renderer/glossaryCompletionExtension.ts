@@ -170,8 +170,8 @@ function createGlossaryCompletionTrigger(
 /**
  * Builds the full glossary-completion extension set for one MarkdownEditor
  * EditorView. Safe to install unconditionally on every instance: whenever
- * `getConfig()` returns `null` (GlossaryEditor's own description field never
- * supplies a config), the source yields no candidates and the trigger always
+ * `getConfig()` returns `null` (an auxiliary MarkdownEditor instance that
+ * never supplies a config), the source yields no candidates and the trigger always
  * declines, so Ctrl+Space is inert there - exactly as it already is with no
  * glossary integration wired at all.
  */

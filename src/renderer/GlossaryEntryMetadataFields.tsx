@@ -26,9 +26,9 @@ const ATOM_REORDER_MIME = "application/x-pergamum-glossary-atom-reorder";
 const ATOM_DRAG_HANDLE_GLYPH = "⣿"; // ⣿
 
 /**
- * The atom / tag editing callbacks, one per draft mutation. Shared by the
- * Glossary Entry Editor Pane (`GlossaryEditor`) and the glossary Description
- * tab's metadata panel (#573 Slice 5).
+ * The atom / tag editing callbacks, one per draft mutation — used by the
+ * glossary Description tab's metadata panel (#573 Slice 5; originally
+ * extracted from the removed Glossary Entry Editor Pane's `GlossaryEditor`).
  */
 export interface GlossaryEntryMetadataHandlers {
   onAddAtom: () => void;

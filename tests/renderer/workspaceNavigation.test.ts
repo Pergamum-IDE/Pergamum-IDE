@@ -722,15 +722,14 @@ describe("workspace navigation", () => {
     expect(source).toContain("onActivateProjectDocument={(relativePath) => {");
   });
 
-  it("connects Glossary activation through command execution to the Entry Editor Pane (#436 Slice 5)", () => {
+  it("connects Glossary activation through command execution to the glossary Description tab (#573 Slice 7)", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
 
     expect(source).toContain("registerGlossaryCommands(");
-    // #436 Slice 5: opening a glossary entry no longer opens a `glossaryEntry`
-    // editor tab — the command controller opens the bottom Glossary Entry
-    // Editor Pane in edit mode.
+    // #573 Slice 7: opening a glossary entry opens (or focuses) its glossary
+    // Description tab (the #436 bottom pane is gone).
     expect(source).toContain(
-      'openGlossaryEntryEditPane({ source: "glossary-pane", entryId })'
+      "openGlossaryEntry: (entryId) => openGlossaryDescriptionTab(entryId),"
     );
     expect(source).not.toContain(
       "return await openEditorFromExplicitActivation(editorId);"
@@ -957,7 +956,8 @@ describe("workspace navigation", () => {
 
   it("keeps renderer glossary code isolated from SQLite and main process persistence modules", () => {
     const rendererFiles = [
-      "src/renderer/GlossaryEditor.tsx",
+      "src/renderer/GlossaryEntryMetadataFields.tsx",
+      "src/renderer/GlossaryDescriptionMetadataPanel.tsx",
       "src/renderer/GlossarySidebar.tsx",
       "src/renderer/WorkspaceSidebar.tsx",
       "src/renderer/glossaryCommands.ts",

@@ -804,7 +804,7 @@ export function EditorSurface({
           documentKey={activeDocumentKey}
           documentStates={documentStates}
           // #573 Slice 3: glossary Description always previews as plain
-          // (horizontal) Markdown, like the Glossary Entry Editor Pane.
+          // (horizontal) Markdown.
           previewRenderer={isGlossaryDescription ? "markdown" : previewRenderer}
           narouMarkText={narouMarkText}
           previewUpdateDelayMs={previewUpdateDelayMs}
@@ -1103,8 +1103,8 @@ function MarkdownEditorSurface({
   );
   // #409 / #412: the source decides how project-local image links resolve
   // (`sourceFile` for a project document, `none` for a standalone /
-  // untitled one; the Glossary vocabulary Preview uses `projectRoot` — see
-  // GlossaryEditor.tsx). Re-memoized on its primitive parts so it stays a
+  // untitled one; a glossary Description tab uses `projectRoot` — see
+  // markdownSurfaceSource.ts). Re-memoized on its primitive parts so it stays a
   // stable prop identity for MarkdownEditor's effect deps across keystrokes.
   const previewImageResolutionKind = source.imageResolution.kind;
   const previewSourceProjectRelativePath =

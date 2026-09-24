@@ -9,10 +9,9 @@ import type { GlossaryEntryId } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 
 export const glossaryCommandIds = {
-  // #436 Slice 5: `openEntry` no longer opens a `glossaryEntry` editor tab —
-  // its App controller opens the bottom Glossary Entry Editor Pane in edit
-  // mode. The old `createEntry` command was removed (the Glossary Entry
-  // Editor Pane create flow replaces it).
+  // #573 Slice 7: `openEntry` opens (or focuses) the entry's glossary
+  // Description tab. The old `createEntry` command was removed in #436 (the
+  // create entry point is `glossary.openCreateEntryPane`).
   openEntry: defineCommandId<readonly [entryId: GlossaryEntryId], boolean>(
     "glossary.entry.open"
   ),

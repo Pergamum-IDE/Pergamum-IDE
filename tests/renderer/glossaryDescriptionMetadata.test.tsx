@@ -308,7 +308,7 @@ describe("App glossary metadata wiring (#573 Slice 5)", () => {
     const start = appSource.indexOf("function updateGlossaryDescriptionDraft(");
     const block = appSource.slice(
       start,
-      appSource.indexOf("async function handleLoadGlossaryEntryFromPane", start)
+      appSource.indexOf("const glossaryDescriptionMetadataConfig", start)
     );
 
     expect(block).toContain("if (!canMutateActiveWorkingCopy())");

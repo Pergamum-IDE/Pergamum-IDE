@@ -90,7 +90,7 @@ export function createCurrentDocumentMarkdownSurfaceSource(
 
 // #412: glossary text has no source-file location, so its Preview and image
 // diagnostics resolve project-local image links against the PROJECT ROOT —
-// the same behavior as the Glossary Entry Editor Pane's Description preview.
+// the same base the glossary Description has always used (#412).
 const GLOSSARY_DESCRIPTION_IMAGE_RESOLUTION: ProjectLocalImageResolutionContext =
   { kind: "projectRoot" };
 

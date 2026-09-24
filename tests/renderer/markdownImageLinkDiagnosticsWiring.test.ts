@@ -16,8 +16,8 @@ describe("markdown image link diagnostics wiring (#411 / #412)", () => {
     "src/renderer/MarkdownEditor.tsx",
     "utf8"
   );
-  const glossaryEditorSource = readFileSync(
-    "src/renderer/GlossaryEditor.tsx",
+  const markdownSurfaceSourceSource = readFileSync(
+    "src/renderer/markdownSurfaceSource.ts",
     "utf8"
   );
   const documentStateSource = readFileSync(
@@ -37,21 +37,14 @@ describe("markdown image link diagnostics wiring (#411 / #412)", () => {
     );
   });
 
-  it("GlossaryEditor uses the projectRoot context (disabled when read-only) and threads global editor settings", () => {
-    expect(glossaryEditorSource).toContain(
-      "const imageLinkDiagnosticsResolutionContext = readOnly"
+  it("#573: the glossary Description tab resolves (and so diagnoses) against the projectRoot context", () => {
+    // The tab renders through the same MarkdownEditorSurface as documents, so
+    // its diagnostics use EditorSurface's rule above over this context.
+    expect(markdownSurfaceSourceSource).toContain(
+      "const GLOSSARY_DESCRIPTION_IMAGE_RESOLUTION: ProjectLocalImageResolutionContext =\n  { kind: \"projectRoot\" };"
     );
-    expect(glossaryEditorSource).toContain("DIAGNOSTICS_DISABLED");
-    expect(glossaryEditorSource).toContain(
-      "GLOSSARY_PREVIEW_IMAGE_RESOLUTION"
-    );
-    expect(glossaryEditorSource).toContain(
-      "imageLinkDiagnosticsResolutionContext={"
-    );
-    // Blocker 1: the global line-break marker / whitespace settings now flow in.
-    expect(glossaryEditorSource).toContain("markerGlyph={markerGlyph}");
-    expect(glossaryEditorSource).toContain(
-      "initialLineEndingBreaks={initialDescriptionLineEndingBreaks}"
+    expect(markdownSurfaceSourceSource).toContain(
+      "imageResolution: GLOSSARY_DESCRIPTION_IMAGE_RESOLUTION,"
     );
   });
 

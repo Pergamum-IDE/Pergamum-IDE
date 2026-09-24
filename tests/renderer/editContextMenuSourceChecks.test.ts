@@ -55,12 +55,12 @@ function allSourceText(): string {
  * not a document-level/global shortcut listener, and it never touches the
  * Markdown editor's native-edit-command delegation.
  *
- * GlossaryEditor.tsx (#375) is the same category again: the per-atom drag
+ * GlossaryEntryMetadataFields.tsx (#375, moved out of the since-removed
+ * GlossaryEditor.tsx by #573) is the same category again: the per-atom drag
  * handle's `onKeyDown` implements Arrow Up / Down reorder for its own
  * `<button>` while that handle is focused — a keyboard fallback for the D&D
  * reorder, scoped to the handle, not a document-level/global shortcut
- * listener. #573 Slice 5 moved that atom list (unchanged) into
- * GlossaryEntryMetadataFields.tsx, which is exempt for the same reason.
+ * listener.
  *
  * GlossaryTagManager.tsx (#375) is the same category once more: the per-row
  * tag drag handle's `onKeyDown` implements Arrow Up / Down reorder for its own
@@ -149,7 +149,6 @@ const onKeyDownExemptFileNames = new Set([
   "InfoDialog.tsx",
   "DocumentTabBar.tsx",
   "FileExplorer.tsx",
-  "GlossaryEditor.tsx",
   "GlossaryEntryMetadataFields.tsx",
   "GlossaryTagManager.tsx",
   "GlossaryEntryTagAssignmentEditor.tsx",

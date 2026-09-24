@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GlossaryEntry } from "../../src/shared/glossary";
-import { DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE } from "../../src/renderer/glossaryEntryEditorPaneState";
+import { DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE } from "../../src/renderer/glossaryEntryEditorPaneCommands";
 import {
   normalizeGlossaryRepresentativeFromEditorSelection,
   resolveGlossaryEntryEditorPaneTargetFromSelection

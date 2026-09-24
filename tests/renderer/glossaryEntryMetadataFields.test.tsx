@@ -1,4 +1,9 @@
 // @vitest-environment happy-dom
+//
+// #573 Slice 7: the atom / tag editor formerly tested through GlossaryEditor
+// (removed with the bottom Glossary Entry Editor Pane) lives on as
+// GlossaryEntryMetadataFields — the glossary Description tab's metadata
+// panel body. Same behaviors, same DOM, retargeted here.
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRoot } from "react-dom/client";
@@ -14,10 +19,7 @@ import type {
 } from "../../src/shared/glossary";
 import type { Translate } from "../../src/shared/i18n";
 import { pergamumContextSurfaceAttribute } from "../../src/shared/editContextMenu";
-import {
-  GlossaryEditor,
-  type GlossaryEditorMode
-} from "../../src/renderer/GlossaryEditor";
+import { GlossaryEntryMetadataFields } from "../../src/renderer/GlossaryEntryMetadataFields";
 import {
   createGlossaryEntryDraft,
   updateGlossaryEntryDraftAtomValue,
@@ -77,24 +79,8 @@ function entry(): GlossaryEntry {
   };
 }
 
-/** #412 Blocker 1: the global editor settings GlossaryEditor now requires. */
-const editorSettingsProps = {
-  markerGlyph: "↓" as const,
-  expectedLineEnding: "lf" as const,
-  newFileLineEndingFallback: "lf" as const,
-  whitespaceSettings: {
-    renderIdeographicSpace: false,
-    renderAsciiSpace: false,
-    renderTab: false,
-    renderOtherUnicodeSpace: false
-  },
-  undoHistoryMinDepth: 100
-};
-
 function noopHandlers() {
   return {
-    ...editorSettingsProps,
-    onChangeDescription: vi.fn(),
     onAddAtom: vi.fn(),
     onChangeAtomValue: vi.fn(),
     onChangeAtomMatchFlags: vi.fn(),
@@ -103,22 +89,19 @@ function noopHandlers() {
     onAssignTag: vi.fn(),
     onUnassignTag: vi.fn(),
     onReorderAssignedTag: vi.fn(),
-    onOpenTagManager: vi.fn(),
-    onDeleteEntry: vi.fn()
+    onOpenTagManager: vi.fn()
   };
 }
 
 function render(
   draft: GlossaryEntryDraft,
   overrides: {
-    mode?: GlossaryEditorMode;
     availableTags?: readonly GlossaryTag[];
     readOnly?: boolean;
   } = {}
 ): string {
   return renderToStaticMarkup(
-    React.createElement(GlossaryEditor, {
-      mode: overrides.mode ?? "edit",
+    React.createElement(GlossaryEntryMetadataFields, {
       draft,
       availableTags: overrides.availableTags ?? [tagA, tagB],
       translate,
@@ -128,7 +111,7 @@ function render(
   );
 }
 
-describe("GlossaryEditor (#375)", () => {
+describe("GlossaryEntryMetadataFields (#375)", () => {
   it("renders one row per atom with the representative badge on the first", () => {
     const markup = render(createGlossaryEntryDraft(entry()));
 
@@ -250,22 +233,6 @@ describe("GlossaryEditor (#375)", () => {
     expect(markup).toContain('role="alert"');
   });
 
-  it("renders a delete-entry icon button in edit mode", () => {
-    const markup = render(createGlossaryEntryDraft(entry()), {
-      mode: "edit"
-    });
-
-    expect(markup).toContain('aria-label="glossaryEditor.deleteEntry"');
-  });
-
-  it("#436 Slice 9: hides the delete-entry button in create mode (nothing persisted yet)", () => {
-    const markup = render(createGlossaryEntryDraft(entry()), {
-      mode: "create"
-    });
-
-    expect(markup).not.toContain('aria-label="glossaryEditor.deleteEntry"');
-  });
-
   it("#436 Slice 9: no longer renders occurrence navigation UI", () => {
     const markup = render(createGlossaryEntryDraft(entry()));
 
@@ -281,18 +248,6 @@ describe("GlossaryEditor (#375)", () => {
     expect(markup).toMatch(/glossaryEditorAddAtom[^>]*disabled/);
   });
 
-  it("renders the draft description as Markdown preview, not raw source", () => {
-    const draft = createGlossaryEntryDraft({
-      ...entry(),
-      description: "# 見出し"
-    });
-
-    const markup = render(draft);
-
-    expect(markup).toMatch(/<h1[^>]*>見出し<\/h1>/);
-    expect(markup).not.toContain("# 見出し");
-  });
-
   it("renders a 'manage tags' link near the tag assignment editor", () => {
     const markup = render(createGlossaryEntryDraft(entry()));
 
@@ -301,7 +256,7 @@ describe("GlossaryEditor (#375)", () => {
   });
 });
 
-describe("GlossaryEditor (#375) — tag manager link", () => {
+describe("GlossaryEntryMetadataFields (#375) — tag manager link", () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
 
@@ -321,8 +276,7 @@ describe("GlossaryEditor (#375) — tag manager link", () => {
 
     act(() => {
       root.render(
-        React.createElement(GlossaryEditor, {
-          mode: "edit",
+        React.createElement(GlossaryEntryMetadataFields, {
           draft: createGlossaryEntryDraft(entry()),
           availableTags: [tagA, tagB],
           translate,
@@ -342,7 +296,7 @@ describe("GlossaryEditor (#375) — tag manager link", () => {
   });
 });
 
-describe("GlossaryEditor (#375) — atom drag-reorder", () => {
+describe("GlossaryEntryMetadataFields (#375) — atom drag-reorder", () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
 
@@ -361,8 +315,7 @@ describe("GlossaryEditor (#375) — atom drag-reorder", () => {
     const onReorderAtom = vi.fn();
     act(() => {
       root.render(
-        React.createElement(GlossaryEditor, {
-          mode: "edit",
+        React.createElement(GlossaryEntryMetadataFields, {
           draft: createGlossaryEntryDraft(entry()),
           availableTags: [tagA, tagB],
           translate,
@@ -464,134 +417,5 @@ describe("GlossaryEditor (#375) — atom drag-reorder", () => {
     fire(rows()[1], "drop", 5);
 
     expect(onReorderAtom).toHaveBeenCalledWith("a1", 1);
-  });
-});
-
-describe("GlossaryEditor — Preview project-local image links (#412)", () => {
-  function draftWithDescription(description: string): GlossaryEntryDraft {
-    return { ...createGlossaryEntryDraft(entry()), description };
-  }
-
-  it("rewrites a project-root-relative image link to pergamum-asset:// in the Preview", () => {
-    const markup = render(
-      draftWithDescription("![](assets/images/foo.png)")
-    );
-    expect(markup).toContain(
-      "pergamum-asset://project/assets/images/foo.png"
-    );
-  });
-
-  it("rewrites a leading ./ link against the project root", () => {
-    const markup = render(
-      draftWithDescription("![](./assets/characters/shizuku.png)")
-    );
-    expect(markup).toContain(
-      "pergamum-asset://project/assets/characters/shizuku.png"
-    );
-  });
-
-  it("neutralizes a ../ link — the Glossary has no source folder, so it escapes the root", () => {
-    const markup = render(
-      draftWithDescription("![](../assets/images/foo.png)")
-    );
-    expect(markup).toContain('src="data:,"');
-    expect(markup).not.toContain("pergamum-asset:");
-  });
-
-  it("leaves external http(s) / data / blob images untouched", () => {
-    for (const src of [
-      "http://example.com/a.png",
-      "https://example.com/a.png",
-      "data:image/png;base64,iVBORw0KGgo=",
-      "blob:https://x/abcd"
-    ]) {
-      const markup = render(draftWithDescription(`![](${src})`));
-      expect(markup).not.toContain("pergamum-asset:");
-      expect(markup).not.toContain('src="data:,"');
-    }
-  });
-
-  it("leaves .svg / .bmp / .avif links untouched (unsupported formats)", () => {
-    for (const ext of ["svg", "bmp", "avif"]) {
-      const markup = render(draftWithDescription(`![](assets/pic.${ext})`));
-      expect(markup).toContain(`src="assets/pic.${ext}"`);
-      expect(markup).not.toContain("pergamum-asset:");
-    }
-  });
-
-  it("does not mutate the draft's description string (render-only, no DB normalization)", () => {
-    const original = "![](assets/images/foo.png) and ![](../up.png)";
-    const draft = draftWithDescription(original);
-    render(draft);
-    expect(draft.description).toBe(original);
-  });
-});
-
-describe("GlossaryEditor — description editor line-break marker (#412 Blocker 1)", () => {
-  let container: HTMLDivElement;
-  let root: ReturnType<typeof createRoot>;
-
-  beforeEach(() => {
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-  });
-
-  afterEach(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-
-  function mount(markerGlyph: "none" | "⏎" | "↵" | "↓"): void {
-    act(() => {
-      root.render(
-        React.createElement(GlossaryEditor, {
-          mode: "edit",
-          draft: draftWithMultilineDescription(),
-          availableTags: [tagA, tagB],
-          translate,
-          ...noopHandlers(),
-          markerGlyph
-        })
-      );
-    });
-  }
-
-  function draftWithMultilineDescription(): GlossaryEntryDraft {
-    return {
-      ...createGlossaryEntryDraft(entry()),
-      description: "first line\nsecond line\nthird line\n"
-    };
-  }
-
-  function markerGlyphs(): string[] {
-    return Array.from(
-      container.querySelectorAll<HTMLElement>(".pergamum-line-end-marker")
-    ).map((el) => el.textContent ?? "");
-  }
-
-  it("renders the CONFIGURED glyph (↓), not MarkdownEditor's built-in ⏎ default", () => {
-    mount("↓");
-    const glyphs = markerGlyphs();
-    expect(glyphs.length).toBeGreaterThan(0);
-    expect(new Set(glyphs)).toEqual(new Set(["↓"]));
-  });
-
-  it("draws no marker when the setting is 'none'", () => {
-    mount("none");
-    expect(markerGlyphs()).toEqual([]);
-  });
-
-  it("keeps the marker after an unmount + remount (tab switch away and back)", () => {
-    mount("↓");
-    expect(markerGlyphs().length).toBeGreaterThan(0);
-
-    act(() => root.unmount());
-    root = createRoot(container);
-    mount("↓");
-
-    const glyphs = markerGlyphs();
-    expect(glyphs.length).toBeGreaterThan(0);
-    expect(new Set(glyphs)).toEqual(new Set(["↓"]));
   });
 });

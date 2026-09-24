@@ -206,7 +206,6 @@ function buildCoreCommandRegistry(): CommandRegistry {
     {
       openGlossaryEntryCreatePane: () => undefined,
       openGlossaryEntryEditPane: () => undefined,
-      closeGlossaryEntryEditorPane: () => undefined,
       openGlossaryEntryEditorPaneFromSelection: () => undefined
     },
     {
@@ -214,8 +213,6 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openCreatePaneDescription: "Open create pane",
       openEditPane: "Open edit pane",
       openEditPaneDescription: "Open edit pane",
-      closePane: "Close pane",
-      closePaneDescription: "Close pane",
       openFromEditorSelection: "Open from editor selection",
       openFromEditorSelectionDescription: "Open from editor selection"
     }

@@ -35,12 +35,11 @@ interface GlossarySidebarProps {
   activeDocumentContent: string | null;
   /**
    * #436: open an existing entry for editing (row "…" button). Routes through
-   * the host to the bottom Glossary Entry Editor Pane in edit mode
-   * (source "glossary-pane") — never a glossary entry editor tab.
+   * the host to the entry's glossary Description tab (#573 Slice 7).
    */
   onActivateEntry: (entryId: GlossaryEntryId) => void;
-  /** #436 Slice 3: "語彙を追加" opens the bottom Glossary Entry Editor Pane in
-   *  create mode. Replaces the old inline create form / new-tab flow. */
+  /** #436 Slice 3: "語彙を追加" — opens a new, unsaved glossary Description
+   *  tab (#573 Slice 7). */
   onOpenCreateEntryPane: () => void;
   onNavigateOccurrence: (
     entry: GlossaryEntry,
