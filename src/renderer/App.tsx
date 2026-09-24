@@ -180,14 +180,23 @@ import {
   createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
   createNewGlossaryDescriptionCurrentEditor,
+  glossaryDescriptionEditorTitle,
   updateGlossaryDescriptionEditorDraft,
   updateGlossaryDescriptionEditorText,
   currentEditorProjectRelativePath,
   currentEditorTitle,
   isCurrentEditorDirty,
   markdownDocumentForEditor,
-  type CurrentEditor
+  type CurrentEditor,
+  type GlossaryDescriptionCurrentEditor
 } from "./currentEditor";
+import {
+  countGlossaryImageReferences,
+  glossaryDescriptionImageReferenceRewrites,
+  glossaryEntryDescriptionUpdateInput,
+  rebaseGlossaryDescriptionEditorBaseline,
+  rewriteGlossaryDescriptionImageReferences
+} from "./glossaryImageReferenceMoveUpdate";
 import { DocumentTabBar } from "./DocumentTabBar";
 import { useTabSwitchShortcuts } from "./editorTabShortcuts";
 import { useGlobalKeyboardShortcuts } from "./globalKeyboardShortcuts";
@@ -1663,9 +1672,17 @@ export function App(): JSX.Element {
     readonly referenceCount: number;
     readonly documentCount: number;
     readonly imageCount: number;
+    /** #574 Slice 2: glossary entries whose Description would be updated. */
+    readonly glossaryEntryCount: number;
   } | null>(null);
   const pendingImageReferenceMoveUpdateRef = useRef<{
     readonly plans: readonly ImageReferenceMoveUpdatePlan[];
+    /**
+     * #574 Slice 2: the image moves to follow in glossary Descriptions
+     * (recomputed against the live data at apply time). Empty when no
+     * glossary entry referenced a moved image.
+     */
+    readonly glossaryMovedImages: readonly MovedImageFile[];
   } | null>(null);
   // #272: Session persistence seam. `App` only *observes* already-derived
   // session inputs and forwards them to the coordinator, plus exposes a
@@ -9362,6 +9379,264 @@ export function App(): JSX.Element {
    * the C1 "moved document" flow and the C2 "moved image reference" flow —
    * the difference is only which document path / rewrites are passed in.
    */
+  // #574 Slice 2: every open glossary Description tab (saved or new).
+  function openGlossaryDescriptionEditors(
+    state: OpenDocumentsState
+  ): GlossaryDescriptionCurrentEditor[] {
+    return state.documents.flatMap((openDocument) =>
+      openDocument.editor.kind === "glossaryDescription"
+        ? [openDocument.editor]
+        : []
+    );
+  }
+
+  // #574 Slice 2: rewrite an OPEN glossary tab's CURRENT draft Description —
+  // exactly like an open Markdown document (#414 P1-2): the active tab via
+  // its live editor, an inactive one via a real transaction on its #392
+  // cached EditorState (both Undo-reversible). A tab that has never been
+  // shown in this session has no EditorState yet; its draft text is then
+  // updated directly (the editor will be built from it). Dirty edits are
+  // kept — only the matching destinations change.
+  function applyGlossaryTabImageReferenceRewrites(
+    tabEditorId: EditorId,
+    movedImages: readonly MovedImageFile[]
+  ): "updated" | "unchanged" | "failed" {
+    const openTab = findOpenDocument(openDocumentsStateRef.current, tabEditorId);
+
+    if (openTab?.editor.kind !== "glossaryDescription") {
+      return "unchanged";
+    }
+
+    const description = openTab.editor.draft.description;
+    const rewrites = glossaryDescriptionImageReferenceRewrites(
+      description,
+      movedImages
+    );
+
+    if (rewrites.length === 0) {
+      return "unchanged";
+    }
+
+    const specs = markdownImageLinkRewriteChangeSpecs(description, rewrites);
+
+    if (specs === null) {
+      return "failed";
+    }
+
+    const changeSpecs = specs.map((spec) => ({ ...spec }));
+    const activeId = openDocumentsStateRef.current.activeDocumentId;
+    const isActiveGlossaryBuffer =
+      !isEditorAreaSpecialTabActive &&
+      paragraphIndentControllerRef.current !== null &&
+      activeId !== null &&
+      editorIdEquals(tabEditorId, activeId);
+
+    if (isActiveGlossaryBuffer) {
+      return paragraphIndentControllerRef.current?.applyReplaceInBufferChanges(
+        changeSpecs
+      )
+        ? "updated"
+        : "failed";
+    }
+
+    const documentKey = serializeEditorId(tabEditorId);
+    const cached = markdownEditorDocumentStatesRef.current.get(documentKey);
+    let nextText: string;
+    let nextBreaks: LineEndingBreakSet;
+
+    if (cached) {
+      const transactionResult = applyChangesToCachedMarkdownEditorDocumentState(
+        cached,
+        description,
+        changeSpecs,
+        "input.replace"
+      );
+
+      if (!transactionResult) {
+        return "failed";
+      }
+
+      markdownEditorDocumentStatesRef.current.set(
+        documentKey,
+        transactionResult.nextDocumentState
+      );
+      nextText = transactionResult.content;
+      nextBreaks = transactionResult.lineEndingBreaks;
+    } else {
+      const rewritten = applyMarkdownImageLinkRewritesToText(
+        description,
+        rewrites
+      );
+
+      if (rewritten === null) {
+        return "failed";
+      }
+
+      nextText = rewritten;
+      nextBreaks = buildLineEndingBreakSet(analyzeLineEndings(rewritten));
+    }
+
+    setOpenDocumentsState((current) =>
+      updateOpenEditor(current, tabEditorId, (editor) =>
+        updateGlossaryDescriptionEditorText(editor, nextText, nextBreaks)
+      )
+    );
+    return "updated";
+  }
+
+  // #574 Slice 2: follow a completed image Move / Rename in glossary
+  // Descriptions. Per entry: its OPEN tab's draft is rewritten first; only
+  // if that succeeded (or the tab needs nothing / is not open) is the
+  // stored Description updated — then the tab's saved baseline is rebased
+  // onto the stored result (draft untouched, so dirty stays dirty and clean
+  // stays clean). A failed tab rewrite leaves the stored entry alone too, so
+  // a later Ctrl+S can never write an old link back over an updated one.
+  // Never-saved new-entry tabs only get the draft rewrite.
+  async function applyGlossaryImageReferenceMoveUpdates(
+    movedImages: readonly MovedImageFile[]
+  ): Promise<{
+    readonly updatedEntryCount: number;
+    readonly updatedReferenceCount: number;
+    readonly updatedImageOldPaths: ReadonlySet<string>;
+    readonly failedNames: readonly string[];
+  }> {
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+    const updatedEntryIds = new Set<string>();
+    const updatedImageOldPaths = new Set<string>();
+    const failedNames: string[] = [];
+    let updatedReferenceCount = 0;
+    let storedEntries: GlossaryEntry[];
+
+    const noteRewrites = (
+      rewrites: readonly { readonly oldImageProjectRelativePath: string }[]
+    ): void => {
+      updatedReferenceCount += rewrites.length;
+      for (const rewrite of rewrites) {
+        updatedImageOldPaths.add(rewrite.oldImageProjectRelativePath);
+      }
+    };
+
+    try {
+      storedEntries = await window.pergamum.glossary.list();
+    } catch {
+      return {
+        updatedEntryCount: 0,
+        updatedReferenceCount: 0,
+        updatedImageOldPaths,
+        failedNames: [glossaryDescriptionEditorTitle("")]
+      };
+    }
+
+    const storedEntryIds = new Set(storedEntries.map((entry) => entry.id));
+    let storedEntryChanged = false;
+
+    for (const storedEntry of storedEntries) {
+      if (
+        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        break;
+      }
+
+      const name = glossaryDescriptionEditorTitle(
+        representativeGlossarySurface(storedEntry)
+      );
+      const tabEditorId = createGlossaryDescriptionEditorId(storedEntry.id);
+      const openTab = findOpenDocument(openDocumentsStateRef.current, tabEditorId);
+      const tabRewrites =
+        openTab?.editor.kind === "glossaryDescription"
+          ? glossaryDescriptionImageReferenceRewrites(
+              openTab.editor.draft.description,
+              movedImages
+            )
+          : [];
+      const tabOutcome = openTab
+        ? applyGlossaryTabImageReferenceRewrites(tabEditorId, movedImages)
+        : "unchanged";
+
+      if (tabOutcome === "failed") {
+        failedNames.push(name);
+        continue;
+      }
+      if (tabOutcome === "updated") {
+        updatedEntryIds.add(storedEntry.id);
+        noteRewrites(tabRewrites);
+      }
+
+      const storedRewrites = glossaryDescriptionImageReferenceRewrites(
+        storedEntry.description,
+        movedImages
+      );
+      const rewritten = rewriteGlossaryDescriptionImageReferences(
+        storedEntry.description,
+        movedImages
+      );
+
+      if (!rewritten) {
+        continue;
+      }
+
+      try {
+        const savedEntry = await window.pergamum.glossary.update(
+          glossaryEntryDescriptionUpdateInput(storedEntry, rewritten.description)
+        );
+
+        storedEntryChanged = true;
+        setOpenDocumentsState((current) =>
+          updateOpenEditor(current, tabEditorId, (editor) =>
+            rebaseGlossaryDescriptionEditorBaseline(editor, savedEntry)
+          )
+        );
+        if (!updatedEntryIds.has(storedEntry.id)) {
+          updatedEntryIds.add(storedEntry.id);
+          noteRewrites(storedRewrites);
+        }
+      } catch {
+        // The entry may have been deleted meanwhile, or the write failed:
+        // report it by name (never its Description text).
+        failedNames.push(name);
+      }
+    }
+
+    // Open tabs with no stored counterpart: never-saved new entries (and an
+    // entry deleted meanwhile) — draft rewrite only.
+    for (const tab of openGlossaryDescriptionEditors(openDocumentsStateRef.current)) {
+      if (storedEntryIds.has(tab.entryId)) {
+        continue;
+      }
+
+      const tabEditorId = createGlossaryDescriptionEditorId(tab.entryId);
+      const tabRewrites = glossaryDescriptionImageReferenceRewrites(
+        tab.draft.description,
+        movedImages
+      );
+      const outcome = applyGlossaryTabImageReferenceRewrites(
+        tabEditorId,
+        movedImages
+      );
+
+      if (outcome === "failed") {
+        failedNames.push(currentEditorTitle(tab));
+      } else if (outcome === "updated") {
+        updatedEntryIds.add(tab.entryId);
+        noteRewrites(tabRewrites);
+      }
+    }
+
+    if (storedEntryChanged) {
+      setGlossaryRefreshToken((token) => token + 1);
+    }
+
+    return {
+      updatedEntryCount: updatedEntryIds.size,
+      updatedReferenceCount,
+      updatedImageOldPaths,
+      failedNames
+    };
+  }
+
   async function applyImageLinkRewritesToProjectDocument(
     documentProjectRelativePath: string,
     rewrites: readonly {
@@ -9554,6 +9829,19 @@ export function App(): JSX.Element {
       }
     }
 
+    // #574 Slice 2: only images that actually completed their move.
+    const completedMoveKeys = new Set(
+      args.completedImageMoves.map((move) =>
+        JSON.stringify([move.oldProjectRelativePath, move.newProjectRelativePath])
+      )
+    );
+    const glossaryMovedImages = (c2Pending?.glossaryMovedImages ?? []).filter(
+      (move) =>
+        completedMoveKeys.has(
+          JSON.stringify([move.oldProjectRelativePath, move.newProjectRelativePath])
+        )
+    );
+
     if (c2Pending) {
       const c2Plans = filterImageReferenceUpdatePlansToCompletedMoves(
         c2Pending.plans,
@@ -9568,7 +9856,7 @@ export function App(): JSX.Element {
       }
     }
 
-    if (byDocument.size === 0) {
+    if (byDocument.size === 0 && glossaryMovedImages.length === 0) {
       return;
     }
 
@@ -9578,6 +9866,7 @@ export function App(): JSX.Element {
       const updatedImages = new Set<string>();
       let sawImageReferences = false;
       const failedDocuments: string[] = [];
+      let updatedGlossaryEntries = 0;
 
       for (const [documentPath, entry] of byDocument) {
         if (entry.movedImages.size > 0) {
@@ -9599,6 +9888,19 @@ export function App(): JSX.Element {
         }
       }
 
+      if (glossaryMovedImages.length > 0) {
+        const glossaryOutcome =
+          await applyGlossaryImageReferenceMoveUpdates(glossaryMovedImages);
+
+        sawImageReferences = true;
+        updatedGlossaryEntries = glossaryOutcome.updatedEntryCount;
+        updatedRewrites += glossaryOutcome.updatedReferenceCount;
+        for (const image of glossaryOutcome.updatedImageOldPaths) {
+          updatedImages.add(image);
+        }
+        failedDocuments.push(...glossaryOutcome.failedNames);
+      }
+
       if (failedDocuments.length > 0) {
         const shown = failedDocuments.slice(0, 5);
         const documents =
@@ -9616,14 +9918,24 @@ export function App(): JSX.Element {
         return;
       }
 
-      if (updatedDocuments === 0) {
+      if (updatedDocuments === 0 && updatedGlossaryEntries === 0) {
         return;
       }
 
       setStatus({
         key: "status.fileExplorerMoveResult",
         values: {
-          message: sawImageReferences
+          message: updatedGlossaryEntries > 0
+            ? translate(
+                "explorer.move.imageReferenceUpdate.status.updatedWithGlossary",
+                {
+                  count: updatedRewrites,
+                  documentCount: updatedDocuments,
+                  glossaryCount: updatedGlossaryEntries,
+                  imageCount: updatedImages.size
+                }
+              )
+            : sawImageReferences
             ? translate("explorer.move.imageReferenceUpdate.status.updated", {
                 count: updatedRewrites,
                 documentCount: updatedDocuments,
@@ -9682,7 +9994,21 @@ export function App(): JSX.Element {
     // than drops a document that percent-encoded a special char.
     const searchPlan = imageReferenceSearchPlan(effectiveMoves);
     const perDocumentPlans: ImageReferenceMoveUpdatePlan[] = [];
+    let glossaryCount: ReturnType<typeof countGlossaryImageReferences> = {
+      entryCount: 0,
+      referenceCount: 0,
+      imageOldPaths: new Set()
+    };
     try {
+      // #574 Slice 2: glossary Descriptions reference project images too
+      // (project-root-relative). A failed glossary read fails planning, like
+      // an unreadable document.
+      glossaryCount = countGlossaryImageReferences(
+        await window.pergamum.glossary.list(),
+        openGlossaryDescriptionEditors(openDocumentsStateRef.current),
+        effectiveMoves
+      );
+
       for (const projectDocument of projectSnapshot.documents) {
         // #414 P1-1: a document we cannot read fails planning — no silent skip.
         const content = await readProjectDocumentTextOrThrow(
@@ -9724,8 +10050,14 @@ export function App(): JSX.Element {
     }
 
     const batch = buildImageReferenceMoveUpdateBatch(perDocumentPlans);
-    if (batch.plans.length === 0) {
+    if (batch.plans.length === 0 && glossaryCount.entryCount === 0) {
       return "proceed";
+    }
+    const referencedImages = new Set(glossaryCount.imageOldPaths);
+    for (const plan of batch.plans) {
+      for (const rewrite of plan.rewrites) {
+        referencedImages.add(rewrite.oldImageProjectRelativePath);
+      }
     }
 
     imageReferenceMoveUpdateResolveRef.current?.("cancel");
@@ -9738,14 +10070,20 @@ export function App(): JSX.Element {
         setImageReferenceMoveUpdateDialogState(null);
         const resolution = resolveImageReferenceMoveUpdateChoice(choice, batch);
         pendingImageReferenceMoveUpdateRef.current = resolution.stagedBatch
-          ? { plans: resolution.stagedBatch.plans }
+          ? {
+              plans: resolution.stagedBatch.plans,
+              glossaryMovedImages:
+                glossaryCount.entryCount > 0 ? effectiveMoves : []
+            }
           : null;
         resolve(resolution.moveDecision);
       };
       setImageReferenceMoveUpdateDialogState({
-        referenceCount: batch.totalReferenceCount,
+        referenceCount:
+          batch.totalReferenceCount + glossaryCount.referenceCount,
         documentCount: batch.documentCount,
-        imageCount: batch.imageCount
+        imageCount: referencedImages.size,
+        glossaryEntryCount: glossaryCount.entryCount
       });
     });
   }
@@ -12382,6 +12720,9 @@ export function App(): JSX.Element {
           referenceCount={imageReferenceMoveUpdateDialogState.referenceCount}
           documentCount={imageReferenceMoveUpdateDialogState.documentCount}
           imageCount={imageReferenceMoveUpdateDialogState.imageCount}
+          glossaryEntryCount={
+            imageReferenceMoveUpdateDialogState.glossaryEntryCount
+          }
           translate={translate}
           opener={imageReferenceMoveUpdateOpenerRef.current}
           onUpdate={confirmImageReferenceMoveUpdate}

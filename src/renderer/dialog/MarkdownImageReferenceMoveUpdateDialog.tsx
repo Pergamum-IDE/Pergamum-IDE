@@ -26,6 +26,8 @@ export interface MarkdownImageReferenceMoveUpdateDialogProps {
   readonly referenceCount: number;
   readonly documentCount: number;
   readonly imageCount: number;
+  /** #574 Slice 2: glossary entries whose Description would be updated. */
+  readonly glossaryEntryCount?: number;
   readonly translate: Translate;
   readonly opener: Element | null;
   readonly onUpdate: () => void;
@@ -37,6 +39,7 @@ export function MarkdownImageReferenceMoveUpdateDialog({
   referenceCount,
   documentCount,
   imageCount,
+  glossaryEntryCount = 0,
   translate,
   opener,
   onUpdate,
@@ -49,7 +52,8 @@ export function MarkdownImageReferenceMoveUpdateDialog({
     updateButtonRef.current?.focus();
   }, []);
 
-  const isBatch = imageCount > 1 || documentCount > 1;
+  const isBatch =
+    imageCount > 1 || documentCount + glossaryEntryCount > 1;
 
   return (
     <InfoDialog
@@ -123,12 +127,18 @@ export function MarkdownImageReferenceMoveUpdateDialog({
           count: referenceCount
         })}
       </p>
-      <p
-        className="markdownImageReferenceMoveUpdateGlossaryNote"
-        data-testid="markdownImageReferenceMoveUpdateGlossaryNote"
-      >
-        {translate("explorer.move.imageReferenceUpdate.glossaryNote")}
-      </p>
+      {/* #574 Slice 2: glossary Descriptions are updated too — the old
+          "Glossary is not updated" note is gone. */}
+      {glossaryEntryCount > 0 ? (
+        <p
+          className="markdownImageReferenceMoveUpdateGlossaryCount"
+          data-testid="markdownImageReferenceMoveUpdateGlossaryCount"
+        >
+          {translate("explorer.move.imageReferenceUpdate.glossaryCount", {
+            count: glossaryEntryCount
+          })}
+        </p>
+      ) : null}
     </InfoDialog>
   );
 }

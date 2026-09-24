@@ -671,14 +671,16 @@ export const enTranslations = {
   "explorer.move.imageReferenceUpdate.imageCount": "Images affected: {count}",
   "explorer.move.imageReferenceUpdate.documentCount": "Documents affected: {count}",
   "explorer.move.imageReferenceUpdate.count": "References to update: {count}",
-  "explorer.move.imageReferenceUpdate.glossaryNote":
-    "Glossary image references are not updated by this operation.",
+  "explorer.move.imageReferenceUpdate.glossaryCount":
+    "Glossary entries: {count}",
   "explorer.move.imageReferenceUpdate.update": "Update",
   "explorer.move.imageReferenceUpdate.update.batch": "Update all",
   "explorer.move.imageReferenceUpdate.keep": "Don't update",
   "explorer.move.imageReferenceUpdate.keep.batch": "Don't update any",
   "explorer.move.imageReferenceUpdate.status.updated":
     "Moved, and updated {count} image reference(s) for {imageCount} image(s) across {documentCount} document(s)",
+  "explorer.move.imageReferenceUpdate.status.updatedWithGlossary":
+    "Moved, and updated {count} image reference(s) for {imageCount} image(s) across {documentCount} document(s) and {glossaryCount} glossary entr(ies)",
   "explorer.move.imageReferenceUpdate.status.failed":
     "Moved, but updating image references failed for {count} document(s): {documents}",
   "explorer.move.imageReferenceUpdate.status.planningFailed":

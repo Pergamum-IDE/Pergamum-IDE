@@ -123,13 +123,6 @@ function encodeDestinationSegment(segment: string): string {
 export function planMarkdownImageReferenceRewritesForImageMove(
   args: PlanMarkdownImageReferenceRewritesForImageMoveArgs
 ): readonly MarkdownImageReferenceMoveRewrite[] {
-  const movedImages = args.movedImages.filter(
-    (image) => image.oldProjectRelativePath !== image.newProjectRelativePath
-  );
-  if (movedImages.length === 0) {
-    return [];
-  }
-
   // Links are always resolved from the document's CURRENT (pre-move) folder —
   // that is what the link text means today. Destinations are GENERATED from
   // the document's FINAL folder when this document is itself moving (#414
@@ -141,12 +134,64 @@ export function planMarkdownImageReferenceRewritesForImageMove(
   const finalDocumentPath =
     relocation?.newProjectRelativePath ??
     args.markdownDocumentProjectRelativePath;
-  const finalDocDir = projectRelativeDirname(finalDocumentPath);
 
-  const sourceFileContext = {
-    kind: "sourceFile" as const,
-    sourceMarkdownProjectRelativePath: args.markdownDocumentProjectRelativePath
-  };
+  return planImageReferenceRewrites({
+    markdown: args.markdown,
+    movedImages: args.movedImages,
+    resolutionContext: {
+      kind: "sourceFile",
+      sourceMarkdownProjectRelativePath: args.markdownDocumentProjectRelativePath
+    },
+    destinationBaseDirectory: projectRelativeDirname(finalDocumentPath),
+    reportedDocumentPath: finalDocumentPath
+  });
+}
+
+/**
+ * #574 Slice 2: the same plan for a glossary entry's Description Markdown.
+ * Glossary Description has no source file: its image links are resolved —
+ * and regenerated — from the PROJECT ROOT (the #412 / #573 Slice 6 base), so
+ * `assets/foo.png` → `images/archive/foo.png` stays project-root-relative.
+ * Same parser, candidate filter, notation preservation and exclusions as a
+ * document. `markdownDocumentProjectRelativePath` is `""` on every rewrite
+ * (there is no document path).
+ */
+export function planGlossaryDescriptionImageReferenceRewritesForImageMove(args: {
+  readonly markdown: string;
+  readonly movedImages: readonly MovedImageFile[];
+}): readonly MarkdownImageReferenceMoveRewrite[] {
+  return planImageReferenceRewrites({
+    markdown: args.markdown,
+    movedImages: args.movedImages,
+    resolutionContext: { kind: "projectRoot" },
+    destinationBaseDirectory: "",
+    reportedDocumentPath: ""
+  });
+}
+
+function planImageReferenceRewrites(args: {
+  readonly markdown: string;
+  readonly movedImages: readonly MovedImageFile[];
+  readonly resolutionContext:
+    | {
+        readonly kind: "sourceFile";
+        readonly sourceMarkdownProjectRelativePath: string;
+      }
+    | { readonly kind: "projectRoot" };
+  /** Project-root-relative directory new destinations are relative to. */
+  readonly destinationBaseDirectory: string;
+  readonly reportedDocumentPath: string;
+}): readonly MarkdownImageReferenceMoveRewrite[] {
+  const movedImages = args.movedImages.filter(
+    (image) => image.oldProjectRelativePath !== image.newProjectRelativePath
+  );
+  if (movedImages.length === 0) {
+    return [];
+  }
+
+  const finalDocumentPath = args.reportedDocumentPath;
+  const finalDocDir = args.destinationBaseDirectory;
+  const sourceFileContext = args.resolutionContext;
 
   const rewrites: MarkdownImageReferenceMoveRewrite[] = [];
 

@@ -667,14 +667,15 @@ export const jaTranslations = {
   "explorer.move.imageReferenceUpdate.imageCount": "対象画像: {count}件",
   "explorer.move.imageReferenceUpdate.documentCount": "対象文書: {count}件",
   "explorer.move.imageReferenceUpdate.count": "更新対象: {count}件",
-  "explorer.move.imageReferenceUpdate.glossaryNote":
-    "Glossary の画像参照はこの操作では更新されません。",
+  "explorer.move.imageReferenceUpdate.glossaryCount": "対象語彙: {count}件",
   "explorer.move.imageReferenceUpdate.update": "更新する",
   "explorer.move.imageReferenceUpdate.update.batch": "一括更新する",
   "explorer.move.imageReferenceUpdate.keep": "更新しない",
   "explorer.move.imageReferenceUpdate.keep.batch": "どれも更新しない",
   "explorer.move.imageReferenceUpdate.status.updated":
     "移動後、{imageCount} 件の画像について {documentCount} 件の文書で画像参照 {count} 件を更新しました",
+  "explorer.move.imageReferenceUpdate.status.updatedWithGlossary":
+    "移動後、{imageCount} 件の画像について {documentCount} 件の文書と {glossaryCount} 件の語彙で画像参照 {count} 件を更新しました",
   "explorer.move.imageReferenceUpdate.status.failed":
     "移動は完了しましたが、次の {count} 件の文書で画像参照の更新に失敗しました: {documents}",
   "explorer.move.imageReferenceUpdate.status.planningFailed":
