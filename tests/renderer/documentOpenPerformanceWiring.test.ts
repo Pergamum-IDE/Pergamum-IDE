@@ -333,8 +333,16 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
     });
 
     it("EditorSurface threads documentOpenId only to MarkdownEditorSurface (line-mode editors are out of scope for #152)", () => {
-      const markdownCaseStart = editorSurfaceSource.indexOf('case "markdown":');
-      const markdownCaseEnd = editorSurfaceSource.indexOf("return null;");
+      // #573 Slice 3: EditorSurface renders ONE MarkdownEditorSurface for
+      // every editor kind (no `case "markdown":` branch any more).
+      const markdownCaseStart = editorSurfaceSource.indexOf(
+        "<MarkdownEditorSurface"
+      );
+      const markdownCaseEnd = editorSurfaceSource.indexOf(
+        "/>",
+        markdownCaseStart
+      );
+      expect(markdownCaseStart).toBeGreaterThan(-1);
       const markdownCase = editorSurfaceSource.slice(
         markdownCaseStart,
         markdownCaseEnd
@@ -458,8 +466,16 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
         "onDocumentOpenPreviewDecorationCompleted={\n                      handleDocumentOpenPreviewDecorationCompleted\n                    }"
       );
 
-      const markdownCaseStart = editorSurfaceSource.indexOf('case "markdown":');
-      const markdownCaseEnd = editorSurfaceSource.indexOf("return null;");
+      // #573 Slice 3: EditorSurface renders ONE MarkdownEditorSurface for
+      // every editor kind (no `case "markdown":` branch any more).
+      const markdownCaseStart = editorSurfaceSource.indexOf(
+        "<MarkdownEditorSurface"
+      );
+      const markdownCaseEnd = editorSurfaceSource.indexOf(
+        "/>",
+        markdownCaseStart
+      );
+      expect(markdownCaseStart).toBeGreaterThan(-1);
       const markdownCase = editorSurfaceSource.slice(
         markdownCaseStart,
         markdownCaseEnd
@@ -715,8 +731,16 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
         "onDocumentOpenPreviewFrameObserved={\n                      handleDocumentOpenPreviewFrameObserved\n                    }"
       );
 
-      const markdownCaseStart = editorSurfaceSource.indexOf('case "markdown":');
-      const markdownCaseEnd = editorSurfaceSource.indexOf("return null;");
+      // #573 Slice 3: EditorSurface renders ONE MarkdownEditorSurface for
+      // every editor kind (no `case "markdown":` branch any more).
+      const markdownCaseStart = editorSurfaceSource.indexOf(
+        "<MarkdownEditorSurface"
+      );
+      const markdownCaseEnd = editorSurfaceSource.indexOf(
+        "/>",
+        markdownCaseStart
+      );
+      expect(markdownCaseStart).toBeGreaterThan(-1);
       const markdownCase = editorSurfaceSource.slice(
         markdownCaseStart,
         markdownCaseEnd

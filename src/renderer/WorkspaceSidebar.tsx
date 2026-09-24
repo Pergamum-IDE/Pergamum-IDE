@@ -118,11 +118,11 @@ interface WorkspaceSidebarProps {
   onFileExplorerExport?: (origin: ExportOrigin) => void;
   /**
    * #436: open an existing glossary entry for editing (Glossary side pane row
-   * "…"). Routes to the bottom Glossary Entry Editor Pane in edit mode.
+   * "…"). Routes to the entry's glossary Description tab (#573 Slice 7).
    */
   onActivateGlossaryEntry: (entryId: GlossaryEntryId) => void;
-  /** #436 Slice 3: open the bottom Glossary Entry Editor Pane in create mode
-   *  from the Glossary side pane's "語彙を追加" button. */
+  /** #436 Slice 3: open a new, unsaved glossary Description tab from the
+   *  Glossary side pane's "語彙を追加" button (#573 Slice 7). */
   onOpenGlossaryCreateEntryPane: () => void;
   /** #375: active Markdown document body for glossary occurrence counts. */
   glossaryActiveDocumentContent: string | null;

@@ -13,10 +13,12 @@ export type SaveWorkingCopyOutcome =
   | "failed"
   | "ignored";
 
-export type DirtyWorkingCopyKind = "markdown";
+export type DirtyWorkingCopyKind = "markdown" | "glossaryDescription";
 
 export type DirtyWorkingCopyScope =
   | "projectDocument"
+  // #573 Slice 4: a glossary Description tab's draft (project glossary data).
+  | "glossary"
   | "standaloneMarkdown"
   | "untitledMarkdown";
 

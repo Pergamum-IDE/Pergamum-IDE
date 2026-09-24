@@ -211,6 +211,7 @@ export const debugLogEditorIdKinds = [
   "untitled",
   "projectDocument",
   "glossaryEntry",
+  "glossaryDescription",
   "unknown"
 ] as const;
 

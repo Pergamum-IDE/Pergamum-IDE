@@ -452,7 +452,9 @@ app.whenReady().then(async () => {
     logger: debugLogger,
     // #287 follow-up: a recovered file written inside the open project root
     // becomes a project document so the renderer opens it project-owned.
-    registerRestoredProjectDocument: registerCurrentProjectDocumentPath
+    registerRestoredProjectDocument: registerCurrentProjectDocumentPath,
+    // #573 Slice 9: glossary candidates restore only into their own project.
+    getCurrentProjectFilePath: currentActiveProjectFilePath
   });
 
   void createMainWindow(true);

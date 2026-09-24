@@ -174,7 +174,7 @@ interface MarkdownEditorProps {
    * used to tell "the same document, content changed" apart from "a
    * genuinely different document is now shown". Only the latter re-seeds
    * the line-ending tracking field from `initialLineEndingBreaks`. Optional
-   * for non-file editors (e.g. GlossaryEditor's description field) that
+   * for auxiliary editors that
    * never switch between distinct documents and don't care about
    * line-ending tracking.
    */
@@ -239,7 +239,7 @@ interface MarkdownEditorProps {
    * open. Threaded to `createMarkdownEditorDocumentState`'s
    * `isMarkdownDocument` option, which sets `documentIsMarkdownFacet` on that
    * document's own `EditorState`. Defaults to `true` so callers that never
-   * pass it (e.g. GlossaryEditor's description field) keep today's
+   * pass it keep today's
    * Markdown-aware indent/outdent behavior unchanged.
    */
   isMarkdownDocument?: boolean;
@@ -258,8 +258,8 @@ interface MarkdownEditorProps {
    * Unicode `Zs`). Independent of #252's line-ending marker. Toggling any
    * of these never edits the document, never makes it dirty, and never
    * touches selection/caret; it only reconfigures a CodeMirror compartment
-   * (see the effect below). Omitted by non-file editors (GlossaryEditor's
-   * description field), which then render no whitespace markers at all.
+   * (see the effect below). Omitted by auxiliary editors, which then
+   * render no whitespace markers at all.
    */
   whitespaceSettings?: ApplicationEditorWhitespaceSettings;
   pendingSelection?: MarkdownEditorPendingSelection | null;
@@ -328,8 +328,8 @@ interface MarkdownEditorProps {
   onFocusRequestApplied?: (requestId: number) => void;
   /**
    * #390 PoC: Ctrl+Space Glossary Completion. `undefined`/`null` (the
-   * default) leaves Ctrl+Space inert - GlossaryEditor's own description
-   * field, which reuses this component, never passes this prop. Only the
+   * default) leaves Ctrl+Space inert - an auxiliary instance of this
+   * component simply never passes this prop. Only the
    * active Markdown document editor (EditorSurface's MarkdownEditorSurface)
    * supplies it.
    */
@@ -430,8 +430,8 @@ interface MarkdownEditorProps {
    * Manager or Tag Manager tab / a Glossary Entry editor tab and back all
    * unmount EditorSurface (and this component with it), which previously
    * (#387) meant a component-local cache was lost at exactly that boundary.
-   * `undefined` (GlossaryEditor's description field, which never switches
-   * documents and has no need to survive an unmount it IS the field of)
+   * `undefined` (an auxiliary editor that never switches documents and
+   * has no need to survive its own unmount)
    * falls back to a local, component-lifetime-only cache — behaviorally
    * identical to #387's original design for that one case. Pruning a
    * closed document's entry is the OWNER's job (App.tsx, keyed off its own
@@ -770,7 +770,7 @@ const noWhitespaceRendering: ApplicationEditorWhitespaceSettings = {
 export function MarkdownEditor({
   value,
   onChange,
-  // Non-file editors (GlossaryEditor's description field) never switch
+  // Auxiliary (non-document) editors never switch
   // documents and don't have per-break line-ending data to track — these
   // three defaults give them an editor that behaves exactly as before
   // #253 (a single fixed "document" whose line-ending tracking, if it
@@ -969,8 +969,8 @@ export function MarkdownEditor({
   );
   const appliedFocusRequestIdRef = useRef<number | null>(null);
   // #392: component-local fallback cache, used only when no `documentStates`
-  // prop is supplied (GlossaryEditor's description field — see that prop's
-  // doc comment). Never read directly elsewhere in this file; always go
+  // prop is supplied (an auxiliary editor — see that prop's doc
+  // comment). Never read directly elsewhere in this file; always go
   // through the `documentStates` constant below.
   const fallbackDocumentStatesRef = useRef<
     Map<string, MarkdownEditorDocumentState>

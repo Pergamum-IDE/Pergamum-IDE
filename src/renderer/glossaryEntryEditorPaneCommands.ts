@@ -4,19 +4,52 @@ import {
   type CommandRegistry
 } from "../shared/commandRegistry";
 import type { Translate } from "../shared/i18n";
-import type {
-  OpenGlossaryEntryCreatePaneOptions,
-  OpenGlossaryEntryEditPaneOptions
-} from "./glossaryEntryEditorPaneState";
 
 /**
  * #436 Phase 8-0 PoC — Slice 2.
  *
- * Command ids + controller + builders for the Glossary Entry Editor Pane.
- * Registered in App.tsx since Slice 3; Ctrl+G's `openFromEditorSelection`
- * (Slice 12) is the first keybound member — the other three stay
- * palette-hidden and un-keybound.
+ * Command ids + controller + builders for the glossary entry create / edit
+ * entry points. Ctrl+G's `openFromEditorSelection` (Slice 12) is the only
+ * keybound member; the others stay palette-hidden and un-keybound.
+ *
+ * #573 Slice 7: the bottom Glossary Entry Editor Pane these commands were
+ * named after is gone — they now open glossary Description tabs (a new,
+ * unsaved entry tab for create; the entry's tab for edit). The command ids
+ * are kept stable; the pane-only `closePane` command was removed.
  */
+
+/** Which UI asked to create / edit a glossary entry (kept for logging). */
+export type GlossaryEntryEditorPaneSource =
+  | "glossary-pane"
+  | "glossary-settings"
+  | "editor-selection"
+  | "editor-context-menu"
+  | "developer";
+
+/**
+ * Fallback representative surface pre-filled into a new entry when the
+ * caller passes no `presetRepresentative` (e.g. the Glossary side pane's
+ * "語彙を追加", which has no editor selection to seed from).
+ */
+export const DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE = "新しい語彙";
+
+export function presetRepresentativeOrDefault(
+  presetRepresentative: string | undefined
+): string {
+  return presetRepresentative !== undefined && presetRepresentative.length > 0
+    ? presetRepresentative
+    : DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE;
+}
+
+export interface OpenGlossaryEntryCreatePaneOptions {
+  source: GlossaryEntryEditorPaneSource;
+  presetRepresentative?: string;
+}
+
+export interface OpenGlossaryEntryEditPaneOptions {
+  source: GlossaryEntryEditorPaneSource;
+  entryId: string;
+}
 export const glossaryEntryEditorPaneCommandIds = {
   openCreatePane: defineCommandId<
     readonly [options: OpenGlossaryEntryCreatePaneOptions],
@@ -26,9 +59,6 @@ export const glossaryEntryEditorPaneCommandIds = {
     readonly [options: OpenGlossaryEntryEditPaneOptions],
     void
   >("glossary.openEditEntryPane"),
-  closePane: defineCommandId<readonly [], void>(
-    "glossary.closeEntryEditorPane"
-  ),
   /**
    * #436 Slice 12: Ctrl+G. `selectedText` is the active Markdown editor's
    * RAW current selection (`""` when empty) — normalization and the
@@ -48,7 +78,6 @@ export interface GlossaryEntryEditorPaneCommandController {
   openGlossaryEntryEditPane(
     options: OpenGlossaryEntryEditPaneOptions
   ): void | Promise<void>;
-  closeGlossaryEntryEditorPane(): void | Promise<void>;
   openGlossaryEntryEditorPaneFromSelection(
     selectedText: string
   ): void | Promise<void>;
@@ -59,8 +88,6 @@ export interface GlossaryEntryEditorPaneCommandTitles {
   openCreatePaneDescription: string;
   openEditPane: string;
   openEditPaneDescription: string;
-  closePane: string;
-  closePaneDescription: string;
   openFromEditorSelection: string;
   openFromEditorSelectionDescription: string;
 }
@@ -74,8 +101,6 @@ type OpenEditPaneCommand = Command<
   readonly [options: OpenGlossaryEntryEditPaneOptions],
   void
 >;
-
-type ClosePaneCommand = Command<readonly [], void>;
 
 type OpenFromEditorSelectionCommand = Command<
   readonly [selectedText: string],
@@ -94,10 +119,6 @@ export function createGlossaryEntryEditorPaneCommandTitles(
     openEditPaneDescription: translate(
       "command.glossary.openEditEntryPane.description"
     ),
-    closePane: translate("command.glossary.closeEntryEditorPane"),
-    closePaneDescription: translate(
-      "command.glossary.closeEntryEditorPane.description"
-    ),
     openFromEditorSelection: translate(
       "command.glossary.openFromEditorSelection"
     ),
@@ -113,7 +134,6 @@ export function createGlossaryEntryEditorPaneCommands(
 ): readonly [
   OpenCreatePaneCommand,
   OpenEditPaneCommand,
-  ClosePaneCommand,
   OpenFromEditorSelectionCommand
 ] {
   return [
@@ -130,13 +150,6 @@ export function createGlossaryEntryEditorPaneCommands(
       description: titles.openEditPaneDescription,
       palette: { visible: false },
       execute: (options) => controller.openGlossaryEntryEditPane(options)
-    },
-    {
-      id: glossaryEntryEditorPaneCommandIds.closePane,
-      title: titles.closePane,
-      description: titles.closePaneDescription,
-      palette: { visible: false },
-      execute: () => controller.closeGlossaryEntryEditorPane()
     },
     {
       id: glossaryEntryEditorPaneCommandIds.openFromEditorSelection,
@@ -160,12 +173,10 @@ export function registerGlossaryEntryEditorPaneCommands(
   const [
     openCreatePaneCommand,
     openEditPaneCommand,
-    closePaneCommand,
     openFromEditorSelectionCommand
   ] = createGlossaryEntryEditorPaneCommands(controller, titles);
 
   registry.register(openCreatePaneCommand);
   registry.register(openEditPaneCommand);
-  registry.register(closePaneCommand);
   registry.register(openFromEditorSelectionCommand);
 }

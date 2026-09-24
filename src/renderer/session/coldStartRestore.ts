@@ -11,8 +11,9 @@
  *   3. reopens its Project through the normal open lifecycle (never a
  *      Session-Restore shortcut), verifying the saved identity
  *   4. reopens its Markdown editors (`projectMarkdown` / `standaloneMarkdown`;
- *      `untitled` is skipped in #274), preserving relative order and skipping
- *      missing resources locally
+ *      `untitled` is skipped in #274) and #573 glossary Description tabs
+ *      (re-read by entry id; no View State), preserving relative order and
+ *      skipping missing resources locally
  *   5. resolves the active editor (saved → filename fallback → no-active)
  *   6. hands the assembled working environment + pending #273 View States
  *      to the host to apply
@@ -57,14 +58,17 @@ export type StartupMarkdownRejectedRoute = Extract<
   StartupMarkdownRoute,
   { kind: "rejected" }
 >;
+import type { GlossaryEntry } from "../../shared/glossary";
 import {
   createFileEditorIdForPath,
+  createGlossaryDescriptionEditorId,
   createProjectDocumentEditorId,
   serializeEditorId,
   type ActiveProjectContext,
   type EditorId
 } from "../../shared/editorId";
 import {
+  createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
   type CurrentEditor
 } from "../currentEditor";
@@ -115,6 +119,13 @@ export interface ColdStartRestoreDeps {
     relativePath: string
   ) => Promise<string>;
   readonly readMarkdownFile: (filePath: string) => Promise<MarkdownFile>;
+  /**
+   * #573 Slice 8: re-read a glossary entry for a restored glossary
+   * Description tab. `null` = the entry no longer exists.
+   */
+  readonly getGlossaryEntryById: (
+    entryId: string
+  ) => Promise<GlossaryEntry | null>;
   /**
    * #501 slice 7: register `absolutePath` as a project document when it is
    * not (yet) in the restored `PergamumProject.documents` — e.g. a `.txt`
@@ -305,6 +316,45 @@ async function buildRestoredEditor(
         fallbackFilename: fallbackFilenameForSessionEditor(editor),
         viewStateKey: serializeEditorId(id),
         viewState: editor.viewState
+      };
+    }
+
+    case "glossaryDescription": {
+      // #573 Slice 8: project glossary data — only with the project itself.
+      if (!projectRestoreSucceeded || !project) {
+        return null;
+      }
+
+      let entry: GlossaryEntry | null;
+
+      try {
+        entry = await deps.getGlossaryEntryById(editor.entryId);
+      } catch {
+        entry = null;
+      }
+
+      // A deleted entry is usually a deliberate deletion, so it is skipped
+      // quietly (debug log only) — no toast, no placeholder tab.
+      if (!entry || entry.id !== editor.entryId) {
+        deps.logDebug?.("cold-start: glossary entry skipped", {
+          reason: "entryUnavailable"
+        });
+        return null;
+      }
+
+      const id = createGlossaryDescriptionEditorId(entry.id);
+
+      return {
+        // Equivalent to opening the entry normally: current saved data, clean.
+        openDocument: {
+          id,
+          editor: createGlossaryDescriptionCurrentEditor(entry)
+        },
+        sessionIdentity: sessionEditorIdentity(editor),
+        fallbackFilename: fallbackFilenameForSessionEditor(editor),
+        // View State is deferred for glossary tabs (not restored).
+        viewStateKey: null,
+        viewState: null
       };
     }
   }

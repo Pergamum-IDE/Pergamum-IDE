@@ -29,6 +29,10 @@ import {
   type RecoveryDocumentType
 } from "../shared/recoveryDocument";
 import type { RecoveryCandidate } from "../shared/recoveryCandidate";
+import {
+  glossaryRecoveryPayloadText,
+  isNewGlossaryRecoveryPayload
+} from "../shared/glossaryRecoveryDraft";
 import type { RecoveryRestoreRow } from "./recoveryRestore";
 import { buildRecoveryPreviewSnippet } from "./recoveryPreviewSnippet";
 
@@ -81,17 +85,28 @@ export function safeRecoveryDisplayName(rawDisplayName: string): string {
 }
 
 function toCandidate(row: DocumentRow): RecoveryCandidate {
+  const documentType = typeOrDefault(row.document_type);
+  // #573 Slice 9: a glossary row's payload is draft JSON — preview / count
+  // its Description, never the JSON itself.
+  const isGlossary = documentType === "glossary.description";
+  const humanText = isGlossary
+    ? glossaryRecoveryPayloadText(row.payload_text)
+    : row.payload_text;
+
   return {
     recoveryId: row.id,
-    documentType: typeOrDefault(row.document_type),
+    documentType,
     displayName: safeRecoveryDisplayName(row.display_name),
     documentEncoding: encodingOrNull(row.document_encoding),
     documentLineend: lineEndOrNull(row.document_lineend),
     updatedAt: row.updated_at,
-    characterCount: Array.from(row.payload_text).length,
-    previewSnippet: buildRecoveryPreviewSnippet(row.payload_text),
+    characterCount: Array.from(humanText).length,
+    previewSnippet: buildRecoveryPreviewSnippet(humanText),
     hasFilePath: hasPath(row.file_path),
-    hasProjectFilePath: hasPath(row.project_file_path)
+    hasProjectFilePath: hasPath(row.project_file_path),
+    ...(isGlossary
+      ? { glossaryEntryIsNew: isNewGlossaryRecoveryPayload(row.payload_text) }
+      : {})
   };
 }
 
@@ -253,4 +268,41 @@ export function deletePreviousRunRecoveryRowsById(
   }
 
   return { deleted, missing, failed };
+}
+
+/**
+ * #573 Slice 9: the one previous-run glossary Description row an explicit
+ * glossary restore reads (current-run rows are never returned, matching
+ * {@link getRecoveryRestoreRows}). `null` when there is no such row.
+ */
+export function getGlossaryRecoveryRow(
+  database: BetterSqliteDatabase,
+  recoveryId: string,
+  currentInstanceRunId: string
+): {
+  readonly recoveryId: string;
+  readonly projectFilePath: string | null;
+  readonly payloadText: string;
+} | null {
+  const row = database
+    .prepare(
+      `SELECT id, project_file_path, payload_text
+       FROM documents
+       WHERE id = @id
+         AND document_type = 'glossary.description'
+         AND origin_instance_run_id <> @currentInstanceRunId`
+    )
+    .get({ id: recoveryId, currentInstanceRunId }) as
+    | { id: string; project_file_path: string | null; payload_text: string }
+    | undefined;
+
+  return row
+    ? {
+        recoveryId: row.id,
+        projectFilePath: hasPath(row.project_file_path)
+          ? row.project_file_path
+          : null,
+        payloadText: row.payload_text
+      }
+    : null;
 }

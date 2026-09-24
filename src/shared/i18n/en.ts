@@ -56,17 +56,12 @@ export const enTranslations = {
   "command.editor.selection.selectAll.description": "Select all text in the current editor.",
   "command.disabled.readOnlyProject": "Unavailable in read-only mode",
   "command.glossary.entry.open": "Open glossary entry",
-  "command.glossary.openCreateEntryPane":
-    "Open Glossary Entry Editor Pane in create mode",
+  "command.glossary.openCreateEntryPane": "Open New Glossary Entry in Tab",
   "command.glossary.openCreateEntryPane.description":
-    "Open the Glossary Entry Editor Pane to create a new entry. (#436 PoC)",
-  "command.glossary.openEditEntryPane":
-    "Open Glossary Entry Editor Pane in edit mode",
+    "Open a new, unsaved glossary entry in a tab. The entry is created on its first save.",
+  "command.glossary.openEditEntryPane": "Open Glossary Entry in Tab",
   "command.glossary.openEditEntryPane.description":
-    "Open an existing entry in the Glossary Entry Editor Pane. (#436 PoC)",
-  "command.glossary.closeEntryEditorPane": "Close Glossary Entry Editor Pane",
-  "command.glossary.closeEntryEditorPane.description":
-    "Close the Glossary Entry Editor Pane. (#436 PoC)",
+    "Open an existing glossary entry in a tab (or show its tab if already open).",
   "command.glossary.openFromEditorSelection":
     "Open Glossary Entry from Selection",
   "command.glossary.openFromEditorSelection.description":
@@ -348,6 +343,8 @@ export const enTranslations = {
   "dialog.recovery.title": "Recover Unsaved Changes",
   "dialog.recovery.type.file": "File",
   "dialog.recovery.type.untitled": "Untitled",
+  "dialog.recovery.type.glossary": "Glossary",
+  "dialog.recovery.type.glossaryNew": "New glossary entry",
   "dialog.paragraphIndent.remove.title": "Remove Paragraph Indents",
   "dialog.paragraphIndent.result.message": "Changed lines: {changedLineCount}\nSkipped lines: {skippedLineCount}\nEmpty lines: {emptyLineCount}",
   "dialog.projectSwitchUnsaved.discardAndContinue": "Discard Changes and Continue",
@@ -1016,30 +1013,13 @@ export const enTranslations = {
   "glossaryEditor.tags.primary": "Primary",
   "glossaryEditor.validity.duplicateAtomValue": "Two forms have the same value.",
   "glossaryEditor.validity.noAtoms": "Enter at least one form.",
-  "glossaryEditor.deleteEntry": "Delete",
-  "glossaryEditor.description": "Description",
-  "glossaryEditor.emptyDescription": "No description.",
-  "glossaryEditor.label": "Glossary editor",
-  "glossaryEntryEditorPane.label": "Glossary Entry Editor",
-  "glossaryEntryEditorPane.close": "Close",
-  "glossaryEntryEditorPane.resizeHandle": "Resize the Glossary Entry Editor pane",
-  "glossaryEntryEditorPane.create.submit": "Create",
-  "glossaryEntryEditorPane.create.failed":
-    "Could not create the glossary entry.",
-  "glossaryEntryEditorPane.edit.loading": "Loading the glossary entry…",
-  "glossaryEntryEditorPane.edit.loadFailed":
-    "Could not load the glossary entry.",
-  "glossaryEntryEditorPane.edit.save": "Save",
-  "glossaryEntryEditorPane.edit.saveFailed":
-    "Could not save the glossary entry.",
+  "glossaryDescriptionTab.metadata.heading": "Glossary Entry",
+  "glossaryDescriptionTab.metadata.summary.representative": "Representative: {value}",
+  "glossaryDescriptionTab.metadata.summary.atomCount": "Surfaces: {count}",
+  "glossaryDescriptionTab.metadata.summary.tags": "Tags: {tags}",
+  "glossaryDescriptionTab.metadata.summary.noTags": "Tags: none",
   "glossaryEntryEditorPane.saveFailed.duplicateAtomValue":
     'A glossary Atom "{value}" already exists.',
-  "glossaryEntryEditorPane.dirty.title": "Unsaved glossary entry",
-  "glossaryEntryEditorPane.dirty.message":
-    "This glossary entry has unsaved changes. Save before continuing?",
-  "glossaryEntryEditorPane.dirty.saveAndContinue": "Save and Continue",
-  "glossaryEntryEditorPane.dirty.discardAndContinue": "Discard and Continue",
-  "glossaryEntryEditorPane.dirty.cancel": "Cancel",
   "glossaryTagEditor.background": "Background color",
   "glossaryTagEditor.cancel": "Cancel",
   "glossaryTagEditor.create": "Create",
@@ -1744,6 +1724,10 @@ export const enTranslations = {
   "status.recoveryBackupSaved": "Saved recovery backup.",
   "status.recoveryDiscarded": "Discarded {count} Recovery item(s)",
   "status.recoveryRestoreFailed": "Some items could not be restored",
+  "status.recoveryGlossaryOtherProject":
+    "Glossary entries from another project cannot be restored here. Open that project, then restore",
+  "status.recoveryGlossaryTabBusy":
+    "\"{name}\" has unsaved changes, so it was not restored. Save or discard them, then restore",
   "status.recoveryRestored": "Restored {count} item(s) as .recovered files",
   "status.saveCanceled": "Save canceled",
   "status.saveFailed": "Save failed: {message}",

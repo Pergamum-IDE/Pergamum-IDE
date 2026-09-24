@@ -40,15 +40,15 @@ describe("Glossary delete confirmation wiring (#375)", () => {
     const source = appSource();
     const deleteFn = block(
       source,
-      "async function handleDeleteGlossaryEntryFromPane(",
-      "async function handleCreateGlossaryTag("
+      "async function handleDeleteGlossaryEntryFromManager(",
+      "function navigateGlossaryOccurrenceFromSidebar("
     );
 
     const confirmIndex = deleteFn.indexOf(
-      "if (!(await confirmDeleteGlossaryEntry(draft)))"
+      "if (!(await confirmDeleteGlossaryEntry(createGlossaryEntryDraft(entry))))"
     );
     const ipcIndex = deleteFn.indexOf(
-      "await window.pergamum.glossary.delete(draft.entry.id)"
+      "await window.pergamum.glossary.delete(entryId)"
     );
 
     expect(confirmIndex).toBeGreaterThan(-1);
@@ -57,9 +57,12 @@ describe("Glossary delete confirmation wiring (#375)", () => {
     expect(deleteFn).not.toContain("deleteEntryConfirmMessage");
     // Double-press guard.
     expect(deleteFn).toContain("glossaryDeleteInFlightRef.current");
-    // Existing post-delete behaviour is kept (no tab to close, refresh token bumped).
-    expect(deleteFn).not.toContain("closeOpenEditor");
+    // Refresh token bumped; #573 Slice 7: the deleted entry's glossary
+    // Description tab (if open) is closed only AFTER a confirmed delete.
     expect(deleteFn).toContain("setGlossaryRefreshToken((token) => token + 1)");
+    expect(deleteFn.indexOf("closeOpenEditor(state, deletedEntryTabId)")).toBeGreaterThan(
+      ipcIndex
+    );
   });
 
   it("confirms a tag delete through the same dialog before calling deleteTag(id)", () => {

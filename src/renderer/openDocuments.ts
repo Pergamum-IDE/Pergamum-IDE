@@ -219,10 +219,10 @@ export function hasDirtyOpenDocuments(state: OpenDocumentsState): boolean {
   return hasDirtyWorkingCopies(state);
 }
 
-function dirtyWorkingCopyScopeForEditor(
-  editor: CurrentEditor
+function dirtyWorkingCopyScopeForDocument(
+  document: CurrentDocument
 ): DirtyWorkingCopyScope {
-  switch (editor.document.kind) {
+  switch (document.kind) {
     case "project":
       return "projectDocument";
     case "file":
@@ -235,18 +235,29 @@ function dirtyWorkingCopyScopeForEditor(
 export function getDirtyWorkingCopies(
   state: OpenDocumentsState
 ): DirtyWorkingCopy[] {
-  return state.documents.flatMap((openDocument) =>
-    isCurrentEditorDirty(openDocument.editor)
-      ? [
-          {
-            editorId: openDocument.id,
-            kind: openDocument.editor.kind,
-            scope: dirtyWorkingCopyScopeForEditor(openDocument.editor),
-            title: currentEditorTitle(openDocument.editor)
-          }
-        ]
-      : []
-  );
+  return state.documents.flatMap((openDocument): DirtyWorkingCopy[] => {
+    const { editor } = openDocument;
+
+    if (!isCurrentEditorDirty(editor)) {
+      return [];
+    }
+
+    // #573 Slice 4: a dirty glossary Description tab is a project-scoped
+    // working copy saved through the glossary update path.
+    const document = markdownDocumentForEditor(editor);
+    const scope: DirtyWorkingCopyScope = document
+      ? dirtyWorkingCopyScopeForDocument(document)
+      : "glossary";
+
+    return [
+      {
+        editorId: openDocument.id,
+        kind: editor.kind,
+        scope,
+        title: currentEditorTitle(editor)
+      }
+    ];
+  });
 }
 
 export function hasDirtyWorkingCopies(
@@ -498,7 +509,12 @@ export function closeOpenEditor(
 function isProjectScopedOpenEditor(openDocument: OpenDocument): boolean {
   const { editor } = openDocument;
 
-  return editor.document.kind === "project";
+  // #573: a glossary Description tab belongs to the project's glossary, so
+  // it closes with the project like a project document does.
+  return (
+    editor.kind === "glossaryDescription" ||
+    editor.document.kind === "project"
+  );
 }
 
 export function removeProjectScopedOpenEditors(

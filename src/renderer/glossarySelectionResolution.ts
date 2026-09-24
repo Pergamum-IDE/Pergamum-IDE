@@ -1,5 +1,5 @@
 import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
-import { DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE } from "./glossaryEntryEditorPaneState";
+import { DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE } from "./glossaryEntryEditorPaneCommands";
 
 /**
  * #436 Slice 12.

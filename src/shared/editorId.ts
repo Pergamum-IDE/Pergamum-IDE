@@ -1,3 +1,8 @@
+import {
+  validateGlossaryEntryId,
+  type GlossaryEntryId
+} from "./glossary";
+
 declare const editorIdBrand: unique symbol;
 declare const serializedEditorIdBrand: unique symbol;
 
@@ -20,6 +25,16 @@ type UntitledEditorId = {
   readonly sessionId: number;
 } & EditorIdBrand;
 
+/**
+ * #573: a non-file-backed editor tab showing one glossary entry's
+ * Description. Identity is the entry id, so the same entry never opens
+ * twice.
+ */
+type GlossaryDescriptionEditorId = {
+  readonly kind: "glossaryDescription";
+  readonly entryId: GlossaryEntryId;
+} & EditorIdBrand;
+
 type UnbrandedEditorId =
   | {
       readonly kind: "file";
@@ -32,12 +47,17 @@ type UnbrandedEditorId =
   | {
       readonly kind: "untitled";
       readonly sessionId: number;
+    }
+  | {
+      readonly kind: "glossaryDescription";
+      readonly entryId: GlossaryEntryId;
     };
 
 export type EditorId =
   | FileEditorId
   | ProjectDocumentEditorId
-  | UntitledEditorId;
+  | UntitledEditorId
+  | GlossaryDescriptionEditorId;
 
 export type SerializedEditorId = string & {
   readonly [serializedEditorIdBrand]: "SerializedEditorId";
@@ -301,6 +321,15 @@ export function createProjectDocumentEditorId(
   );
 }
 
+export function createGlossaryDescriptionEditorId(
+  entryId: string
+): EditorId {
+  return createEditorId({
+    kind: "glossaryDescription",
+    entryId: validateGlossaryEntryId(entryId, "entryId")
+  });
+}
+
 export function createUntitledEditorId(sessionId: number): EditorId {
   if (!Number.isSafeInteger(sessionId) || sessionId <= 0) {
     throw new Error("Untitled EditorId session ID must be a positive integer.");
@@ -328,6 +357,11 @@ export function serializeEditorId(editorId: EditorId): SerializedEditorId {
       return JSON.stringify({
         kind: "untitled",
         sessionId: editorId.sessionId
+      }) as SerializedEditorId;
+    case "glossaryDescription":
+      return JSON.stringify({
+        kind: "glossaryDescription",
+        entryId: editorId.entryId
       }) as SerializedEditorId;
   }
 }
@@ -407,6 +441,16 @@ function deserializeCanonicalEditorId(
       }
 
       return createUntitledEditorId(value.sessionId);
+    case "glossaryDescription":
+      assertSerializedEditorIdKeys(value, ["kind", "entryId"]);
+
+      if (typeof value.entryId !== "string") {
+        throw new Error(
+          "Serialized glossaryDescription EditorId must include an entryId."
+        );
+      }
+
+      return createGlossaryDescriptionEditorId(value.entryId);
     default:
       throw new Error("Serialized EditorId kind is not supported.");
   }
@@ -442,9 +486,16 @@ export function editorIdEquals(left: EditorId, right: EditorId): boolean {
       );
     case "untitled":
       return right.kind === "untitled" && left.sessionId === right.sessionId;
+    case "glossaryDescription":
+      return (
+        right.kind === "glossaryDescription" && left.entryId === right.entryId
+      );
   }
 }
 
 export function isProjectScopedEditorId(editorId: EditorId): boolean {
-  return editorId.kind === "projectDocument";
+  return (
+    editorId.kind === "projectDocument" ||
+    editorId.kind === "glossaryDescription"
+  );
 }

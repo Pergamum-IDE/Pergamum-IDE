@@ -45,6 +45,9 @@ export async function resolveCurrentEditor(
       return resolveProjectDocumentEditor(editorId, context);
     case "file":
     case "untitled":
+    // #573 Slice 1: a glossary Description tab is only ever opened from an
+    // in-memory GlossaryEntry (never resolved by id alone yet).
+    case "glossaryDescription":
       return { kind: "notFound" };
   }
 }

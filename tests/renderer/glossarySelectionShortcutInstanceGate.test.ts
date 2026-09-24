@@ -3,8 +3,8 @@
  * #436 Slice 12 remediation — reproduces the exact review blocker and proves
  * the fix: the Ctrl+G keydown handler must be ATTACHED only to the one
  * `MarkdownEditor` instance the shortcut belongs to (EditorSurface's
- * document editor), never to an auxiliary instance such as GlossaryEditor's
- * own description-field editor — even while the module-level
+ * document editor), never to an auxiliary instance (formerly the removed
+ * GlossaryEditor's description-field editor) — even while the module-level
  * current-config slot holds a DIFFERENT instance's published config, which is
  * exactly the situation while both are mounted at once (see
  * glossarySelectionShortcutExtension.ts's remediation note).

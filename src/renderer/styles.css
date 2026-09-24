@@ -1503,127 +1503,6 @@ label.settingsItemHeader {
   font-size: 13px;
 }
 
-/* #436 Phase 8-0 PoC: the bottom pane that replaces the Utility Window and
-   hosts the glossary entry create / edit forms. User-resizable via the
-   top-edge `.glossaryEntryEditorPaneResizeHandle` — inline `height` (px) is
-   supplied by App and clamped by `clampGlossaryEntryEditorPaneHeight`. Tone
-   matches the surrounding workbench chrome (.pane / the former
-   .utilityWindow). */
-.glossaryEntryEditorPane {
-  display: flex;
-  min-width: 0;
-  flex: 0 0 auto;
-  flex-direction: column;
-  border-top: 1px solid #d3dae2;
-  background: #ffffff;
-}
-
-.glossaryEntryEditorPaneResizeHandle {
-  height: 6px;
-  min-height: 6px;
-  flex: 0 0 auto;
-  border-top: 1px solid #d3dae2;
-  background: transparent;
-  cursor: row-resize;
-  touch-action: none;
-}
-
-.glossaryEntryEditorPaneResizeHandle:hover,
-.glossaryEntryEditorPaneResizeHandle:active {
-  background: #7aa7d9;
-}
-
-.glossaryEntryEditorPaneHeader {
-  display: flex;
-  min-height: 34px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 8px 0 16px;
-  border-bottom: 1px solid #e3e8ee;
-  background: #fbfcfd;
-}
-
-.glossaryEntryEditorPaneTitle {
-  color: #52616f;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.glossaryEntryEditorPaneCloseButton {
-  flex: 0 0 auto;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: #52616f;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 12px;
-  cursor: pointer;
-}
-
-.glossaryEntryEditorPaneCloseButton:hover {
-  background: #eef3f8;
-  color: #17212b;
-}
-
-.glossaryEntryEditorPaneBody {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 16px;
-}
-
-/* #436 Slice 8: edit-mode loading / load-failed text, while
-   `GlossaryEntryEditForm` waits on / fails to fetch the target entry. */
-.glossaryEntryEditorPaneStatus {
-  margin: 0;
-  color: #6b7785;
-  font-size: 13px;
-}
-
-/* #436 Slice 8: the minimal Save control above the relocated (unmodified)
-   GlossaryEditor — the old glossaryEntry tab had none of its own; it saved
-   through the global Ctrl+S / Save command, which does not reach a pane that
-   is not an open editor tab. */
-.glossaryEntryEditorPaneEditSession {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  height: 100%;
-}
-
-.glossaryEntryEditorPaneEditActions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  border-bottom: 1px solid #e3e8ee;
-  background: #fbfcfd;
-}
-
-.glossaryEntryEditorPaneSaveButton {
-  font: inherit;
-  padding: 6px 14px;
-  border: 1px solid #2f6f9f;
-  border-radius: 4px;
-  background: #2f6f9f;
-  color: #ffffff;
-  cursor: pointer;
-}
-
-.glossaryEntryEditorPaneSaveButton:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.glossaryEntryEditorPaneSaveFailed {
-  color: #b3261e;
-  font-size: 12px;
-}
-
 /* #377: the Debug Log special tab wrapper — a scroll container that fills the
    editor area, mirroring the Glossary management tabs. */
 .debugLogTab {
@@ -5417,61 +5296,6 @@ label.settingsItemHeader {
   background: rgba(50, 109, 168, 0.08);
 }
 
-.glossaryEditor {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  background: #ffffff;
-  padding: 28px 32px;
-}
-
-.glossaryEditorHeader {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.glossaryEditorHeader h1 {
-  min-width: 0;
-  margin: 0;
-  color: #17212b;
-  font-size: 28px;
-  line-height: 1.2;
-}
-
-.glossaryEditorDeleteButton {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  margin-left: auto;
-  border: 1px solid #b3261e;
-  border-radius: 4px;
-  background: #ffffff;
-  color: #b3261e;
-  cursor: pointer;
-  padding: 6px;
-}
-
-.glossaryEditorDeleteButton:hover {
-  background: #fdecea;
-}
-
-.glossaryEditorDeleteButton svg {
-  display: block;
-  width: 16px;
-  height: 16px;
-}
-
-.glossaryEditorDescriptionWorkspace {
-  height: 360px;
-  border: 1px solid #e3e8ee;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
 .glossaryEditorSection {
   margin-bottom: 24px;
 }
@@ -5660,16 +5484,6 @@ label.settingsItemHeader {
   flex-direction: column;
   gap: 6px;
   margin-bottom: 8px;
-}
-
-.glossaryDescriptionPreview {
-  padding: 0;
-}
-
-.glossaryEditorEmptyDescription {
-  margin: 0;
-  color: #6b7785;
-  font-size: 14px;
 }
 
 /* #375: atom / tag / match-flags editor */
@@ -6164,7 +5978,7 @@ label.settingsItemHeader {
 
 /* #375: Glossary Tag Manager tab + tag editor modal */
 /* The tab wraps the manager in a scrollable, padded editor-area surface
- * (mirrors .glossaryEditor). */
+ * (mirrors the other glossary management surfaces). */
 .glossaryTagManagerTab {
   flex: 1;
   min-width: 0;
@@ -6375,6 +6189,81 @@ label.settingsItemHeader {
   background: #fbeaea;
   border-color: #e3b3b3;
   color: #8f1b21;
+}
+
+/* #573 Slice 5: the glossary Description tab's collapsible metadata area,
+   above the Description editor + preview. Capped so the Description stays
+   the main work area; scrolls internally when expanded. */
+.glossaryDescriptionMetadataPanel {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-block-size: 45%;
+  overflow: auto;
+  border-block-end: 1px solid #e3e8ee;
+  background: #fbfcfd;
+}
+
+.glossaryDescriptionMetadataHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding-block: 4px;
+  padding-inline: 8px 16px;
+}
+
+.glossaryDescriptionMetadataToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+  padding-block: 4px;
+  padding-inline: 6px 8px;
+  cursor: pointer;
+}
+
+.glossaryDescriptionMetadataToggle:hover {
+  background: #eef3f8;
+  color: #17212b;
+}
+
+.glossaryDescriptionMetadataToggleIcon {
+  display: inline-block;
+  transition: transform 120ms ease;
+}
+
+.glossaryDescriptionMetadataToggleIcon:dir(rtl) {
+  transform: scaleX(-1);
+}
+
+.glossaryDescriptionMetadataPanel[data-expanded="true"]
+  .glossaryDescriptionMetadataToggleIcon {
+  transform: rotate(90deg);
+}
+
+.glossaryDescriptionMetadataSummary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  min-width: 0;
+  color: #52616f;
+  font-size: 12px;
+}
+
+.glossaryDescriptionMetadataSummaryInvalid {
+  color: #8f1b21;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.glossaryDescriptionMetadataBody {
+  padding-block: 8px 0;
+  padding-inline: 16px;
 }
 
 /* #375: Glossary Management tab — reuses the Tag Manager's cell / drag-handle /

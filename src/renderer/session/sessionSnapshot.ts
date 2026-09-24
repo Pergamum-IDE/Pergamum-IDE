@@ -25,6 +25,7 @@ import type {
 import { sessionEditorIdentity } from "../../shared/session";
 import type { EditorViewState } from "../editorViewState";
 import type { CurrentEditor } from "../currentEditor";
+import { glossaryEntryDraftIsNew } from "../glossaryEntryDraft";
 import {
   activeOpenDocument,
   type OpenDocumentsState
@@ -60,6 +61,25 @@ function sessionEditorFromOpenEditor(
   order: number
 ): SessionEditorInput | null {
   const viewStateKey = serializeEditorId(editorId);
+
+  // #573 Slice 8: a glossary Description tab is recorded by its entry id
+  // only (the entry is re-read on restore). #273 View State is deferred for
+  // glossary tabs, so it gets no View State key and stays `null`. A
+  // never-saved new-entry tab has no entry to reopen — its content is
+  // Recovery's job — so it is not recorded at all.
+  if (editor.kind === "glossaryDescription") {
+    return glossaryEntryDraftIsNew(editor.draft)
+      ? null
+      : {
+          editor: {
+            kind: "glossaryDescription",
+            order,
+            entryId: editor.entryId,
+            viewState: null
+          },
+          viewStateKey: null
+        };
+  }
 
   switch (editor.document.kind) {
     case "project":
@@ -154,7 +174,8 @@ export function buildRendererSessionSnapshot(
 ): RendererSessionSnapshot {
   const editors: SessionEditor[] = inputs.editors.map(
     ({ editor, viewStateKey }) => {
-      if (viewStateKey === null) {
+      // #573 Slice 8: glossary tabs never carry View State (deferred).
+      if (viewStateKey === null || editor.kind === "glossaryDescription") {
         return editor;
       }
 

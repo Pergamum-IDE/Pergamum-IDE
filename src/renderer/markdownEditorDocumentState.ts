@@ -158,8 +158,7 @@ export interface MarkdownEditorDocumentStateOptions {
    * actually publishes into the module-level current-glossary-selection-shortcut
    * slot (EditorSurface's MarkdownEditorSurface — see MarkdownEditor.tsx's
    * `glossarySelectionShortcut` prop); `false` (the default when omitted) for
-   * every other `MarkdownEditor` instance, e.g. GlossaryEditor's own
-   * description-field editor.
+   * every other `MarkdownEditor` instance.
    *
    * This is a BUILD-TIME decision, not a live ref: the module-level config slot
    * can hold ANOTHER instance's published config at any moment (e.g. the main

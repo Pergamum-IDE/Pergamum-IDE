@@ -92,6 +92,8 @@ import type {
   RecoveryDiscardResult,
   RecoveryFinalizeRequest,
   RecoveryFinalizeResult,
+  RecoveryGlossaryDraftRequest,
+  RecoveryGlossaryDraftResult,
   RecoveryHasRecoverableResult,
   RecoveryMarkCandidatesSeenResult,
   RecoveryReportResult,
@@ -432,7 +434,10 @@ export const RECOVERY_CHANNELS = {
   getReport: "recovery:getReport",
   /** #288 follow-up: whether any previous-run Recovery candidates exist
    *  (drives the `recovery.hasRecoverableCandidates` command context key). */
-  hasRecoverableCandidates: "recovery:hasRecoverableCandidates"
+  hasRecoverableCandidates: "recovery:hasRecoverableCandidates",
+  /** #573 Slice 9: explicit restore of one glossary candidate — returns its
+   *  main-validated draft (the only Recovery body sent to the renderer). */
+  readGlossaryCandidateDraft: "recovery:readGlossaryCandidateDraft"
 } as const;
 
 export const GLOSSARY_CHANNELS = {
@@ -1540,6 +1545,10 @@ export interface PergamumApi {
     /** #288 follow-up: whether at least one previous-run Recovery candidate
      *  exists. Current-run dirty backups never count. */
     hasRecoverableCandidates: () => Promise<RecoveryHasRecoverableResult>;
+    /** #573 Slice 9: see `RECOVERY_CHANNELS.readGlossaryCandidateDraft`. */
+    readGlossaryCandidateDraft: (
+      request: RecoveryGlossaryDraftRequest
+    ) => Promise<RecoveryGlossaryDraftResult>;
   };
   glossary: {
     create: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;

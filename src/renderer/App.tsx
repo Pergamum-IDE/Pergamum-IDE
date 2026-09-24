@@ -55,6 +55,7 @@ import {
 } from "../shared/commandRegistry";
 import {
   createEditorIdForPath,
+  createGlossaryDescriptionEditorId,
   createProjectDocumentEditorId,
   editorIdEquals,
   serializeEditorId,
@@ -74,6 +75,7 @@ import type {
   UpdateGlossaryEntryInput,
   UpdateGlossaryTagInput
 } from "../shared/glossary";
+import { parseGlossaryAtomValueConflictMessage } from "../shared/glossary";
 import type {
   ExecuteTextImportResult,
   PreviewTextImportFilesRequest,
@@ -174,7 +176,12 @@ import {
   serializeLineEndings
 } from "./lineEndingTracking";
 import {
+  applyGlossaryDescriptionEditorSaveResult,
+  createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
+  createNewGlossaryDescriptionCurrentEditor,
+  updateGlossaryDescriptionEditorDraft,
+  updateGlossaryDescriptionEditorText,
   currentEditorProjectRelativePath,
   currentEditorTitle,
   isCurrentEditorDirty,
@@ -252,11 +259,15 @@ import { getCurrentActiveEditorSelectionText } from "./find/activeEditorSelectio
 import type { MarkdownEditorToolbarShortcutConfig } from "./editorMarkdownToolbarShortcuts";
 import type { HeadingLevel } from "../shared/markdownHeadingMarkup";
 import type { MarkdownListKind } from "../shared/markdownListMarkup";
-import { markdownImageLinksForAttachments } from "../shared/markdownImageLink";
+import {
+  markdownImageLinksForAttachmentsFromBase,
+  type MarkdownImageLinkBase
+} from "../shared/markdownImageLink";
 import type { ImageInsertionCopyPlanEntry } from "../shared/api";
 import {
   EditorSurface,
   type DocumentOpenAggregateMetrics,
+  type GlossaryDescriptionMetadataConfig,
   type ViewportSizeDetails
 } from "./EditorSurface";
 import { EditorToolbar } from "./components/EditorToolbar";
@@ -304,6 +315,11 @@ import {
   recoveryDocumentKeyForDocument,
   recoveryDocumentKeyForProjectRelativePath
 } from "./recovery/recoveryDocumentPayload";
+import {
+  buildGlossaryRecoveryPayload,
+  glossaryEditorFromRecoveryDraft,
+  recoveryDocumentKeyForGlossaryEditor
+} from "./recovery/glossaryRecovery";
 import { RecoveryCandidateDialog } from "./recovery/RecoveryCandidateDialog";
 import {
   createRecoveryCommandTitles,
@@ -372,27 +388,13 @@ import {
 // `layout.utilityWindow` state and `openUtilityWindowOnOccurrencesTab` are
 // kept dormant for a later slice to remove once the occurrence-navigation UI
 // has a new home.
-import { GlossaryEntryEditorPane } from "./GlossaryEntryEditorPane";
-import type { GlossaryEntryEditorSessionHandle } from "./GlossaryEntryEditorSession";
 import {
   DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
-  GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT,
-  clampGlossaryEntryEditorPaneHeight,
-  closeGlossaryEntryEditorPane,
-  createInitialGlossaryEntryEditorPaneState,
-  isSameGlossaryEntryEditorPaneTarget,
-  openGlossaryEntryCreatePane,
-  openGlossaryEntryEditPane,
-  type GlossaryEntryEditorPaneSource,
-  type GlossaryEntryEditorPaneState,
-  type OpenGlossaryEntryEditorPaneState
-} from "./glossaryEntryEditorPaneState";
-import {
   createGlossaryEntryEditorPaneCommandTitles,
   glossaryEntryEditorPaneCommandIds,
+  presetRepresentativeOrDefault,
   registerGlossaryEntryEditorPaneCommands
 } from "./glossaryEntryEditorPaneCommands";
-import { confirmGlossaryEntryEditorPaneDiscardOrSave } from "./glossaryEntryEditorPaneDirtyConfirmation";
 import { resolveGlossaryEntryEditorPaneTargetFromSelection } from "./glossarySelectionResolution";
 import {
   EditorNavigation,
@@ -401,6 +403,10 @@ import {
 } from "./editorNavigation";
 import {
   createGlossaryEntryDraft,
+  glossaryEntryDraftCreateInput,
+  glossaryEntryDraftIsNew,
+  glossaryEntryDraftUpdateInput,
+  glossaryEntryDraftValidity,
   representativeGlossaryAtomDraft,
   type GlossaryEntryDraft
 } from "./glossaryEntryDraft";
@@ -452,6 +458,7 @@ import {
   removeProjectScopedOpenEditors,
   reorderOpenDocuments,
   replaceOpenDocument,
+  replaceOpenEditor,
   resolveCloseTargetEditorId,
   updateActiveOpenDocument,
   updateActiveOpenEditor,
@@ -533,7 +540,6 @@ import {
 import { useApplicationSettings } from "./useApplicationSettings";
 import { createSettingsFieldRestartTracker } from "./settingsFieldRestartTracker";
 import { useHorizontalDrag } from "./useHorizontalDrag";
-import { useVerticalDrag } from "./useVerticalDrag";
 import {
   createUtilityWindowCommandTitles,
   registerUtilityWindowCommands
@@ -918,8 +924,10 @@ function debugEditorIdKind(
   return editorId?.kind ?? "unknown";
 }
 
-function debugSaveTargetKind(editor: CurrentEditor): DebugLogSaveTargetKind {
-  return isProjectCurrentDocument(editor.document)
+function debugSaveTargetKind(
+  document: CurrentDocument
+): DebugLogSaveTargetKind {
+  return isProjectCurrentDocument(document)
     ? "projectDocument"
     : "standaloneMarkdown";
 }
@@ -1152,100 +1160,99 @@ export function App(): JSX.Element {
   );
   const [selectedPreviewRenderer, setSelectedPreviewRenderer] =
     useState<PreviewRendererId>(builtInDefaultSettings.preview.renderer);
-  // #436 Phase 8-0 PoC: the bottom pane that replaces the former Utility
-  // Window. Ephemeral React state — NOT persisted to the session. Its height
-  // (Slice 6 remediation) is likewise renderer-memory only, but survives
-  // close/reopen within the same app run.
-  const [glossaryEntryEditorPane, setGlossaryEntryEditorPane] =
-    useState<GlossaryEntryEditorPaneState>(
-      createInitialGlossaryEntryEditorPaneState
-    );
-  // #436 Slice 11: readable from async continuations (dirty-confirm dialogs)
-  // that ran a state snapshot before an `await` — mirrors `projectRef`.
-  const glossaryEntryEditorPaneRef = useRef(glossaryEntryEditorPane);
-  glossaryEntryEditorPaneRef.current = glossaryEntryEditorPane;
-  // #436 Slice 11: the currently-mounted session's imperative isDirty/save
-  // handle (forwarded through `GlossaryEntryEditorPane`) — `null` while the
-  // pane is closed. Never read directly; always go through
-  // `confirmGlossaryEntryEditorPaneDirtyIfNeeded`.
-  const glossaryEntryEditorSessionHandleRef =
-    useRef<GlossaryEntryEditorSessionHandle | null>(null);
+  // #573 Slice 7: glossary entry editing happens only in glossary
+  // Description tabs — the #436 bottom Glossary Entry Editor Pane is gone.
+  // Every former pane entry point (Glossary side pane, Glossary Management,
+  // Command Palette @-jump, occurrence tracking, Ctrl+G) lands here.
 
-  // #436 Slice 11: the ONE place that decides whether the pane's current
-  // draft is safe to abandon. `false` means the caller MUST abort its
-  // operation — the confirm dialog already explained why (the user
-  // cancelled, or chose Save and the save failed, in which case the pane's
-  // own failure UI is already visible).
-  async function confirmGlossaryEntryEditorPaneDirtyIfNeeded(): Promise<boolean> {
-    if (!glossaryEntryEditorPaneRef.current.isOpen) {
+  // Open — or focus, if already open — the tab for an EXISTING entry, seeded
+  // from the entry as currently stored (the existing `getById` IPC). Tab
+  // identity is the entry id, so an entry is never open twice.
+  async function openGlossaryDescriptionTab(
+    entryId: GlossaryEntryId
+  ): Promise<boolean> {
+    if (!projectRef.current || isLifecycleCommitBarrierActiveNow()) {
+      return false;
+    }
+
+    const editorId = createGlossaryDescriptionEditorId(entryId);
+
+    if (hasOpenDocument(openDocumentsStateRef.current, editorId)) {
+      openEditorFromUi(editorId);
       return true;
     }
 
-    const handle = glossaryEntryEditorSessionHandleRef.current;
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+    let entry: GlossaryEntry | null;
 
-    if (!handle) {
-      return true;
+    try {
+      entry = await window.pergamum.glossary.getById(entryId);
+    } catch (error) {
+      entry = null;
+      setStatus({
+        key: "status.documentOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
     }
 
-    const outcome = await confirmGlossaryEntryEditorPaneDiscardOrSave({
-      isDirty: () => handle.isDirty(),
-      save: () => handle.save(),
-      translate,
-      choiceDialog
-    });
-
-    return outcome === "proceed";
-  }
-
-  // #436 Slice 11: every "open create/edit pane" caller (Glossary side pane,
-  // glossary settings add/edit, the Command Palette @-jump / occurrence
-  // tracking's `openGlossaryEntry`) goes through this instead of calling
-  // `setGlossaryEntryEditorPane` directly. Re-opening the IDENTICAL target
-  // (same create preset, or the same entryId already open) is a no-op —
-  // keeps the current draft, never prompts (nothing would be lost either
-  // way). Anything else confirms first when the CURRENT pane has unsaved
-  // work; a cancel (or a failed save) leaves the current pane untouched.
-  async function transitionGlossaryEntryEditorPane(
-    next: OpenGlossaryEntryEditorPaneState
-  ): Promise<void> {
     if (
-      isSameGlossaryEntryEditorPaneTarget(
-        glossaryEntryEditorPaneRef.current,
-        next
+      !entry ||
+      !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+        projectGeneration
       )
     ) {
-      setGlossaryEntryEditorPane(next);
-      return;
+      return false;
     }
 
-    if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
-      return;
-    }
-
-    setGlossaryEntryEditorPane(next);
+    openEditorFromUi(editorId, {
+      history: "record",
+      resolvedEditor: createGlossaryDescriptionCurrentEditor(entry)
+    });
+    return true;
   }
 
-  // #436 Slice 11: closing the pane (header close button, the dormant
-  // `closePane` command) gates on the same dirty confirm.
-  async function closeGlossaryEntryEditorPaneWithConfirm(): Promise<void> {
-    if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
+  // A NEW entry opens as an unsaved glossary Description tab (the former
+  // pane's create mode): nothing is written to the DB until its first
+  // Ctrl+S, which creates the entry and re-keys the tab to the real entry id
+  // (see `saveGlossaryDescriptionEditor`). Each call opens a fresh tab.
+  function openNewGlossaryDescriptionTab(presetRepresentative?: string): void {
+    if (!projectRef.current || isLifecycleCommitBarrierActiveNow()) {
       return;
     }
 
-    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
+    const editor = createNewGlossaryDescriptionCurrentEditor(
+      presetRepresentativeOrDefault(presetRepresentative),
+      createUuidv7()
+    );
+    const editorId = createGlossaryDescriptionEditorId(editor.entryId);
+
+    openEditorFromUi(editorId, { history: "record", resolvedEditor: editor });
   }
 
-  // #436 Slice 12: shared by Ctrl+G (source editor-selection) and, in a
-  // later slice, the editor right-click context menu (a different member of
-  // GlossaryEntryEditorPaneSource) — see glossarySelectionResolution.ts's
-  // doc comment. Resolves the selection against the CURRENT `glossaryEntries`
-  // (kept fresh by the effect that also feeds the Glossary sidebar /
-  // Management tab — see its own `glossaryRefreshToken` dependency), then
-  // routes through the SAME dirty-confirm transition every other "open
-  // create/edit pane" caller uses — never touches pane state directly.
-  async function openGlossaryEntryEditorPaneFromSelection(
-    selectedText: string,
-    source: GlossaryEntryEditorPaneSource
+  // A new-entry tab's EditorId changes on its first save (local id → real
+  // entry id). A close flow that saved it first ("保存して閉じる") still holds
+  // the old id, so it closes whatever that id became.
+  const savedGlossaryDescriptionEditorIdsRef = useRef(
+    new Map<string, EditorId>()
+  );
+
+  function currentIdForSavedGlossaryDescriptionEditor(
+    editorId: EditorId
+  ): EditorId {
+    return (
+      savedGlossaryDescriptionEditorIdsRef.current.get(
+        serializeEditorId(editorId)
+      ) ?? editorId
+    );
+  }
+
+  // #436 Slice 12 / #573 Slice 7: Ctrl+G. Resolves the selection against the
+  // CURRENT `glossaryEntries`: an exact match opens that entry's tab, no
+  // match opens a new-entry tab preset to the selection, several matches only
+  // report status.
+  async function openGlossaryDescriptionTabFromSelection(
+    selectedText: string
   ): Promise<void> {
     const resolution = resolveGlossaryEntryEditorPaneTargetFromSelection(
       selectedText,
@@ -1258,18 +1265,11 @@ export function App(): JSX.Element {
     }
 
     if (resolution.kind === "create") {
-      await transitionGlossaryEntryEditorPane(
-        openGlossaryEntryCreatePane({
-          source,
-          presetRepresentative: resolution.presetRepresentative
-        })
-      );
+      openNewGlossaryDescriptionTab(resolution.presetRepresentative);
       return;
     }
 
-    await transitionGlossaryEntryEditorPane(
-      openGlossaryEntryEditPane({ source, entryId: resolution.entryId })
-    );
+    await openGlossaryDescriptionTab(resolution.entryId);
   }
 
   // #436 Slice 12: the Ctrl+G keymap extension's `requestOpen` bubbles up to
@@ -1285,8 +1285,6 @@ export function App(): JSX.Element {
     );
   }
 
-  const [glossaryEntryEditorPaneHeight, setGlossaryEntryEditorPaneHeight] =
-    useState(GLOSSARY_ENTRY_EDITOR_PANE_DEFAULT_HEIGHT);
   const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
   // #375: the Glossary Tag Manager special tab. Project-scoped (tags are
   // project-owned) — closed on project close. Opening / activating it NEVER
@@ -1943,28 +1941,6 @@ export function App(): JSX.Element {
       );
     }
   });
-  // #436 Slice 6 remediation: top-edge drag resizes the Glossary Entry Editor
-  // Pane. Dragging up (negative deltaY) grows it; clamped against the editor
-  // area's height so the tab content above keeps a usable minimum.
-  const glossaryEntryEditorPaneHeightAtDragStartRef = useRef(
-    glossaryEntryEditorPaneHeight
-  );
-  const glossaryEntryEditorPaneResizeDrag = useVerticalDrag({
-    onDragStart: () => {
-      glossaryEntryEditorPaneHeightAtDragStartRef.current =
-        glossaryEntryEditorPaneHeight;
-    },
-    onDragMove: (deltaY) => {
-      const nextHeight = clampGlossaryEntryEditorPaneHeight(
-        glossaryEntryEditorPaneHeightAtDragStartRef.current - deltaY,
-        editorAreaBodyRef.current?.clientHeight
-      );
-
-      setGlossaryEntryEditorPaneHeight((current) =>
-        current === nextHeight ? current : nextHeight
-      );
-    }
-  });
   const {
     settings,
     displayLanguage,
@@ -2361,7 +2337,6 @@ export function App(): JSX.Element {
   useEffect(() => {
     function handleWindowResize(): void {
       const sidebarContainerWidth = mainAreaRef.current?.clientWidth;
-      const editorAreaHeight = editorAreaBodyRef.current?.clientHeight;
 
       setLayout((current) => {
         const nextWidth =
@@ -2378,17 +2353,6 @@ export function App(): JSX.Element {
           sidebar: { ...current.sidebar, width: nextWidth }
         };
       });
-
-      // #436 Slice 6 remediation: keep the pane height within the new area.
-      if (editorAreaHeight !== undefined) {
-        setGlossaryEntryEditorPaneHeight((current) => {
-          const next = clampGlossaryEntryEditorPaneHeight(
-            current,
-            editorAreaHeight
-          );
-          return next === current ? current : next;
-        });
-      }
     }
 
     window.addEventListener("resize", handleWindowResize);
@@ -2823,8 +2787,14 @@ export function App(): JSX.Element {
 
     return dirty;
   }, [openDocumentsState]);
+  // #573 Slice 3: the active tab is a glossary Description editor (project
+  // glossary data, but no backing file / CurrentDocument).
+  const isGlossaryDescriptionEditorActive =
+    !isEditorAreaSpecialTabActive &&
+    currentEditor?.kind === "glossaryDescription";
   const isReadOnlyProjectOwnedEditor =
-    isReadOnlyProject && isProjectOwnedCurrentEditor;
+    isReadOnlyProject &&
+    (isProjectOwnedCurrentEditor || isGlossaryDescriptionEditorActive);
   // #529: shared enable gate for the Heading / Bold / Italic / Strikethrough
   // / Link toolbar commands (and, since #527's table gate had the same
   // Markdown-only requirement gap, the Table command too) — reuses the
@@ -2833,8 +2803,13 @@ export function App(): JSX.Element {
   // `activeMarkdownDocument !== null`, which allowed these commands while a
   // special tab (Settings, Glossary Manager, ...) was showing, or on a
   // non-Markdown (.txt) document.
+  //
+  // #573 Slice 3: widened from "file-backed Markdown document" to "Markdown
+  // editing target", which also covers a glossary Description tab.
+  const activeEditorIsMarkdownEditingTarget =
+    activeEditorIsMarkdown || isGlossaryDescriptionEditorActive;
   const canUseMarkdownToolbarCommands =
-    activeEditorIsMarkdown && !isReadOnlyProjectOwnedEditor;
+    activeEditorIsMarkdownEditingTarget && !isReadOnlyProjectOwnedEditor;
   // #531: shared enable gate for the Ruby / Emphasis Mark toolbar buttons —
   // deliberately looser than `canUseMarkdownToolbarCommands` above, since the
   // existing Ctrl+R / Ctrl+. shortcuts already work on `.txt` documents
@@ -2844,23 +2819,29 @@ export function App(): JSX.Element {
   // matching `canUseMarkdownToolbarCommands`'s other two conditions.
   const hasEditableTextLikeDocument =
     !isEditorAreaSpecialTabActive &&
-    activeMarkdownDocument !== null &&
+    (activeMarkdownDocument !== null || isGlossaryDescriptionEditorActive) &&
     !isReadOnlyProjectOwnedEditor;
   // #535: narrower than `canUseMarkdownToolbarCommands` — the inserted
   // Markdown image link's relative path only makes sense for a project-owned
   // document (the attachment folder itself is always project-relative).
+  // #573 Slice 6: a glossary Description tab also inserts images, with links
+  // relative to the project root (see `handleInsertImage`).
   const canInsertImage =
-    canUseMarkdownToolbarCommands && activeMarkdownDocument?.kind === "project";
+    canUseMarkdownToolbarCommands &&
+    (activeMarkdownDocument?.kind === "project" ||
+      isGlossaryDescriptionEditorActive);
   // #548: Preview availability is no longer gated by document extension or
   // renderer choice. The toggle controls only pane visibility; the renderer
   // dropdown controls how the current text-like document is interpreted.
   const isPreviewEligible =
     !isEditorAreaSpecialTabActive &&
-    activeMarkdownDocument !== null;
+    (activeMarkdownDocument !== null || isGlossaryDescriptionEditorActive);
   const canSave =
-    !isEditorAreaSpecialTabActive &&
-    currentEditor?.kind === "markdown" &&
-    Boolean(activeMarkdownDocument);
+    (!isEditorAreaSpecialTabActive &&
+      currentEditor?.kind === "markdown" &&
+      Boolean(activeMarkdownDocument)) ||
+    // #573 Slice 4: Ctrl+S saves a glossary Description tab's draft.
+    isGlossaryDescriptionEditorActive;
   const canSaveAs =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -3170,14 +3151,19 @@ export function App(): JSX.Element {
         projectIsOpen: project !== null,
         projectAccessReadWrite: isReadWriteProject,
         projectAccessReadOnly: isReadOnlyProject,
+        // #573 Slice 4: a glossary Description tab is a saveable working
+        // copy too. `editor.kind.markdown` stays false for it, so Save As /
+        // paragraph indent (gated on both keys) remain unavailable.
         editorHasDocument:
-          !isEditorAreaSpecialTabActive &&
-          currentEditor?.kind === "markdown" &&
-          Boolean(activeMarkdownDocument),
+          (!isEditorAreaSpecialTabActive &&
+            currentEditor?.kind === "markdown" &&
+            Boolean(activeMarkdownDocument)) ||
+          isGlossaryDescriptionEditorActive,
         editorIsDirty: !isEditorAreaSpecialTabActive && isDirty,
         editorKindMarkdown:
           !isEditorAreaSpecialTabActive && currentEditor?.kind === "markdown",
-        editorDocumentProjectOwned: isProjectOwnedCurrentEditor,
+        editorDocumentProjectOwned:
+          isProjectOwnedCurrentEditor || isGlossaryDescriptionEditorActive,
         // #318: same source of truth as the Rename target resolution — an
         // active Markdown editor over a current-project document. Untitled,
         // external / standalone, project-root-outside, and other-project
@@ -3443,11 +3429,24 @@ export function App(): JSX.Element {
   // window, the info toast below explains why nothing was inserted.
   const handleInsertImage = useCallback(
     async (opener: Element | null) => {
+      // #573 Slice 6: the link base follows the surface's Preview — a
+      // project document's own folder, or the project root for a glossary
+      // Description tab (which has no source file).
       const doc = activeMarkdownDocument;
-      if (!doc || doc.kind !== "project") {
+      let imageLinkBase: MarkdownImageLinkBase;
+      if (doc?.kind === "project") {
+        imageLinkBase = {
+          kind: "sourceFile",
+          sourceMarkdownProjectRelativePath: doc.relativePath
+        };
+      } else if (currentEditor?.kind === "glossaryDescription") {
+        imageLinkBase = { kind: "projectRoot" };
+      } else {
         return;
       }
-      const markdownRelativePath = doc.relativePath;
+      // #573 Slice 6: the link is built for THIS editor, so it must still be
+      // the active one when the (async) copy completes.
+      const targetEditorId = activeDocument?.id ?? null;
 
       let saveDirectory = currentImageAttachmentSettings().saveDirectory;
 
@@ -3511,15 +3510,21 @@ export function App(): JSX.Element {
       }
 
       const selection = paragraphIndentControllerRef.current?.getSelection();
-      if (!selection) {
+      const currentActiveId = openDocumentsStateRef.current.activeDocumentId;
+      if (
+        !selection ||
+        targetEditorId === null ||
+        currentActiveId === null ||
+        !editorIdEquals(targetEditorId, currentActiveId)
+      ) {
         notifyImageAttachmentInfo(
           translate("imageInsertion.toast.targetChanged")
         );
         return;
       }
 
-      const linkText = markdownImageLinksForAttachments({
-        markdownRelativePath,
+      const linkText = markdownImageLinksForAttachmentsFromBase({
+        base: imageLinkBase,
         imageRelativePaths: copyResult.relativePaths
       });
 
@@ -3532,7 +3537,7 @@ export function App(): JSX.Element {
         notifyImageAttachmentSuccess(translate("imageInsertion.toast.inserted"));
       }
     },
-    [activeMarkdownDocument, translate]
+    [activeMarkdownDocument, activeDocument?.id, currentEditor?.kind, translate]
   );
 
   // #529 / #531: the keyboard-shortcut path for the Markdown-specific
@@ -3810,18 +3815,10 @@ export function App(): JSX.Element {
     registerGlossaryCommands(
       registry,
       {
-        // #436 Phase 8-0 PoC (Slice 5): opening a glossary entry no longer
-        // opens a `glossaryEntry` editor tab — it opens the bottom Glossary
-        // Entry Editor Pane in edit mode. Every caller (Glossary side pane
-        // "…", the Command Palette @-jump, occurrence tracking) routes here.
-        // #436 Slice 11: routed through the dirty-confirm transition — a
-        // pending unsaved pane draft is confirmed before switching entries.
-        openGlossaryEntry: async (entryId) => {
-          await transitionGlossaryEntryEditorPane(
-            openGlossaryEntryEditPane({ source: "glossary-pane", entryId })
-          );
-          return true;
-        },
+        // #573 Slice 7: opening a glossary entry opens (or focuses) its
+        // glossary Description tab. Every caller (Glossary side pane "…",
+        // the Command Palette @-jump, occurrence tracking) routes here.
+        openGlossaryEntry: (entryId) => openGlossaryDescriptionTab(entryId),
         openGlossaryTagManager: () => {
           openGlossaryTagManagerTab();
           return true;
@@ -3833,35 +3830,21 @@ export function App(): JSX.Element {
       },
       createGlossaryCommandTitles(translate)
     );
-    // #436 Phase 8-0 PoC (Slice 3): the unified Glossary Entry Editor Pane
-    // entry points. The Glossary side pane's "語彙を追加", the glossary
-    // settings screen, and (Slice 12) Ctrl+G all dispatch through these
-    // commands. The editor context menu still routes through the same
-    // `openGlossaryEntryEditorPaneFromSelection` in a later slice.
+    // #436 Slice 3 / #573 Slice 7: the glossary entry create / edit entry
+    // points (Glossary side pane "語彙を追加", Glossary Management add / edit,
+    // Ctrl+G). Their command ids predate #573 and are kept stable; they now
+    // open glossary Description tabs instead of the removed bottom pane.
     registerGlossaryEntryEditorPaneCommands(
       registry,
       {
-        // #436 Slice 11: routed through the dirty-confirm transition/close
-        // helpers — a pending unsaved pane draft is confirmed before
-        // switching to a different create/edit target or closing outright.
-        openGlossaryEntryCreatePane: async (options) => {
-          await transitionGlossaryEntryEditorPane(
-            openGlossaryEntryCreatePane(options)
-          );
+        openGlossaryEntryCreatePane: (options) => {
+          openNewGlossaryDescriptionTab(options.presetRepresentative);
         },
         openGlossaryEntryEditPane: async (options) => {
-          await transitionGlossaryEntryEditorPane(
-            openGlossaryEntryEditPane(options)
-          );
-        },
-        closeGlossaryEntryEditorPane: async () => {
-          await closeGlossaryEntryEditorPaneWithConfirm();
+          await openGlossaryDescriptionTab(options.entryId);
         },
         openGlossaryEntryEditorPaneFromSelection: async (selectedText) => {
-          await openGlossaryEntryEditorPaneFromSelection(
-            selectedText,
-            "editor-selection"
-          );
+          await openGlossaryDescriptionTabFromSelection(selectedText);
         }
       },
       createGlossaryEntryEditorPaneCommandTitles(translate)
@@ -4129,21 +4112,13 @@ export function App(): JSX.Element {
   const projectFileQuickOpenDocuments = project?.documents ?? [];
 
   async function confirmProjectSwitch(): Promise<boolean> {
-    const markdownProceed = await confirmProjectSwitchWithUnsavedDocuments({
+    // #573 Slice 7: glossary Description tabs are open editors, so this one
+    // unsaved-documents check covers them too (the #436 pane had its own).
+    return confirmProjectSwitchWithUnsavedDocuments({
       state: openDocumentsState,
       translate,
       choiceDialog
     });
-
-    if (!markdownProceed) {
-      return false;
-    }
-
-    // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm —
-    // separate from the Markdown check above (the pane's draft was never an
-    // open editor). Asked only once the Markdown check already proceeded, so
-    // a Markdown cancel never also prompts about the glossary pane.
-    return confirmGlossaryEntryEditorPaneDirtyIfNeeded();
   }
 
   async function resolveProjectOpenResult(
@@ -4180,19 +4155,29 @@ export function App(): JSX.Element {
     }
 
     setOpenDocumentsState((state) =>
-      updateActiveOpenDocument(state, (document) =>
-        updateCurrentDocumentContent(
-          document,
-          nextContent,
-          nextLineEndingBreaks
-        )
-      )
+      // #573 Slice 3: a glossary Description tab keeps its text in the tab's
+      // in-memory draft only — never written to the DB here.
+      activeCurrentEditor(state)?.kind === "glossaryDescription"
+        ? updateActiveOpenEditor(state, (editor) =>
+            updateGlossaryDescriptionEditorText(
+              editor,
+              nextContent,
+              nextLineEndingBreaks
+            )
+          )
+        : updateActiveOpenDocument(state, (document) =>
+            updateCurrentDocumentContent(
+              document,
+              nextContent,
+              nextLineEndingBreaks
+            )
+          )
     );
   }
 
-  // #436 Phase 8-0 PoC (Slice 3): the Glossary side pane's "語彙を追加" opens
-  // the bottom Glossary Entry Editor Pane in create mode. (Slice 5 removed the
-  // old inline create form and the immediate-DB-create command it used.)
+  // #436 Slice 3 / #573 Slice 7: the Glossary side pane's "語彙を追加" opens a
+  // new, unsaved glossary Description tab (nothing is written to the DB until
+  // its first save).
   function openGlossaryCreateEntryPaneFromSidebar(): void {
     executeUiCommand(
       glossaryEntryEditorPaneCommandIds.openCreatePane,
@@ -4204,16 +4189,12 @@ export function App(): JSX.Element {
     );
   }
 
-  // #436 Phase 8-0 PoC (Slice 9): create a new Glossary entry from the bottom
-  // pane's create-mode session (`GlossaryEntryEditorSession` over the SAME
-  // `GlossaryEditor` edit mode uses). Persists through the existing glossary
-  // create IPC, refreshes every glossary consumer, and NEVER opens a
-  // glossary entry tab. Mirrors `handleSaveGlossaryEntryFromPane` below:
-  // resolves the saved entry (so the caller can re-key local atom ids AND
-  // flip the session from create-like to edit-like via
-  // `applyGlossaryEntryDraftSaveResult`); rethrows after surfacing the error
-  // so the caller marks the draft `saveFailed` and the pane stays open.
-  async function handleCreateGlossaryEntryFromPane(
+  // #436 Slice 9 / #573 Slice 7: persist a NEW glossary entry (a new-entry
+  // glossary Description tab's first save) through the existing glossary
+  // create IPC and refresh every glossary consumer. Resolves the saved entry
+  // (so the caller can rebase its draft and re-key the tab); rethrows after
+  // surfacing the error, leaving the caller's draft untouched.
+  async function createGlossaryEntryFromDraft(
     input: CreateGlossaryEntryInput
   ): Promise<GlossaryEntry> {
     const projectGeneration =
@@ -4252,23 +4233,37 @@ export function App(): JSX.Element {
     }
   }
 
-  // #436 Phase 8-0 PoC (Slice 8): load the entry an edit-mode pane targets.
-  // A thin forward of the existing glossary IPC — `GlossaryEntryEditForm`
-  // owns the loading / failed / ready state and the race guard.
-  async function handleLoadGlossaryEntryFromPane(
-    entryId: GlossaryEntryId
-  ): Promise<GlossaryEntry | null> {
-    return window.pergamum.glossary.getById(entryId);
+  // #573 Slice 5: a metadata edit from a glossary Description tab's metadata
+  // panel mutates THAT tab's own draft — the same draft Description edits and
+  // Ctrl+S use, so dirty / save / close confirm need nothing extra.
+  function updateGlossaryDescriptionDraft(
+    entryId: GlossaryEntryId,
+    update: (draft: GlossaryEntryDraft) => GlossaryEntryDraft
+  ): void {
+    if (!canMutateActiveWorkingCopy()) {
+      return;
+    }
+
+    setOpenDocumentsState((state) =>
+      updateOpenEditor(
+        state,
+        createGlossaryDescriptionEditorId(entryId),
+        (editor) => updateGlossaryDescriptionEditorDraft(editor, update)
+      )
+    );
   }
 
-  // #436 Phase 8-0 PoC (Slice 8): save an edit-mode pane's draft. This is the
-  // SAME glossary update IPC and save-failed dialog the old glossaryEntry
-  // tab's Ctrl+S save used (`saveGlossaryEntryByEditorId`) — reused here
-  // without its `openDocumentsState` / `EditorId` plumbing, since the pane is
-  // never an open editor tab. Resolves the saved entry (so the caller can
-  // re-key local atom ids via `applyGlossaryEntryDraftSaveResult`); rethrows
-  // after surfacing the error so the caller marks the draft `saveFailed`.
-  async function handleSaveGlossaryEntryFromPane(
+  const glossaryDescriptionMetadataConfig: GlossaryDescriptionMetadataConfig = {
+    availableTags: glossaryTags,
+    onUpdateDraft: updateGlossaryDescriptionDraft,
+    onOpenTagManager: openGlossaryTagManagerTab
+  };
+
+  // #436 Slice 8 / #573 Slice 7: persist an EXISTING glossary entry's draft
+  // (a glossary Description tab's save) through the existing glossary update
+  // IPC and save-failed dialog. Resolves the saved entry (so the caller can
+  // rebase its draft); rethrows after surfacing the error.
+  async function updateGlossaryEntryFromDraft(
     input: UpdateGlossaryEntryInput
   ): Promise<GlossaryEntry> {
     const projectGeneration =
@@ -4304,49 +4299,6 @@ export function App(): JSX.Element {
       }
 
       throw error;
-    }
-  }
-
-  // #436 Phase 8-0 PoC (Slice 8): delete an entry from the bottom pane's edit
-  // mode. Reuses the SAME destructive confirm dialog (`confirmDeleteGlossaryEntry`)
-  // and the same in-flight guard `deleteActiveGlossaryEntry` / the Glossary
-  // Management delete use — but, unlike those, there is no glossaryEntry tab
-  // to invalidate or close here, only the pane (the caller closes it).
-  async function handleDeleteGlossaryEntryFromPane(
-    draft: GlossaryEntryDraft
-  ): Promise<boolean> {
-    if (glossaryDeleteInFlightRef.current) {
-      return false;
-    }
-
-    glossaryDeleteInFlightRef.current = true;
-
-    try {
-      if (!(await confirmDeleteGlossaryEntry(draft))) {
-        return false;
-      }
-
-      const result = await window.pergamum.glossary.delete(draft.entry.id);
-
-      if (!result.deleted) {
-        return false;
-      }
-
-      setGlossaryRefreshToken((token) => token + 1);
-      setGlossaryOccurrenceTrackingState((state) =>
-        state.kind === "active" && state.entryId === draft.entry.id
-          ? inactiveGlossaryOccurrenceTrackingState
-          : state
-      );
-      return true;
-    } catch (error) {
-      setStatus({
-        key: "status.commandFailed",
-        values: { message: errorMessage(error, translate) }
-      });
-      return false;
-    } finally {
-      glossaryDeleteInFlightRef.current = false;
     }
   }
 
@@ -4445,12 +4397,9 @@ export function App(): JSX.Element {
     return entries;
   }
 
-  // #436 Phase 8-0 PoC (Slice 4): the Glossary Management tab's "語彙追加"
-  // button and its per-row edit action open the bottom Glossary Entry Editor
-  // Pane (create / edit mode, source "glossary-settings") instead of
-  // persisting a placeholder entry and opening a glossary entry editor tab.
-  // No DB write and no form yet — later slices flesh out the pane and remove
-  // the old glossary entry tab path.
+  // #436 Slice 4 / #573 Slice 7: the Glossary Management tab's "語彙追加"
+  // button opens a new, unsaved glossary Description tab and its per-row
+  // edit action opens (or focuses) that entry's tab.
   function handleAddGlossaryEntryFromManager(): void {
     executeUiCommand(
       glossaryEntryEditorPaneCommandIds.openCreatePane,
@@ -4514,6 +4463,14 @@ export function App(): JSX.Element {
         state.kind === "active" && state.entryId === entryId
           ? inactiveGlossaryOccurrenceTrackingState
           : state
+      );
+      // #573 Slice 7: the entry is gone, so its glossary Description tab (if
+      // open) closes too — without a dirty prompt: the user just confirmed
+      // deleting the entry itself, and its draft could no longer be saved.
+      const deletedEntryTabId = createGlossaryDescriptionEditorId(entryId);
+      editorNavigation.invalidateEditor(deletedEntryTabId);
+      setOpenDocumentsState((state) =>
+        closeOpenEditor(state, deletedEntryTabId)
       );
     } catch (error) {
       if (
@@ -5223,6 +5180,130 @@ export function App(): JSX.Element {
     await discardRecoveryCandidates("all", recoveryIds);
   }
 
+  // #573 Slice 9: restore ONE glossary Recovery candidate into a dirty
+  // glossary Description tab. Main has already checked the row belongs to
+  // the open project and parsed the draft.
+  //   - saved entry still exists → that entry's tab (focused, or opened)
+  //     carrying the recovered draft; refused while that tab has unsaved
+  //     edits of its own (never silently overwritten — the row is kept),
+  //   - never-saved / deleted entry → an unsaved new-entry tab (first
+  //     Ctrl+S creates the entry; nothing is written to the DB here).
+  // Returns whether a tab opened, the row should fall back to `.recovered.md`,
+  // or it is kept for later.
+  async function restoreGlossaryRecoveryCandidate(
+    recoveryId: string
+  ): Promise<"opened" | "fallback" | "kept"> {
+    if (isLifecycleCommitBarrierActiveNow()) {
+      return "kept";
+    }
+
+    let read: Awaited<
+      ReturnType<typeof window.pergamum.recovery.readGlossaryCandidateDraft>
+    >;
+
+    try {
+      read = await window.pergamum.recovery.readGlossaryCandidateDraft({
+        recoveryId
+      });
+    } catch {
+      setStatus({ key: "status.recoveryRestoreFailed" });
+      return "kept";
+    }
+
+    if (!read.ok) {
+      return "kept";
+    }
+
+    switch (read.result.kind) {
+      case "missing":
+        return "kept";
+      case "differentProject":
+        setStatus({ key: "status.recoveryGlossaryOtherProject" });
+        return "kept";
+      case "invalid":
+        return "fallback";
+      case "draft":
+        break;
+    }
+
+    const { draft } = read.result;
+    let currentEntry: GlossaryEntry | null = null;
+
+    if (draft.entryId !== null) {
+      try {
+        currentEntry = await window.pergamum.glossary.getById(draft.entryId);
+      } catch {
+        currentEntry = null;
+      }
+    }
+
+    if (currentEntry) {
+      const tabId = createGlossaryDescriptionEditorId(currentEntry.id);
+      const openTab = findOpenDocument(openDocumentsStateRef.current, tabId);
+
+      if (openTab && isCurrentEditorDirty(openTab.editor)) {
+        setStatus({
+          key: "status.recoveryGlossaryTabBusy",
+          values: { name: currentEditorTitle(openTab.editor) }
+        });
+        return "kept";
+      }
+
+      const recoveredEditor = glossaryEditorFromRecoveryDraft(
+        draft,
+        currentEntry,
+        currentEntry.id
+      );
+
+      if (openTab) {
+        // A clean tab (e.g. from session restore) takes the recovered draft
+        // — no duplicate tab for the same entry.
+        const replacement = replaceOpenEditor(
+          openDocumentsStateRef.current,
+          tabId,
+          recoveredEditor,
+          activeProjectContext
+        );
+
+        openDocumentsStateRef.current = replacement.state;
+        setOpenDocumentsState(replacement.state);
+        return (await openEditorFromExplicitActivation(tabId))
+          ? "opened"
+          : "kept";
+      }
+
+      return (await openEditorFromExplicitActivation(tabId, {
+        history: "record",
+        resolvedEditor: recoveredEditor
+      }))
+        ? "opened"
+        : "kept";
+    }
+
+    // Never saved, or the saved entry was deleted since: recover as a new,
+    // unsaved entry.
+    let localId = draft.localId ?? createUuidv7();
+
+    if (
+      hasOpenDocument(
+        openDocumentsStateRef.current,
+        createGlossaryDescriptionEditorId(localId)
+      )
+    ) {
+      localId = createUuidv7();
+    }
+
+    return (await openEditorFromExplicitActivation(
+      createGlossaryDescriptionEditorId(localId),
+      {
+        history: "record",
+        resolvedEditor: glossaryEditorFromRecoveryDraft(draft, null, localId)
+      }
+    ))
+      ? "opened"
+      : "kept";
+  }
+
   async function handleRecoveryRestoreSelected(
     recoveryIds: readonly string[]
   ): Promise<void> {
@@ -5236,6 +5317,39 @@ export function App(): JSX.Element {
         candidate
       ])
     );
+
+    // #573 Slice 9: glossary candidates restore into glossary Description
+    // tabs through their own explicit-restore IPC (two-phase: finalize only
+    // what opened). A payload that cannot become a tab falls back to the
+    // `.recovered.md` file path below — Description only, metadata lost.
+    const glossaryFallbackIds = new Set<string>();
+    const glossaryOpenedIds: string[] = [];
+
+    for (const recoveryId of recoveryIds) {
+      if (byId.get(recoveryId)?.documentType !== "glossary.description") {
+        continue;
+      }
+
+      const outcome = await restoreGlossaryRecoveryCandidate(recoveryId);
+
+      if (outcome === "opened") {
+        glossaryOpenedIds.push(recoveryId);
+      } else if (outcome === "fallback") {
+        glossaryFallbackIds.add(recoveryId);
+      }
+    }
+
+    if (glossaryOpenedIds.length > 0) {
+      try {
+        await window.pergamum.recovery.finalizeRestoredCandidates({
+          recoveryIds: glossaryOpenedIds
+        });
+      } catch {
+        // The recovered drafts are already open in tabs — a finalize failure
+        // just leaves the rows, which is safe.
+      }
+    }
+
     const items: { recoveryId: string; targetPath?: string }[] = [];
 
     for (const recoveryId of recoveryIds) {
@@ -5244,15 +5358,26 @@ export function App(): JSX.Element {
         continue;
       }
 
+      const isGlossaryFallback =
+        candidate.documentType === "glossary.description";
+
+      if (isGlossaryFallback && !glossaryFallbackIds.has(recoveryId)) {
+        continue;
+      }
+
       if (
         candidate.documentType === "markdown.untitled" ||
+        isGlossaryFallback ||
         !candidate.hasFilePath
       ) {
         // Untitled has no source directory — always ask for a save
         // location (project root is only the default). Cancel keeps the row.
-        const defaultPath = project
-          ? `${project.rootPath.replace(/[\\/]+$/, "")}/${candidate.displayName}`
+        const defaultName = isGlossaryFallback
+          ? `${candidate.displayName.replace(/[\\/:*?"<>|]/g, "_")}.md`
           : candidate.displayName;
+        const defaultPath = project
+          ? `${project.rootPath.replace(/[\\/]+$/, "")}/${defaultName}`
+          : defaultName;
         const selected =
           await window.pergamum.files.selectMarkdownSavePath(defaultPath);
         if (!selected) {
@@ -5558,8 +5683,9 @@ export function App(): JSX.Element {
       saveDirtyEditorBeforeClose: (targetId) =>
         saveFile({ editorId: targetId }),
       onClose: (targetId) => {
-        editorNavigation.invalidateEditor(targetId);
-        setOpenDocumentsState((state) => closeOpenEditor(state, targetId));
+        const closingId = currentIdForSavedGlossaryDescriptionEditor(targetId);
+        editorNavigation.invalidateEditor(closingId);
+        setOpenDocumentsState((state) => closeOpenEditor(state, closingId));
       }
     });
   }
@@ -5601,8 +5727,9 @@ export function App(): JSX.Element {
       choiceDialog,
       saveDirtyEditorBeforeClose: (targetId) => saveFile({ editorId: targetId }),
       onClose: (targetId) => {
-        editorNavigation.invalidateEditor(targetId);
-        setOpenDocumentsState((state) => closeOpenEditor(state, targetId));
+        const closingId = currentIdForSavedGlossaryDescriptionEditor(targetId);
+        editorNavigation.invalidateEditor(closingId);
+        setOpenDocumentsState((state) => closeOpenEditor(state, closingId));
       }
     });
   }
@@ -7262,6 +7389,12 @@ export function App(): JSX.Element {
       return "ignored";
     }
 
+    // #573 Slice 4: a glossary Description tab has no file — it saves its
+    // whole draft through the existing glossary update path instead.
+    if (targetOpenDocument.editor.kind === "glossaryDescription") {
+      return await saveGlossaryDescriptionEditor(targetOpenDocument.id);
+    }
+
     const targetEditor = targetOpenDocument.editor;
     const targetIsDirty = isCurrentEditorDirty(targetEditor);
     const targetCanSave = true;
@@ -7273,20 +7406,17 @@ export function App(): JSX.Element {
         editorIdKind,
         operation: "save",
         isDirty: targetIsDirty,
-        canSave: options.forceSaveAs
-          ? targetEditor.kind === "markdown"
-          : targetCanSave
+        canSave: targetCanSave
       }
     });
 
     const result = await saveInFlightGuard.run<SaveFileOutcome>(
       async () => {
         const saveTargetKind: DebugLogSaveTargetKind =
-          targetEditor.kind === "markdown" &&
-          (options.forceSaveAs ||
-            !isProjectCurrentDocument(targetEditor.document))
+          options.forceSaveAs ||
+          !isProjectCurrentDocument(targetEditor.document)
             ? "standaloneMarkdown"
-            : debugSaveTargetKind(targetEditor);
+            : debugSaveTargetKind(targetEditor.document);
 
         logRendererDebugEvent({
           level: "debug",
@@ -7573,6 +7703,182 @@ export function App(): JSX.Element {
     return result ?? "ignored";
   }
 
+  // #573 Slice 4: save a glossary Description tab. Validates the WHOLE draft,
+  // then persists it through the existing glossary update IPC — or, for a
+  // new-entry tab's first save (#573 Slice 7), the glossary create IPC —
+  // (`updateGlossaryEntryFromDraft` / `createGlossaryEntryFromDraft`: also
+  // glossary refresh, status and save-failed dialog). On success the tab's
+  // saved baseline (`draft.entry`) becomes the saved entry; on any failure
+  // the draft (and so the dirty state) is left untouched.
+  async function saveGlossaryDescriptionEditor(
+    editorId: EditorId
+  ): Promise<SaveFileOutcome> {
+    const openDocument = findOpenDocument(
+      openDocumentsStateRef.current,
+      editorId
+    );
+
+    if (openDocument?.editor.kind !== "glossaryDescription") {
+      return "ignored";
+    }
+
+    const { draft } = openDocument.editor;
+    // #573 Slice 9: the Recovery row this save makes obsolete (a new entry's
+    // temporary-id row, or the entry's own row).
+    const preSaveRecoveryKey = recoveryDocumentKeyForGlossaryEditor(
+      openDocument.editor,
+      projectRef.current
+    );
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "save.requested",
+      details: {
+        editorIdKind: "glossaryDescription",
+        operation: "save",
+        isDirty: isCurrentEditorDirty(openDocument.editor),
+        canSave: projectRef.current?.accessMode.kind === "readWrite"
+      }
+    });
+
+    if (projectRef.current?.accessMode.kind !== "readWrite") {
+      setStatus({
+        key: "status.saveFailed",
+        values: { message: translate("command.disabled.readOnlyProject") }
+      });
+      return "rejected";
+    }
+
+    const validity = glossaryEntryDraftValidity(draft);
+
+    if (!validity.ok) {
+      const message = translate(
+        validity.reason === "noAtoms"
+          ? "glossaryEditor.validity.noAtoms"
+          : "glossaryEditor.validity.duplicateAtomValue"
+      );
+
+      setStatus({ key: "status.saveFailed", values: { message } });
+      notificationController.notify({ message });
+      return "rejected";
+    }
+
+    const result = await saveInFlightGuard.run<SaveFileOutcome>(
+      async () => {
+        let savedEntry: GlossaryEntry;
+        // #573 Slice 7: a new-entry tab's first save creates the entry.
+        const isNewEntry = glossaryEntryDraftIsNew(draft);
+
+        try {
+          savedEntry = isNewEntry
+            ? await createGlossaryEntryFromDraft(
+                glossaryEntryDraftCreateInput(draft)
+              )
+            : await updateGlossaryEntryFromDraft(
+                glossaryEntryDraftUpdateInput(draft)
+              );
+        } catch (error) {
+          // Status + save-failed dialog were already surfaced; the tab stays
+          // open and dirty with the user's edits intact. #573 Slice 5: a
+          // surface already used by another entry gets the same specific
+          // message the former Glossary Entry Editor Pane showed.
+          const duplicateAtomValue =
+            error instanceof Error
+              ? parseGlossaryAtomValueConflictMessage(error.message)
+              : null;
+
+          if (duplicateAtomValue !== null) {
+            notificationController.notify({
+              message: translate(
+                "glossaryEntryEditorPane.saveFailed.duplicateAtomValue",
+                { value: duplicateAtomValue }
+              )
+            });
+          }
+          return "failed";
+        }
+
+        // Rebase the tab onto the saved entry (a new entry's tab is also
+        // re-keyed from its local id to the real entry id). The ref is synced
+        // synchronously — like the Markdown save path — so a lifecycle
+        // Save All's follow-up dirty check sees the saved state.
+        const latestOpenDocument = findOpenDocument(
+          openDocumentsStateRef.current,
+          editorId
+        );
+
+        if (latestOpenDocument) {
+          const replacement = replaceOpenEditor(
+            openDocumentsStateRef.current,
+            editorId,
+            applyGlossaryDescriptionEditorSaveResult(
+              latestOpenDocument.editor,
+              savedEntry
+            ),
+            activeProjectContext
+          );
+
+          openDocumentsStateRef.current = replacement.state;
+          setOpenDocumentsState(replacement.state);
+
+          if (isNewEntry) {
+            const savedEditorId = createGlossaryDescriptionEditorId(
+              savedEntry.id
+            );
+
+            savedGlossaryDescriptionEditorIdsRef.current.set(
+              serializeEditorId(editorId),
+              savedEditorId
+            );
+            editorNavigation.invalidateEditor(editorId);
+          }
+
+          // #573 Slice 9: Save-success Recovery cleanup, exactly like a
+          // Markdown save — edits typed during the save are re-captured under
+          // the (possibly new) entry key, then the pre-save row is retired.
+          if (preSaveRecoveryKey) {
+            const savedOpenDocument = findOpenDocument(
+              replacement.state,
+              createGlossaryDescriptionEditorId(savedEntry.id)
+            );
+            const savedEditor = savedOpenDocument?.editor ?? null;
+
+            recoveryPayloadCoordinator.onSaveSucceeded({
+              oldKey: preSaveRecoveryKey,
+              newKey: savedEditor
+                ? recoveryDocumentKeyForGlossaryEditor(
+                    savedEditor,
+                    projectRef.current
+                  )
+                : null,
+              postSavePayload:
+                savedEditor && isCurrentEditorDirty(savedEditor)
+                  ? buildGlossaryRecoveryPayload(
+                      savedEditor,
+                      projectRef.current
+                    )
+                  : null
+            });
+          }
+        }
+        return "saved";
+      },
+      () => {
+        logRendererDebugEvent({
+          level: "debug",
+          event: "save.in_flight.ignored",
+          details: {
+            editorIdKind: "glossaryDescription",
+            operation: "save",
+            result: "ignored"
+          }
+        });
+      }
+    );
+
+    return result ?? "ignored";
+  }
+
   async function readProjectDocument(
     document: ProjectDocument
   ): Promise<CurrentDocument> {
@@ -7638,9 +7944,6 @@ export function App(): JSX.Element {
     );
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
-    // #436 Slice 10: the Glossary Entry Editor Pane holds a project-owned
-    // draft (create or edit) — it never survives a project switch either.
-    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
     setOpenDocumentsState((state) =>
       resetOpenDocumentsForProjectContextSwitch(state)
     );
@@ -7730,11 +8033,6 @@ export function App(): JSX.Element {
     );
     setPendingMarkdownSelection(null);
     setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
-    // #436 Slice 10: the Glossary Entry Editor Pane holds a project-owned
-    // draft (create or edit) — it never survives a project close. Dirty
-    // confirmation for this draft is a later slice; this just guarantees the
-    // pane cannot outlive the project it was editing.
-    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
     const nextOpenDocumentsState = removeProjectScopedOpenEditors(
       openDocumentsStateRef.current
     );
@@ -7786,15 +8084,6 @@ export function App(): JSX.Element {
     let shouldShowCloseFailedDialog = false;
     lifecycleOperationInProgressRef.current = true;
     try {
-      // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm —
-      // entirely separate from the Markdown dirty-resolution below (the
-      // pane's draft was never an open editor, so that flow has no
-      // visibility into it). Runs FIRST: a cancel (or a failed save) aborts
-      // the close here, before the commit-barrier flow ever starts.
-      if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
-        return;
-      }
-
       const dirtyResolution = await resolveDirtyForLifecycle(
         "explicitProjectClose",
         project.name
@@ -7883,52 +8172,43 @@ export function App(): JSX.Element {
     } else {
       lifecycleOperationInProgressRef.current = true;
       try {
-        // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm,
-        // separate from the Markdown dirty-resolution below (the pane's
-        // draft was never an open editor). Runs FIRST — a cancel (or a
-        // failed save) declines the window close, same as a Markdown cancel
-        // does, WITHOUT ever starting the commit-barrier flow.
-        if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
-          decision = { status: "cancelled", requestId: request.requestId };
-        } else {
-          const dirtyResolution = await resolveDirtyForLifecycle(
-            request.intent,
-            "Pergamum"
-          );
+        const dirtyResolution = await resolveDirtyForLifecycle(
+          request.intent,
+          "Pergamum"
+        );
 
-          if (
-            dirtyResolution.status === "resolved" ||
-            dirtyResolution.status === "discarded"
-          ) {
-            commitBarrierToken = dirtyResolution.commitBarrierToken;
+        if (
+          dirtyResolution.status === "resolved" ||
+          dirtyResolution.status === "discarded"
+        ) {
+          commitBarrierToken = dirtyResolution.commitBarrierToken;
 
-            if (request.isFinalWindow) {
-              // #272: the final window close keeps this Session in the restore
-              // set; a best-effort flush is enough (durability is continuous).
-              void sessionPersistence.flushNow();
-              // #286: best-effort Recovery payload flush on normal shutdown —
-              // failing to flush here NEVER deletes an existing Recovery row.
-              void recoveryPayloadCoordinator.flushNow();
-              decision = { status: "approved", requestId: request.requestId };
-            } else {
-              // #272 (review Blocker 5): an ordinary non-final window close
-              // removes this Session from the future restore set. That removal
-              // MUST be durable before we approve the close — otherwise a
-              // manifest write failure would let the closed Session revive on
-              // next launch. On failure, decline the close (safe: the window
-              // stays open, the user can retry).
-              try {
-                await sessionPersistence.dropFromRestoreSet();
-                decision = { status: "approved", requestId: request.requestId };
-              } catch {
-                exitLifecycleCommitBarrier(commitBarrierToken);
-                commitBarrierToken = null;
-                decision = { status: "cancelled", requestId: request.requestId };
-              }
-            }
+          if (request.isFinalWindow) {
+            // #272: the final window close keeps this Session in the restore
+            // set; a best-effort flush is enough (durability is continuous).
+            void sessionPersistence.flushNow();
+            // #286: best-effort Recovery payload flush on normal shutdown —
+            // failing to flush here NEVER deletes an existing Recovery row.
+            void recoveryPayloadCoordinator.flushNow();
+            decision = { status: "approved", requestId: request.requestId };
           } else {
-            decision = { status: "cancelled", requestId: request.requestId };
+            // #272 (review Blocker 5): an ordinary non-final window close
+            // removes this Session from the future restore set. That removal
+            // MUST be durable before we approve the close — otherwise a
+            // manifest write failure would let the closed Session revive on
+            // next launch. On failure, decline the close (safe: the window
+            // stays open, the user can retry).
+            try {
+              await sessionPersistence.dropFromRestoreSet();
+              decision = { status: "approved", requestId: request.requestId };
+            } catch {
+              exitLifecycleCommitBarrier(commitBarrierToken);
+              commitBarrierToken = null;
+              decision = { status: "cancelled", requestId: request.requestId };
+            }
           }
+        } else {
+          decision = { status: "cancelled", requestId: request.requestId };
         }
       } catch {
         decision = {
@@ -7973,14 +8253,6 @@ export function App(): JSX.Element {
 
     lifecycleOperationInProgressRef.current = true;
     try {
-      // #436 Slice 11: the Glossary Entry Editor Pane's own dirty confirm —
-      // separate from the Markdown dirty-resolution below (the pane's draft
-      // was never an open editor). Runs FIRST: a cancel (or a failed save)
-      // aborts the quit/restart here, before the commit-barrier flow starts.
-      if (!(await confirmGlossaryEntryEditorPaneDirtyIfNeeded())) {
-        return;
-      }
-
       const dirtyResolution = await resolveDirtyForLifecycle(
         "explicitApplicationQuit",
         "Pergamum"
@@ -8353,11 +8625,6 @@ export function App(): JSX.Element {
     setGlossaryOccurrenceTrackingState(
       inactiveGlossaryOccurrenceTrackingState
     );
-    // #436 Slice 10: restoring an environment (cold start) never carries a
-    // Glossary Entry Editor Pane draft forward — the pane state itself is
-    // not part of the Session snapshot (Slice 1-9 non-goal), so this is
-    // mostly defensive, matching the other project-scoped resets here.
-    setGlossaryEntryEditorPane(closeGlossaryEntryEditorPane());
     pendingRestoreViewStatesRef.current = new Map(env.pendingViewStates);
     setPendingRestoreViewStateVersion((version) => version + 1);
     setProject(env.project);
@@ -8486,6 +8753,8 @@ export function App(): JSX.Element {
       (await window.pergamum.projects.readProjectDocument(relativePath)).content,
     readMarkdownFile: (filePath) =>
       window.pergamum.files.readMarkdownFile(filePath),
+    // #573 Slice 8: restored glossary Description tabs re-read their entry.
+    getGlossaryEntryById: (entryId) => window.pergamum.glossary.getById(entryId),
     registerProjectDocumentPath: async (absolutePath) =>
       (await window.pergamum.projects.registerProjectDocumentPath(absolutePath))
         .relativePath,
@@ -11557,10 +11826,8 @@ export function App(): JSX.Element {
 
                 <section className="editorAreaBody" ref={editorAreaBodyRef}>
                   {/* #436 Slice 6 remediation: the active tab's content lives
-                      in its own region so the Glossary Entry Editor Pane can
-                      sit below ANY tab (Markdown editor, preview split, or the
-                      glossary management / settings tabs), not just below a
-                      Markdown document. */}
+                      in its own region. (#573 Slice 7 removed the Glossary
+                      Entry Editor Pane that used to sit below it.) */}
                   <div className="editorAreaContent">
                   {isGlossaryTagManagerTabActive ? (
                     <section className="glossaryTagManagerTab">
@@ -11622,6 +11889,9 @@ export function App(): JSX.Element {
                   ) : activeDocument ? (
                     <EditorSurface
                         editor={activeDocument.editor}
+                        glossaryDescriptionMetadata={
+                          glossaryDescriptionMetadataConfig
+                        }
                         isDebugModeEnabled={isDebugModeEnabled}
                         isSyncScrollEditorToPreviewEnabled={
                           effectiveSettings.preview.syncScrollEditorToPreview
@@ -11644,7 +11914,10 @@ export function App(): JSX.Element {
                           effectiveSettings.preview.updateDelayMs
                         }
                         newFileLineEndingFallback={
-                          isMarkdownCurrentDocument(activeDocument.editor.document)
+                          // #573 Slice 3: a glossary Description is Markdown
+                          // (same fallback the former glossary pane used).
+                          !activeMarkdownDocument ||
+                          isMarkdownCurrentDocument(activeMarkdownDocument)
                             ? effectiveSettings.markdownFiles.lineEnding
                             : effectiveSettings.textFiles.lineEnding
                         }
@@ -11720,8 +11993,11 @@ export function App(): JSX.Element {
                           handleMarkdownEditorViewStateControllerChange
                         }
                         onImageAttachmentPaste={
-                          currentEditor?.kind === "markdown" &&
-                          activeMarkdownDocument?.kind === "project" &&
+                          // #573 Slice 6: a glossary Description tab pastes
+                          // too (links relative to the project root).
+                          (isGlossaryDescriptionEditorActive ||
+                            (currentEditor?.kind === "markdown" &&
+                              activeMarkdownDocument?.kind === "project")) &&
                           project?.accessMode.kind === "readWrite" &&
                           !isEditorReadOnly
                             ? handleImageAttachmentPaste
@@ -11786,68 +12062,6 @@ export function App(): JSX.Element {
                   ) : null}
                   </div>
 
-                  {/* #436 Phase 8-0 PoC: the former Utility Window slot now
-                      frames the Glossary Entry Editor Pane, below WHATEVER tab
-                      content is shown above. Create mode is a real new-entry
-                      form (Slice 6/7); edit mode (Slice 8) hosts the EXISTING
-                      GlossaryEditor.tsx (the same screen the old glossaryEntry
-                      tab used) against a pane-local draft — never a revived
-                      glossaryEntry tab, never a change to the active tab.
-                      Resizable via the top-edge handle. */}
-                  {glossaryEntryEditorPane.isOpen ? (
-                    <>
-                      <div
-                        className="glossaryEntryEditorPaneResizeHandle"
-                        role="separator"
-                        aria-orientation="horizontal"
-                        aria-label={translate(
-                          "glossaryEntryEditorPane.resizeHandle"
-                        )}
-                        onPointerDown={
-                          glossaryEntryEditorPaneResizeDrag.onPointerDown
-                        }
-                        onPointerMove={
-                          glossaryEntryEditorPaneResizeDrag.onPointerMove
-                        }
-                        onPointerUp={
-                          glossaryEntryEditorPaneResizeDrag.onPointerUp
-                        }
-                        onPointerCancel={
-                          glossaryEntryEditorPaneResizeDrag.onPointerCancel
-                        }
-                      />
-                      <GlossaryEntryEditorPane
-                        ref={glossaryEntryEditorSessionHandleRef}
-                        state={glossaryEntryEditorPane}
-                        translate={translate}
-                        height={clampGlossaryEntryEditorPaneHeight(
-                          glossaryEntryEditorPaneHeight,
-                          editorAreaBodyRef.current?.clientHeight
-                        )}
-                        availableTags={glossaryTags}
-                        onCreateEntry={handleCreateGlossaryEntryFromPane}
-                        onLoadEntry={handleLoadGlossaryEntryFromPane}
-                        onSaveEntry={handleSaveGlossaryEntryFromPane}
-                        onDeleteEntry={handleDeleteGlossaryEntryFromPane}
-                        onOpenTagManager={openGlossaryTagManagerTab}
-                        readOnly={project?.accessMode.kind === "readOnly"}
-                        markerGlyph={effectiveSettings.editor.lineEnding.markerGlyph}
-                        expectedLineEnding={
-                          effectiveSettings.editor.lineEnding.expected
-                        }
-                        newFileLineEndingFallback={
-                          effectiveSettings.markdownFiles.lineEnding
-                        }
-                        whitespaceSettings={effectiveSettings.editor.whitespace}
-                        undoHistoryMinDepth={
-                          effectiveSettings.editor.undoHistoryMinDepth
-                        }
-                        onClose={() =>
-                          void closeGlossaryEntryEditorPaneWithConfirm()
-                        }
-                      />
-                    </>
-                  ) : null}
                 </section>
               </section>
             </section>

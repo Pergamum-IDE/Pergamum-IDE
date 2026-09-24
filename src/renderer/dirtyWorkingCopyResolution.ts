@@ -2,6 +2,7 @@ import type { EditorId } from "../shared/editorId";
 import type { Translate, TranslationKey } from "../shared/i18n";
 import type {
   DirtyWorkingCopy,
+  DirtyWorkingCopyScope,
   LifecycleIntent,
   SaveWorkingCopyOutcome
 } from "../shared/lifecycle";
@@ -106,6 +107,14 @@ function discardKeyForIntent(intent: DirtyResolutionIntent): TranslationKey {
   }
 }
 
+// #573 Slice 4: a glossary Description tab belongs to the project just like
+// a project document, so an explicit project close must resolve it too.
+function isProjectOwnedDirtyWorkingCopyScope(
+  scope: DirtyWorkingCopyScope
+): boolean {
+  return scope === "projectDocument" || scope === "glossary";
+}
+
 export function getDirtyWorkingCopiesForLifecycle(
   intent: DirtyResolutionIntent,
   state: OpenDocumentsState
@@ -116,8 +125,8 @@ export function getDirtyWorkingCopiesForLifecycle(
     return dirtyWorkingCopies;
   }
 
-  return dirtyWorkingCopies.filter(
-    (workingCopy) => workingCopy.scope === "projectDocument"
+  return dirtyWorkingCopies.filter((workingCopy) =>
+    isProjectOwnedDirtyWorkingCopyScope(workingCopy.scope)
   );
 }
 

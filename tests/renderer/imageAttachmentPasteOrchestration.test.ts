@@ -75,7 +75,10 @@ function target(
 ): ImageAttachmentPasteTarget {
   return {
     documentId: "doc:A",
-    markdownRelativePath: "novel/chapter01.md",
+    imageLinkBase: {
+      kind: "sourceFile",
+      sourceMarkdownProjectRelativePath: "novel/chapter01.md"
+    },
     documentName: "chapter01.md",
     isActive: true,
     position: 3,
@@ -138,6 +141,35 @@ describe("image attachment paste orchestration (#407 B4)", () => {
       "添付画像のリンクを挿入しました。"
     );
     expect(deps.showWarningDialog).not.toHaveBeenCalled();
+  });
+
+  it("#573 Slice 6: a glossary Description target gets a project-root-relative link", async () => {
+    const result = okResult();
+    const glossaryTarget = target({
+      documentId: "glossary:A",
+      imageLinkBase: { kind: "projectRoot" },
+      documentName: "語彙: コードフェンス"
+    });
+    const deps = createDeps({
+      resolveTarget: vi.fn(() => ({ ok: true as const, target: glossaryTarget }))
+    });
+
+    await expect(
+      runImageAttachmentPasteOrchestration(result, deps)
+    ).resolves.toBe("linkInserted");
+
+    // Same save IPC (no source document involved) ...
+    expect(deps.saveImageAttachment).toHaveBeenCalledWith({
+      saveDirectory: "assets/images",
+      bytes: PNG_BYTES,
+      reportedMimeType: "image/png"
+    });
+    // ... but the link is relative to the project root, not a document folder.
+    expect(deps.insertMarkdownLink).toHaveBeenCalledWith({
+      pending: result.pending,
+      target: glossaryTarget,
+      markdownLink: "![](assets/images/x.png)"
+    });
   });
 
   it("save failure: shows warning dialog, does not edit Markdown, does not use Toast, and clears marker", async () => {

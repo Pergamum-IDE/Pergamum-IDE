@@ -7,6 +7,7 @@ import {
   isMarkdownCurrentDocument,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
+import { markdownDocumentForEditor } from "../../src/renderer/currentEditor";
 import {
   closeOpenEditor,
   createOpenDocumentsStateWithDocument,
@@ -115,7 +116,11 @@ describe("Plain Text Document Support (#501 Slice 3)", () => {
       )
     );
 
-    expect(findOpenDocument(dirty, editorId)?.editor.document).toMatchObject({
+    const dirtyEditor = findOpenDocument(dirty, editorId)?.editor;
+
+    expect(
+      dirtyEditor ? markdownDocumentForEditor(dirtyEditor) : null
+    ).toMatchObject({
       kind: "project",
       relativePath: "notes.txt",
       content: "dirty",

@@ -32,6 +32,13 @@ import {
   isProjectCurrentDocument,
   updateCurrentDocumentContent
 } from "./currentDocument";
+import {
+  currentEditorTitle,
+  markdownDocumentForEditor,
+  updateGlossaryDescriptionEditorText,
+  type CurrentEditor
+} from "./currentEditor";
+import type { MarkdownImageLinkBase } from "../shared/markdownImageLink";
 import type { OpenDocumentsState } from "./openDocuments";
 import { updateOpenEditor } from "./openDocuments";
 import type {
@@ -50,6 +57,63 @@ export function imageAttachmentSourceEditorId(
     projectFilePath,
     documentId
   });
+}
+
+/**
+ * #573 Slice 6: an open editor an image can be pasted into — a project
+ * Markdown document (links relative to its own folder) or a glossary
+ * Description tab (links relative to the project root, the base its Preview
+ * already resolves against). `null` for anything else.
+ */
+interface ImageAttachmentPasteSurface {
+  readonly imageLinkBase: MarkdownImageLinkBase;
+  readonly documentName: string;
+  /** The editor's current text, for inserting into a cached (inactive) state. */
+  readonly text: string;
+}
+
+type ImageAttachmentPasteSurfaceResolution =
+  | { readonly ok: true; readonly surface: ImageAttachmentPasteSurface }
+  | {
+      readonly ok: false;
+      readonly reason: "targetDocumentUnavailable" | "projectNotOpen";
+    };
+
+function imageAttachmentPasteSurfaceForEditor(
+  editor: CurrentEditor
+): ImageAttachmentPasteSurfaceResolution {
+  if (editor.kind === "glossaryDescription") {
+    return {
+      ok: true,
+      surface: {
+        imageLinkBase: { kind: "projectRoot" },
+        documentName: currentEditorTitle(editor),
+        text: editor.draft.description
+      }
+    };
+  }
+
+  const markdownDocument = markdownDocumentForEditor(editor);
+
+  if (!markdownDocument) {
+    return { ok: false, reason: "targetDocumentUnavailable" };
+  }
+
+  if (!isProjectCurrentDocument(markdownDocument)) {
+    return { ok: false, reason: "projectNotOpen" };
+  }
+
+  return {
+    ok: true,
+    surface: {
+      imageLinkBase: {
+        kind: "sourceFile",
+        sourceMarkdownProjectRelativePath: markdownDocument.relativePath
+      },
+      documentName: markdownDocument.name,
+      text: markdownDocument.content
+    }
+  };
 }
 
 export interface ImageAttachmentProjectContext {
@@ -104,9 +168,10 @@ export function resolveImageAttachmentPasteTarget({
     return { ok: false, reason: "targetDocumentUnavailable" };
   }
 
-  const markdownDocument = openDocument.editor.document;
-  if (!isProjectCurrentDocument(markdownDocument)) {
-    return { ok: false, reason: "projectNotOpen" };
+  const pasteSurface = imageAttachmentPasteSurfaceForEditor(openDocument.editor);
+
+  if (!pasteSurface.ok) {
+    return { ok: false, reason: pasteSurface.reason };
   }
 
   if (!currentProject) {
@@ -155,8 +220,8 @@ export function resolveImageAttachmentPasteTarget({
     ok: true,
     target: {
       documentId: pending.sourceDocumentId,
-      markdownRelativePath: markdownDocument.relativePath,
-      documentName: markdownDocument.name,
+      imageLinkBase: pasteSurface.surface.imageLinkBase,
+      documentName: pasteSurface.surface.documentName,
       isActive: useLiveActiveEditor,
       position: resolvedPosition.position
     }
@@ -235,13 +300,13 @@ export function insertMarkdownImageLinkIntoTarget({
     (candidate) => serializeEditorId(candidate.id) === request.target.documentId
   );
 
-  if (!openDocument) {
-    return false;
-  }
+  const pasteSurface = openDocument
+    ? imageAttachmentPasteSurfaceForEditor(openDocument.editor)
+    : null;
 
-  const markdownDocument = openDocument.editor.document;
   if (
-    !isProjectCurrentDocument(markdownDocument) ||
+    !openDocument ||
+    !pasteSurface?.ok ||
     currentProject?.accessMode.kind === "readOnly" ||
     isLifecycleCommitBarrierActive
   ) {
@@ -271,7 +336,7 @@ export function insertMarkdownImageLinkIntoTarget({
   const transactionResult = cached
     ? applyChangesToCachedMarkdownEditorDocumentState(
         cached,
-        markdownDocument.content,
+        pasteSurface.surface.text,
         change,
         "input.replace"
       )
@@ -298,7 +363,12 @@ export function insertMarkdownImageLinkIntoTarget({
               transactionResult.lineEndingBreaks
             )
           }
-        : editor
+        : // #573 Slice 6: an inactive glossary Description tab's draft.
+          updateGlossaryDescriptionEditorText(
+            editor,
+            transactionResult.content,
+            transactionResult.lineEndingBreaks
+          )
   );
   setOpenDocumentsState(nextState);
   return true;

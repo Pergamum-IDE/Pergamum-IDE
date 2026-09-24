@@ -47,9 +47,6 @@ describe("supported UI languages (#186)", () => {
 
 describe("glossary deletion dialog translations (#375)", () => {
   it("labels the entry delete confirm dialog for ja and en with a Delete (not OK) action", () => {
-    expect(t("ja", "glossaryEditor.deleteEntry")).toBe("削除");
-    expect(t("en", "glossaryEditor.deleteEntry")).toBe("Delete");
-
     expect(t("ja", "glossary.deleteDialog.title")).toBe("語彙を削除しますか？");
     expect(t("en", "glossary.deleteDialog.title")).toBe(
       "Delete glossary entry?"

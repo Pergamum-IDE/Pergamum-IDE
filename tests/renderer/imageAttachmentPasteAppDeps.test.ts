@@ -199,7 +199,10 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
       ok: true,
       target: {
         documentId: serializedDocIdA,
-        markdownRelativePath: "novel/chapter01.md",
+        imageLinkBase: {
+          kind: "sourceFile",
+          sourceMarkdownProjectRelativePath: "novel/chapter01.md"
+        },
         documentName: "chapter01.md",
         isActive: false,
         position: 5
@@ -400,7 +403,10 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
         pending,
         target: {
           documentId: serializedDocIdA,
-          markdownRelativePath: "novel/chapter01.md",
+          imageLinkBase: {
+            kind: "sourceFile",
+            sourceMarkdownProjectRelativePath: "novel/chapter01.md"
+          },
           documentName: "chapter01.md",
           isActive: false,
           position: 0
@@ -566,7 +572,10 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
         pending,
         target: {
           documentId: serializedDocIdA,
-          markdownRelativePath: "novel/chapter01.md",
+          imageLinkBase: {
+            kind: "sourceFile",
+            sourceMarkdownProjectRelativePath: "novel/chapter01.md"
+          },
           documentName: "chapter01.md",
           isActive: false,
           position: 0
@@ -827,7 +836,10 @@ describe("imageAttachmentPasteAppDeps behavioral tests (#407 B4 remediation)", (
         ok: true as const,
         target: {
           documentId: "doc-1",
-          markdownRelativePath: "chapter.md",
+          imageLinkBase: {
+            kind: "sourceFile" as const,
+            sourceMarkdownProjectRelativePath: "chapter.md"
+          },
           documentName: "chapter.md",
           isActive: true,
           position: 10
