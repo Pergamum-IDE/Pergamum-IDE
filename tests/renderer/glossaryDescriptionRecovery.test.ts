@@ -451,7 +451,7 @@ describe("App glossary Recovery tag validation wiring (#574 Slice 3)", () => {
     const listTagsIndex = restoreBlock.indexOf("window.pergamum.glossary.listTags()");
     const sanitizeIndex = restoreBlock.indexOf("sanitizeGlossaryRecoveryDraftTags(");
     const openIndex = restoreBlock.indexOf(
-      "await openRecoveredGlossaryDraft(sanitized.draft)"
+      "await openRecoveredGlossaryDraft(\n      sanitized.draft\n    );"
     );
 
     expect(draftCaseIndex).toBeGreaterThan(-1);

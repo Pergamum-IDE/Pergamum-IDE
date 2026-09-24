@@ -1727,6 +1727,12 @@ export const jaTranslations = {
   "status.recoveryRestoreFailed": "一部の項目を復元できませんでした",
   "status.recoveryGlossaryOtherProject":
     "別のプロジェクトの語彙は復元できません。そのプロジェクトを開いてから復元してください",
+  "notification.recoveryGlossaryConflict":
+    "復旧した語彙は、復旧データ作成後に更新されています。保存すると現在の語彙を上書きします。",
+  "dialog.recoveryGlossaryConflict.title": "復旧した語彙を保存しますか？",
+  "dialog.recoveryGlossaryConflict.message":
+    "この語彙は、復旧データ作成後に更新されています。保存すると現在の語彙を復旧した内容で上書きします。",
+  "dialog.recoveryGlossaryConflict.confirm": "上書きして保存",
   "status.recoveryGlossaryTagsRemoved":
     "復旧した語彙から、削除済みのタグ {count} 件を除外しました。",
   "status.recoveryGlossaryTabBusy":

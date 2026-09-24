@@ -1728,6 +1728,12 @@ export const enTranslations = {
   "status.recoveryRestoreFailed": "Some items could not be restored",
   "status.recoveryGlossaryOtherProject":
     "Glossary entries from another project cannot be restored here. Open that project, then restore",
+  "notification.recoveryGlossaryConflict":
+    "The recovered glossary entry was updated after this recovery data was captured. Saving will overwrite the current entry.",
+  "dialog.recoveryGlossaryConflict.title": "Save the recovered glossary entry?",
+  "dialog.recoveryGlossaryConflict.message":
+    "This glossary entry was updated after this recovery data was captured. Saving will overwrite the current entry with the recovered content.",
+  "dialog.recoveryGlossaryConflict.confirm": "Overwrite and Save",
   "status.recoveryGlossaryTagsRemoved":
     "Removed {count} deleted tag(s) from the recovered glossary entry.",
   "status.recoveryGlossaryTabBusy":

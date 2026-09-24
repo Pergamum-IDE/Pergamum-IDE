@@ -52,6 +52,17 @@ export interface GlossaryDescriptionCurrentEditor {
   /** Line-ending breaks for `draft.description`, as last reported by the
    *  editor (seeded by analyzing the entry's Description at open time). */
   descriptionLineEndingBreaks: LineEndingBreakSet;
+  /** #574 Slice 4: set only on a tab restored from Recovery whose entry was
+   *  updated after the Recovery snapshot — saving it overwrites newer data,
+   *  so Save asks first. In-memory only (never persisted in the session);
+   *  cleared by a successful save. */
+  recoveryConflict?: GlossaryDescriptionRecoveryConflict | null;
+}
+
+/** #574 Slice 4: the recovered draft's base vs. the entry as stored now. */
+export interface GlossaryDescriptionRecoveryConflict {
+  readonly baseUpdatedAt: string;
+  readonly currentUpdatedAt: string;
 }
 
 export type CurrentEditor =
@@ -164,7 +175,9 @@ export function applyGlossaryDescriptionEditorSaveResult(
     ...editor,
     entryId: savedEntry.id,
     representativeSurface: representativeGlossarySurface(savedEntry).trim(),
-    draft: applyGlossaryEntryDraftSaveResult(editor.draft, savedEntry)
+    draft: applyGlossaryEntryDraftSaveResult(editor.draft, savedEntry),
+    // #574 Slice 4: the save WAS the (confirmed) overwrite — no conflict left.
+    recoveryConflict: null
   };
 }
 

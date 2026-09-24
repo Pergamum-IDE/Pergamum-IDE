@@ -5232,12 +5232,18 @@ export function App(): JSX.Element {
   ): Promise<{
     readonly outcome: "opened" | "fallback" | "kept";
     readonly removedTagCount: number;
+    readonly hasRecoveryConflict: boolean;
   }> {
     const notRestored = (
       outcome: "fallback" | "kept"
-    ): { readonly outcome: "fallback" | "kept"; readonly removedTagCount: 0 } => ({
+    ): {
+      readonly outcome: "fallback" | "kept";
+      readonly removedTagCount: 0;
+      readonly hasRecoveryConflict: false;
+    } => ({
       outcome,
-      removedTagCount: 0
+      removedTagCount: 0,
+      hasRecoveryConflict: false
     });
 
     if (isLifecycleCommitBarrierActiveNow()) {
@@ -5290,19 +5296,30 @@ export function App(): JSX.Element {
       read.result.draft,
       existingTagIds
     );
-    const outcome = await openRecoveredGlossaryDraft(sanitized.draft);
+    const { outcome, hasRecoveryConflict } = await openRecoveredGlossaryDraft(
+      sanitized.draft
+    );
 
     return {
       outcome,
       removedTagCount:
-        outcome === "opened" ? sanitized.removedTagIds.length : 0
+        outcome === "opened" ? sanitized.removedTagIds.length : 0,
+      hasRecoveryConflict: outcome === "opened" && hasRecoveryConflict
     };
   }
 
   // #573 Slice 9: open a (validated) recovered draft as a dirty glossary tab.
+  // #574 Slice 4: `hasRecoveryConflict` — the existing entry was updated after
+  // the snapshot; the opened tab carries `recoveryConflict` so Save asks
+  // before overwriting. A new / deleted-as-new entry never conflicts.
   async function openRecoveredGlossaryDraft(
     draft: GlossaryRecoveryDraft
-  ): Promise<"opened" | "kept"> {
+  ): Promise<{
+    readonly outcome: "opened" | "kept";
+    readonly hasRecoveryConflict: boolean;
+  }> {
+    const kept = { outcome: "kept", hasRecoveryConflict: false } as const;
+
     let currentEntry: GlossaryEntry | null = null;
 
     if (draft.entryId !== null) {
@@ -5322,7 +5339,7 @@ export function App(): JSX.Element {
           key: "status.recoveryGlossaryTabBusy",
           values: { name: currentEditorTitle(openTab.editor) }
         });
-        return "kept";
+        return kept;
       }
 
       const recoveredEditor = glossaryEditorFromRecoveryDraft(
@@ -5330,6 +5347,10 @@ export function App(): JSX.Element {
         currentEntry,
         currentEntry.id
       );
+      const opened = {
+        outcome: "opened",
+        hasRecoveryConflict: Boolean(recoveredEditor.recoveryConflict)
+      } as const;
 
       if (openTab) {
         // A clean tab (e.g. from session restore) takes the recovered draft
@@ -5343,17 +5364,15 @@ export function App(): JSX.Element {
 
         openDocumentsStateRef.current = replacement.state;
         setOpenDocumentsState(replacement.state);
-        return (await openEditorFromExplicitActivation(tabId))
-          ? "opened"
-          : "kept";
+        return (await openEditorFromExplicitActivation(tabId)) ? opened : kept;
       }
 
       return (await openEditorFromExplicitActivation(tabId, {
         history: "record",
         resolvedEditor: recoveredEditor
       }))
-        ? "opened"
-        : "kept";
+        ? opened
+        : kept;
     }
 
     // Never saved, or the saved entry was deleted since: recover as a new,
@@ -5376,8 +5395,8 @@ export function App(): JSX.Element {
         resolvedEditor: glossaryEditorFromRecoveryDraft(draft, null, localId)
       }
     ))
-      ? "opened"
-      : "kept";
+      ? { outcome: "opened", hasRecoveryConflict: false }
+      : kept;
   }
 
   async function handleRecoveryRestoreSelected(
@@ -5402,18 +5421,22 @@ export function App(): JSX.Element {
     const glossaryOpenedIds: string[] = [];
 
     let removedGlossaryTagCount = 0;
+    let glossaryRecoveryConflictCount = 0;
 
     for (const recoveryId of recoveryIds) {
       if (byId.get(recoveryId)?.documentType !== "glossary.description") {
         continue;
       }
 
-      const { outcome, removedTagCount } =
+      const { outcome, removedTagCount, hasRecoveryConflict } =
         await restoreGlossaryRecoveryCandidate(recoveryId);
 
       if (outcome === "opened") {
+        // A conflict does NOT keep the row: the open dirty tab now holds the
+        // recovered data (its Save asks before overwriting).
         glossaryOpenedIds.push(recoveryId);
         removedGlossaryTagCount += removedTagCount;
+        glossaryRecoveryConflictCount += hasRecoveryConflict ? 1 : 0;
       } else if (outcome === "fallback") {
         glossaryFallbackIds.add(recoveryId);
       }
@@ -5425,6 +5448,13 @@ export function App(): JSX.Element {
       setStatus({
         key: "status.recoveryGlossaryTagsRemoved",
         values: { count: removedGlossaryTagCount }
+      });
+    }
+
+    // #574 Slice 4: a non-blocking warning (no Description / surface text).
+    if (glossaryRecoveryConflictCount > 0) {
+      notificationController.notify({
+        message: translate("notification.recoveryGlossaryConflict")
       });
     }
 
@@ -7852,6 +7882,27 @@ export function App(): JSX.Element {
       return "rejected";
     }
 
+    // #574 Slice 4: a tab restored from Recovery over an entry updated since
+    // the snapshot never overwrites it silently — every save route (Ctrl+S,
+    // Save All, close / lifecycle "save") comes through here and asks first.
+    // Cancel leaves the tab dirty and the conflict marked.
+    if (
+      openDocument.editor.recoveryConflict &&
+      !glossaryEntryDraftIsNew(draft)
+    ) {
+      if (!(await confirmRecoveredGlossaryOverwrite())) {
+        return "cancelled";
+      }
+
+      // The draft confirmed must be the draft saved.
+      if (
+        findOpenDocument(openDocumentsStateRef.current, editorId)?.editor !==
+        openDocument.editor
+      ) {
+        return "cancelled";
+      }
+    }
+
     const result = await saveInFlightGuard.run<SaveFileOutcome>(
       async () => {
         let savedEntry: GlossaryEntry;
@@ -7966,6 +8017,32 @@ export function App(): JSX.Element {
     );
 
     return result ?? "ignored";
+  }
+
+  // #574 Slice 4: confirm overwriting a glossary entry updated after the
+  // Recovery snapshot the tab was restored from. Any dialog failure → no save.
+  async function confirmRecoveredGlossaryOverwrite(): Promise<boolean> {
+    try {
+      return (
+        (await confirmDialog({
+          title: translate("dialog.recoveryGlossaryConflict.title"),
+          message: {
+            kind: "plainText",
+            text: translate("dialog.recoveryGlossaryConflict.message")
+          },
+          icon: {
+            kind: "warning",
+            tooltip: translate("dialog.icon.warning")
+          },
+          clipboardText: null,
+          dismissOnBackdropClick: false,
+          tone: "destructive",
+          confirmLabel: translate("dialog.recoveryGlossaryConflict.confirm")
+        })) === "confirm"
+      );
+    } catch {
+      return false;
+    }
   }
 
   async function readProjectDocument(
