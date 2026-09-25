@@ -45,10 +45,17 @@ describe("rubyMarkupSettings", () => {
       expect(validateRubyText("かん\rじ")).toBe(false);
     });
 
-    it("rejects ruby text containing forbidden characters 《, 》, ｜", () => {
-      expect(validateRubyText("かん《じ")).toBe(false);
-      expect(validateRubyText("かん》じ")).toBe(false);
-      expect(validateRubyText("かん｜じ")).toBe(false);
+    it("rejects ruby text containing forbidden characters 《, 》, ｜ for aozora", () => {
+      expect(validateRubyText("かん《じ", "aozora")).toBe(false);
+      expect(validateRubyText("かん》じ", "aozora")).toBe(false);
+      expect(validateRubyText("かん｜じ", "aozora")).toBe(false);
+    });
+
+    it("accepts pipes (half-width and full-width) and forbids curly braces for denden rule", () => {
+      expect(validateRubyText("でん|し|しゅっ|ぱん", "denden")).toBe(true);
+      expect(validateRubyText("でん｜し｜しゅっ｜ぱん", "denden")).toBe(true);
+      expect(validateRubyText("でん{し", "denden")).toBe(false);
+      expect(validateRubyText("でん}し", "denden")).toBe(false);
     });
   });
 });

@@ -180,4 +180,85 @@ describe("Markdown Preview Aozora/Narou ruby notation parsing (#507)", () => {
       expect(kakuyomuRes).not.toContain("<ruby>");
     });
   });
+
+  describe("Denden Markdown ruby notation parsing ({親文字|ルビ}) (#579)", () => {
+    it("renders group ruby {電子出版|でんししゅっぱん}", () => {
+      const result = markdownPreviewRenderer.render("{電子出版|でんししゅっぱん}");
+      expect(result).toContain("<ruby>電子出版<rt>でんししゅっぱん</rt></ruby>");
+    });
+
+    it("renders mono-ruby compound style {電子出版|でん|し|しゅっ|ぱん}", () => {
+      const result = markdownPreviewRenderer.render("{電子出版|でん|し|しゅっ|ぱん}");
+      expect(result).toContain("<ruby>電<rt>でん</rt>子<rt>し</rt>出<rt>しゅっ</rt>版<rt>ぱん</rt></ruby>");
+    });
+
+    it("falls back to group ruby when part count does not match character count {電子出版|でん|しゅっぱん}", () => {
+      const result = markdownPreviewRenderer.render("{電子出版|でん|しゅっぱん}");
+      expect(result).toContain("<ruby>電子出版<rt>でん|しゅっぱん</rt></ruby>");
+    });
+
+    it("HTML escapes special characters in base or ruby parts", () => {
+      const result = markdownPreviewRenderer.render("{<script>|&alert}");
+      expect(result).toContain("<ruby>&lt;script&gt;<rt>&amp;alert</rt></ruby>");
+    });
+
+    it("does not render when base is empty {|bar} or ruby is empty {foo|}", () => {
+      expect(markdownPreviewRenderer.render("{|bar}")).not.toContain("<ruby>");
+      expect(markdownPreviewRenderer.render("{foo|}")).not.toContain("<ruby>");
+      expect(markdownPreviewRenderer.render("{}")).not.toContain("<ruby>");
+    });
+
+    it("does not render backslash-escaped braces \\{電子出版|でんししゅっぱん}", () => {
+      const result = markdownPreviewRenderer.render("\\{電子出版|でんししゅっぱん}");
+      expect(result).not.toContain("<ruby>");
+    });
+
+    it("does not render candidate containing escaped pipe \\|", () => {
+      const result = markdownPreviewRenderer.render("{電子出版\\|でんししゅっぱん}");
+      expect(result).not.toContain("<ruby>");
+    });
+
+    it("does not render candidates crossing newlines", () => {
+      const result = markdownPreviewRenderer.render("{電子出版\n|でんししゅっぱん}");
+      expect(result).not.toContain("<ruby>");
+    });
+
+    it("does not render ruby inside inline code spans or fenced code blocks", () => {
+      const inlineCode = markdownPreviewRenderer.render("`{電子出版|でんししゅっぱん}`");
+      expect(inlineCode).not.toContain("<ruby>");
+
+      const fencedCode = markdownPreviewRenderer.render("```\n{電子出版|でんししゅっぱん}\n```");
+      expect(fencedCode).not.toContain("<ruby>");
+    });
+
+    it("renders kanji-run ruby {漢字かな混じり文書です|かんじ|ま|ぶんしょ}", () => {
+      const result = markdownPreviewRenderer.render("{漢字かな混じり文書です|かんじ|ま|ぶんしょ}");
+      expect(result).toContain(
+        "<ruby>漢字<rt>かんじ</rt></ruby>かな<ruby>混<rt>ま</rt></ruby>じり<ruby>文書<rt>ぶんしょ</rt></ruby>です"
+      );
+    });
+
+    it("keeps single ruby part mixed text as group ruby {漢字かな混じり文書です|かんじかなまじりぶんしょです}", () => {
+      const result = markdownPreviewRenderer.render("{漢字かな混じり文書です|かんじかなまじりぶんしょです}");
+      expect(result).toContain(
+        "<ruby>漢字かな混じり文書です<rt>かんじかなまじりぶんしょです</rt></ruby>"
+      );
+    });
+
+    it("renders full-width ｜ separator Denden ruby {漢字｜かん｜じ}", () => {
+      const result = markdownPreviewRenderer.render("{漢字｜かん｜じ}");
+      expect(result).toContain("<ruby>漢<rt>かん</rt>字<rt>じ</rt></ruby>");
+    });
+
+    it("does not render candidate containing escaped full-width pipe \\｜", () => {
+      const result = markdownPreviewRenderer.render("{Info\\｜Warning}");
+      expect(result).not.toContain("<ruby>");
+    });
+
+    it("renders both Aozora ruby and Denden Markdown ruby simultaneously", () => {
+      const result = markdownPreviewRenderer.render("｜藁苞《わらづと》と{電子出版|でんししゅっぱん}");
+      expect(result).toContain("<ruby>藁苞<rt>わらづと</rt></ruby>");
+      expect(result).toContain("<ruby>電子出版<rt>でんししゅっぱん</rt></ruby>");
+    });
+  });
 });

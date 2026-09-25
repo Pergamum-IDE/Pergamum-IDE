@@ -673,6 +673,10 @@ export const settingCatalogItems = defineSettingCatalog([
         {
           value: "aozora",
           labelKey: "settings.editor.ruby.rule.option.aozora.label"
+        },
+        {
+          value: "denden",
+          labelKey: "settings.editor.ruby.rule.option.denden.label"
         }
       ]
     },

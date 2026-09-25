@@ -16,6 +16,7 @@ import {
   renderMermaidPlaceholder
 } from "./mermaidPreviewPlaceholder";
 import { markdownItCallout } from "./markdownCallout";
+import { renderDendenRubyHtml } from "../../shared/rubyMarkupGenerator";
 
 const markdown = new MarkdownIt({
   html: false,
@@ -75,6 +76,16 @@ function isNarouRubyReading(text: string): boolean {
     return false;
   }
   return /^[\u3040-\u309F\u30A0-\u30FF\u30FC\u30FB\s]+$/u.test(text);
+}
+
+function isEscaped(text: string, index: number): boolean {
+  let count = 0;
+  let i = index - 1;
+  while (i >= 0 && text[i] === "\\") {
+    count++;
+    i--;
+  }
+  return count % 2 === 1;
 }
 
 /**
@@ -335,6 +346,58 @@ function parseRubyInText(
 
   return result;
 }
+
+/**
+ * #579: Inline ruler for Denden Markdown ruby notation ({親文字|ルビ} / {電子出版|でん|し|しゅっ|ぱん}).
+ */
+markdown.inline.ruler.push("denden_ruby", (state, silent) => {
+  if (state.src[state.pos] !== "{") {
+    return false;
+  }
+
+  if (isEscaped(state.src, state.pos)) {
+    return false;
+  }
+
+  const closeBraceIndex = state.src.indexOf("}", state.pos + 1);
+  if (closeBraceIndex === -1) {
+    return false;
+  }
+
+  const candidate = state.src.slice(state.pos + 1, closeBraceIndex);
+  if (
+    /[\r\n]/.test(candidate) ||
+    candidate.includes("\\|") ||
+    candidate.includes("\\｜") ||
+    candidate.includes("\\}") ||
+    (!candidate.includes("|") && !candidate.includes("｜"))
+  ) {
+    return false;
+  }
+
+  const normalizedCandidate = candidate.replace(/｜/g, "|");
+  const parts = normalizedCandidate.split("|");
+  const baseText = parts[0];
+  const rubyParts = parts.slice(1);
+
+  if (
+    baseText.length === 0 ||
+    rubyParts.length === 0 ||
+    !rubyParts.every((p) => p.length > 0)
+  ) {
+    return false;
+  }
+
+  if (silent) {
+    return true;
+  }
+
+  const htmlContent = renderDendenRubyHtml(baseText, rubyParts, escapeHtml);
+  const token = state.push("html_inline", "", 0);
+  token.content = htmlContent;
+  state.pos = closeBraceIndex + 1;
+  return true;
+});
 
 /**
  * #507: Post-inline core ruler transform for Aozora / Narou-style ruby.
