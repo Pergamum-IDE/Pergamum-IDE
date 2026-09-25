@@ -4,7 +4,6 @@ import {
   type GlossaryEntry
 } from "../../shared/glossary";
 import {
-  collectProjectLocalImagesForMarkdown,
   escapeHtmlAttr,
   escapeHtmlText
 } from "../exportHtml";
@@ -13,13 +12,11 @@ import {
   markdownCalloutExportCss,
   type MarkdownCalloutLabels
 } from "../preview/markdownCallout";
-import {
-  renderMermaidDiagramsToStaticHtml,
-  type MermaidPreviewMessages,
-  type MermaidRenderFn
+import type {
+  MermaidPreviewMessages,
+  MermaidRenderFn
 } from "../preview/markdownMermaidRendering";
-import { markdownPreviewRenderer } from "../preview/markdownPreviewRenderer";
-import { MERMAID_BLOCK_CLASS } from "../preview/mermaidPreviewPlaceholder";
+import { renderMarkdownStaticExport } from "../export/markdownStaticExportRenderer";
 import type { GlossaryEntryOccurrenceCounts } from "./glossaryExportOccurrences";
 import type { GlossaryExportContentOptions } from "./glossaryExportModel";
 
@@ -54,36 +51,19 @@ export async function renderGlossaryDescriptionForExport(
   description: string,
   options: RenderGlossaryDescriptionOptions
 ): Promise<RenderedGlossaryDescription> {
-  const { modifiedMarkdownText, assets } = collectProjectLocalImagesForMarkdown(
-    description,
-    { kind: "projectRoot" },
-    options.imageAssetFolderName
-  );
-
-  let html = markdownPreviewRenderer.render(modifiedMarkdownText, {
-    previewRenderer: "markdown",
-    // Links were already rewritten to the export asset folder above.
-    projectLocalImageResolution: { kind: "none" },
-    calloutLabels: options.calloutLabels
+  const result = await renderMarkdownStaticExport({
+    markdown: description,
+    imageResolutionContext: { kind: "projectRoot" },
+    imageAssetFolderName: options.imageAssetFolderName,
+    calloutLabels: options.calloutLabels,
+    mermaidMessages: options.mermaidMessages,
+    mermaidRender: options.mermaidRender
   });
 
-  if (html.includes(MERMAID_BLOCK_CLASS)) {
-    const container = document.createElement("div");
-
-    container.innerHTML = html;
-    await renderMermaidDiagramsToStaticHtml(
-      container,
-      "pergamum-glossary-export-mermaid",
-      options.mermaidMessages,
-      options.mermaidRender
-    );
-    html = container.innerHTML;
-  }
-
   return {
-    html,
-    imageAssets: assets,
-    usesMath: html.includes('class="katex')
+    html: result.html,
+    imageAssets: result.imageAssets,
+    usesMath: result.usesMath
   };
 }
 
