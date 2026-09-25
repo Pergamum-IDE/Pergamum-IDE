@@ -250,6 +250,11 @@ import {
   GlossaryExportDialog,
   type GlossaryExportDialogRequest
 } from "./dialog/GlossaryExportDialog";
+import {
+  GlossaryExportWizardDialog,
+  GlossaryExportWizardErrorBoundary,
+  type OccurrenceCountValue
+} from "./dialog/GlossaryExportWizardDialog";
 import type { GlossaryExportPlan } from "./glossaryExport/glossaryExportModel";
 import { renderGlossaryDescriptionForExport } from "./glossaryExport/glossaryExportHtml";
 import { countGlossaryEntryOccurrences } from "./glossaryExport/glossaryExportOccurrences";
@@ -1410,6 +1415,12 @@ export function App(): JSX.Element {
   // #574 Slice 6: the Glossary Export Dialog's target (`null` = closed).
   const [glossaryExportRequest, setGlossaryExportRequest] =
     useState<GlossaryExportDialogRequest | null>(null);
+  // #581 Slice 1: the Glossary Export Wizard Dialog open state & occurrences map
+  const [isGlossaryExportWizardOpen, setIsGlossaryExportWizardOpen] = useState(false);
+  const [
+    glossaryExportWizardOccurrenceCounts,
+    setGlossaryExportWizardOccurrenceCounts
+  ] = useState<Map<string, OccurrenceCountValue> | undefined>(undefined);
   // #384: Command Palette `%` project-search request handed to the Search pane
   // (also #457: Ctrl+Shift+F / Ctrl+Shift+H, which additionally sets `tab`).
   // `token` is a session-monotonic counter so a repeat `%` re-applies.
@@ -4473,6 +4484,47 @@ export function App(): JSX.Element {
     entryLabel: string
   ): void {
     setGlossaryExportRequest({ entryId, entryLabel });
+  }
+
+  // #581 Slice 1: open the Glossary Export Wizard for multi-entry export
+  function handleOpenGlossaryExportWizard(): void {
+    // 1. Open wizard dialog IMMEDIATELY (0ms, before any IPC or text search)
+    setIsGlossaryExportWizardOpen(true);
+    setGlossaryExportWizardOccurrenceCounts(new Map());
+
+    // 2. Schedule progressive occurrence count computation after first paint
+    setTimeout(() => {
+      void (async () => {
+        const docs = project?.documents ?? [];
+        if (docs.length === 0 || glossaryEntries.length === 0) {
+          return;
+        }
+
+        const counts = new Map<string, OccurrenceCountValue>();
+        for (const entry of glossaryEntries) {
+          counts.set(entry.id, "loading");
+        }
+        setGlossaryExportWizardOccurrenceCounts(new Map(counts));
+
+        const readText = (relPath: string) =>
+          window.pergamum.projects.readProjectDocumentAozora(relPath);
+
+        for (const entry of glossaryEntries) {
+          try {
+            const res = await countGlossaryEntryOccurrences({
+              entry,
+              documents: docs,
+              readText
+            });
+            counts.set(entry.id, res.total);
+          } catch {
+            counts.set(entry.id, "failed");
+          }
+          // Progressive update after each entry so table cells update smoothly without freezing UI
+          setGlossaryExportWizardOccurrenceCounts(new Map(counts));
+        }
+      })();
+    }, 50);
   }
 
   async function confirmGlossaryExportOverwrite(): Promise<boolean> {
@@ -12459,6 +12511,7 @@ export function App(): JSX.Element {
                           handleDeleteGlossaryEntryFromManager(entryId)
                         }
                         onExportEntry={handleExportGlossaryEntryFromManager}
+                        onExportAll={handleOpenGlossaryExportWizard}
                         onReorderEntries={handleReorderGlossaryEntries}
                       />
                     </section>
@@ -12806,6 +12859,17 @@ export function App(): JSX.Element {
         onConfirmOverwrite={confirmGlossaryExportOverwrite}
         onExport={exportGlossaryEntry}
       />
+
+      <GlossaryExportWizardErrorBoundary>
+        <GlossaryExportWizardDialog
+          isOpen={isGlossaryExportWizardOpen}
+          entries={glossaryEntries}
+          occurrenceCountsByEntryId={glossaryExportWizardOccurrenceCounts}
+          translate={translate}
+          opener={null}
+          onClose={() => setIsGlossaryExportWizardOpen(false)}
+        />
+      </GlossaryExportWizardErrorBoundary>
 
       <DocumentMapPngExportDialog
         snapshot={documentMapPngExportSnapshot}

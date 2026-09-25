@@ -6453,6 +6453,7 @@ label.settingsItemHeader {
 .glossaryEntryManagerActions {
   display: flex;
   justify-content: flex-start;
+  gap: 8px;
 }
 
 .glossaryEntryManagerAddButton {
@@ -6472,6 +6473,20 @@ label.settingsItemHeader {
 .glossaryEntryManagerAddButton:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.glossaryEntryManagerExportAllButton {
+  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border-radius: 6px;
+  background: var(--app-dialog-button-bg, #f6f8fa);
+  color: var(--app-dialog-text, #24292f);
+  padding: 6px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.glossaryEntryManagerExportAllButton:hover:not(:disabled) {
+  background: var(--app-dialog-button-hover-bg, #f3f4f6);
 }
 
 .glossaryEntryManagerEmpty {
@@ -11824,4 +11839,275 @@ label.settingsItemHeader {
     transition: none;
     animation: none;
   }
+}
+
+/* #581 Slice 1: Glossary Export Wizard Dialog */
+.glossaryExportWizardDialog {
+  max-width: 780px;
+  width: 90vw;
+}
+
+.glossaryExportWizardContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 400px;
+}
+
+.glossaryExportWizardStepTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--app-dialog-text, #24292f);
+}
+
+.glossaryExportWizardStep1Content,
+.glossaryExportWizardStep2Content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.glossaryExportWizardOptionsBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border-radius: 6px;
+  background: var(--app-dialog-card-bg, #f6f8fa);
+}
+
+.glossaryExportWizardOptionRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.glossaryExportWizardLabel {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 140px;
+
+  color: var(--app-dialog-text, #24292f);
+}
+
+.glossaryExportWizardSelect,
+.glossaryExportWizardTextInput {
+  padding: 5px 10px;
+  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border-radius: 4px;
+  font-size: 13px;
+  background: #ffffff;
+}
+
+.glossaryExportWizardFormatOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--app-dialog-border, #e1e4e8);
+}
+
+.glossaryExportWizardHelpNote {
+  margin: 0;
+  font-size: 12px;
+  color: #57606a;
+}
+
+.glossaryExportWizardPdfFontSection,
+.glossaryExportWizardPdfPageSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.glossaryExportWizardPdfHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.glossaryExportWizardEditButton {
+  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border-radius: 4px;
+  background: #ffffff;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.glossaryExportWizardPdfSummary {
+  margin: 2px 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--app-dialog-text, #24292f);
+}
+
+.glossaryExportWizardTableSection {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border-radius: 6px;
+}
+
+.glossaryExportWizardTable {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.glossaryExportWizardTableRow {
+  display: grid;
+  grid-template-columns: 40px 1.5fr 2fr 1.2fr 80px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--app-dialog-border, #e1e4e8);
+  font-size: 13px;
+}
+
+.glossaryExportWizardTableRow:last-child {
+  border-bottom: none;
+}
+
+.glossaryExportWizardTableHead {
+  background: var(--app-dialog-card-bg, #f6f8fa);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.glossaryExportWizardDragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  opacity: 0.7;
+}
+
+.glossaryExportWizardDragHandle:hover {
+  opacity: 1;
+}
+
+.glossaryExportWizardGripperIcon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+
+.glossaryExportWizardCellRep {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossaryExportWizardCellTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.glossaryExportWizardNoTags {
+  font-size: 11px;
+  color: #8c959f;
+}
+
+.glossaryExportWizardCellCount {
+  font-size: 13px;
+  color: #57606a;
+}
+
+.glossaryExportWizardCellToggle {
+  display: flex;
+  justify-content: center;
+}
+
+.glossaryExportWizardStatusRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.glossaryExportWizardSelectedCount {
+  font-weight: 600;
+}
+
+.glossaryExportWizardErrorText {
+  margin: 0;
+  color: #cf222e;
+  font-weight: 600;
+}
+
+.glossaryExportWizardSummaryBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border-radius: 6px;
+  background: var(--app-dialog-card-bg, #f6f8fa);
+}
+
+.glossaryExportWizardSummaryRow {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.glossaryExportWizardSummaryLabel {
+  font-weight: 600;
+  min-width: 140px;
+}
+
+.glossaryExportWizardSummaryValue {
+  color: var(--app-dialog-text, #24292f);
+}
+
+.glossaryExportWizardSliceNotice {
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: #fff8c5;
+  border: 1px solid #d4a72c;
+  color: #573600;
+  font-size: 12px;
+}
+
+.glossaryExportWizardFooterActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--app-dialog-border, #e1e4e8);
+}
+
+.glossaryExportWizardCancelButton,
+.glossaryExportWizardBackButton {
+  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border-radius: 6px;
+  background: var(--app-dialog-button-bg, #f6f8fa);
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.glossaryExportWizardNextButton,
+.glossaryExportWizardExportButton {
+  border: 1px solid #2f6feb;
+  border-radius: 6px;
+  background: #2f6feb;
+  color: #ffffff;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.glossaryExportWizardNextButton:disabled,
+.glossaryExportWizardExportButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

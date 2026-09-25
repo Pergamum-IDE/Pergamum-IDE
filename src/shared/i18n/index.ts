@@ -64,7 +64,10 @@ export function t(
   key: TranslationKey,
   values: TranslationValues = {}
 ): string {
-  const template = languageDefinitions[language].translations[key];
+  const template = languageDefinitions[language]?.translations?.[key];
+  if (typeof template !== "string") {
+    return String(key);
+  }
 
   return template.replace(/\{([A-Za-z0-9_]+)\}/g, (placeholder, name) => {
     const value = values[name];
