@@ -57,7 +57,7 @@ describe("exportPdf (#523 Slice 8)", () => {
     expect(count).toBe(3);
   });
 
-  it("replaces network external images with placeholder in PDF rendering mode", () => {
+  it("replaces network external images with placeholder in PDF rendering mode", async () => {
     const doc: ExportAssemblyDocument = {
       filePath: "manuscript/chapter1.md",
       parentPath: "manuscript",
@@ -68,7 +68,7 @@ describe("exportPdf (#523 Slice 8)", () => {
         "Here is local: ![Local Map](../assets/map.png)\nAnd external: ![Remote Logo](https://example.com/logo.png)\nAnd external no alt: ![](https://example.com/noalt.png)"
     };
 
-    const { bodyHtml, assets } = renderDocumentToHtml(
+    const { bodyHtml, assets } = await renderDocumentToHtml(
       doc,
       "markdown",
       0,
@@ -88,7 +88,7 @@ describe("exportPdf (#523 Slice 8)", () => {
     expect(assets).toHaveLength(1);
   });
 
-  it("generates combined HTML with PDF page styles when isPdf is true", () => {
+  it("generates combined HTML with PDF page styles when isPdf is true", async () => {
     const docs: ExportAssemblyDocument[] = [
       {
         filePath: "chapter1.md",
@@ -110,7 +110,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       projectName: "PDF Novel"
     };
 
-    const { htmlContent } = generateCombinedHtml(assembly, { isPdf: true });
+    const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: true });
 
     expect(htmlContent).toContain("@page {");
     expect(htmlContent).toContain("size: A4;");
@@ -120,7 +120,7 @@ describe("exportPdf (#523 Slice 8)", () => {
     expect(htmlContent).toContain(".pergamum-export-image-placeholder");
   });
 
-  it("generates combined HTML with A4 landscape and vertical writing CSS when pdfWritingMode is vertical-rl", () => {
+  it("generates combined HTML with A4 landscape and vertical writing CSS when pdfWritingMode is vertical-rl", async () => {
     const docs: ExportAssemblyDocument[] = [
       {
         filePath: "chapter1.md",
@@ -143,7 +143,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       projectName: "PDF Vertical Novel"
     };
 
-    const { htmlContent } = generateCombinedHtml(assembly, {
+    const { htmlContent } = await generateCombinedHtml(assembly, {
       isPdf: true,
       pdfWritingMode: "vertical-rl"
     });
@@ -157,7 +157,7 @@ describe("exportPdf (#523 Slice 8)", () => {
     expect(htmlContent).toContain("出力ファイル構造目次");
   });
 
-  it("does not add vertical writing styles to non-PDF HTML export", () => {
+  it("does not add vertical writing styles to non-PDF HTML export", async () => {
     const docs: ExportAssemblyDocument[] = [
       {
         filePath: "chapter1.md",
@@ -180,7 +180,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       projectName: "HTML Novel"
     };
 
-    const { htmlContent } = generateCombinedHtml(assembly, { isPdf: false });
+    const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: false });
 
     expect(htmlContent).not.toContain("size: A4 landscape;");
     expect(htmlContent).not.toContain('class="pergamum-export-pdf-vertical"');
@@ -266,7 +266,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       expect(resultEmpty.status).toBe("skipped");
     });
 
-    it("embeds requested font family into generated PDF CSS", () => {
+    it("embeds requested font family into generated PDF CSS", async () => {
       const docs: ExportAssemblyDocument[] = [
         {
           filePath: "doc.md",
@@ -288,13 +288,13 @@ describe("exportPdf (#523 Slice 8)", () => {
         pdfFontFamily: "Yu Mincho"
       };
 
-      const { htmlContent } = generateCombinedHtml(assembly, { isPdf: true });
+      const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: true });
       expect(htmlContent).toContain('font-family: "Yu Mincho"');
     });
   });
 
   describe("TOC internal anchor links (#523 Slice 13)", () => {
-    it("generates sequential zero-padded IDs for document sections and links TOC entries to them", () => {
+    it("generates sequential zero-padded IDs for document sections and links TOC entries to them", async () => {
       const docs: ExportAssemblyDocument[] = [
         {
           filePath: "manuscript/001_intro.md",
@@ -324,7 +324,7 @@ describe("exportPdf (#523 Slice 8)", () => {
         projectName: "Novel"
       };
 
-      const { htmlContent } = generateCombinedHtml(assembly, { isPdf: false });
+      const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: false });
 
       expect(htmlContent).toContain(
         '<section class="pergamum-export-document" data-file-path="manuscript/001_intro.md" data-parent-path="manuscript">'
@@ -347,7 +347,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       );
     });
 
-    it("preserves TOC links for both PDF horizontal and PDF vertical export", () => {
+    it("preserves TOC links for both PDF horizontal and PDF vertical export", async () => {
       const docs: ExportAssemblyDocument[] = [
         {
           filePath: "ch1.md",
@@ -381,11 +381,11 @@ describe("exportPdf (#523 Slice 8)", () => {
         projectName: "PDF Vertical"
       };
 
-      const { htmlContent: horizontalHtml } = generateCombinedHtml(
+      const { htmlContent: horizontalHtml } = await generateCombinedHtml(
         horizontalAssembly,
         { isPdf: true, pdfWritingMode: "horizontal" }
       );
-      const { htmlContent: verticalHtml } = generateCombinedHtml(
+      const { htmlContent: verticalHtml } = await generateCombinedHtml(
         verticalAssembly,
         { isPdf: true, pdfWritingMode: "vertical-rl" }
       );
@@ -412,7 +412,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       );
     });
 
-    it("escapes special characters in file paths for TOC links and attributes", () => {
+    it("escapes special characters in file paths for TOC links and attributes", async () => {
       const docs: ExportAssemblyDocument[] = [
         {
           filePath: 'folder & test/<special> "file".md',
@@ -434,7 +434,7 @@ describe("exportPdf (#523 Slice 8)", () => {
         projectName: "Escape Test"
       };
 
-      const { htmlContent } = generateCombinedHtml(assembly, { isPdf: false });
+      const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: false });
 
       expect(htmlContent).toContain(
         'data-file-path="folder &amp; test/&lt;special&gt; &quot;file&quot;.md"'

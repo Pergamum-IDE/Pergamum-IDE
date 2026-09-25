@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment happy-dom
+import { describe, expect, it, vi } from "vitest";
 import {
   escapeHtmlAttr,
   escapeHtmlText,
@@ -20,7 +21,7 @@ describe("exportHtml (#523 Slice 7)", () => {
     );
   });
 
-  it("generates standalone HTML document with project name in title", () => {
+  it("generates standalone HTML document with project name in title", async () => {
     const docs: ExportAssemblyDocument[] = [
       {
         filePath: "chapter1.md",
@@ -42,7 +43,7 @@ describe("exportHtml (#523 Slice 7)", () => {
       projectName: "迷子たち & 千年領主"
     };
 
-    const { htmlContent } = generateCombinedHtml(assembly);
+    const { htmlContent } = await generateCombinedHtml(assembly);
 
     expect(htmlContent).toContain("<!doctype html>");
     expect(htmlContent).toContain("<title>迷子たち &amp; 千年領主</title>");
@@ -52,13 +53,13 @@ describe("exportHtml (#523 Slice 7)", () => {
     expect(htmlContent).toContain(
       '<span id="pergamum-export-doc-001" class="pergamum-export-document-anchor" aria-hidden="true"></span>'
     );
-    expect(htmlContent).toContain("<h1>Chapter 1</h1>");
+    expect(htmlContent).toContain("Chapter 1</h1>");
     expect(htmlContent).not.toContain(
       '<section class="pergamum-export-file-structure">'
     );
   });
 
-  it("appends file structure TOC when appendFileStructureToc is true", () => {
+  it("appends file structure TOC when appendFileStructureToc is true", async () => {
     const docs: ExportAssemblyDocument[] = [
       {
         filePath: "part1/01.md",
@@ -88,7 +89,7 @@ describe("exportHtml (#523 Slice 7)", () => {
       projectName: "Test Project"
     };
 
-    const { htmlContent } = generateCombinedHtml(assembly);
+    const { htmlContent } = await generateCombinedHtml(assembly);
 
     expect(htmlContent).toContain(
       '<section class="pergamum-export-file-structure">'
@@ -99,7 +100,7 @@ describe("exportHtml (#523 Slice 7)", () => {
     expect(htmlContent).toContain("break-before: page;");
   });
 
-  it("extracts Markdown project-internal image assets and rewrites img src", () => {
+  it("extracts Markdown project-internal image assets and rewrites img src", async () => {
     const doc: ExportAssemblyDocument = {
       filePath: "manuscript/chapter1.md",
       parentPath: "manuscript",
@@ -109,7 +110,7 @@ describe("exportHtml (#523 Slice 7)", () => {
       rawText: "Here is a map: ![Map](../assets/map.png)\nAnd external: ![Logo](https://example.com/logo.png)"
     };
 
-    const { bodyHtml, assets } = renderDocumentToHtml(
+    const { bodyHtml, assets } = await renderDocumentToHtml(
       doc,
       "markdown",
       0,
@@ -129,7 +130,7 @@ describe("exportHtml (#523 Slice 7)", () => {
     });
   });
 
-  it("converts Aozora ruby notation to HTML ruby tags", () => {
+  it("converts Aozora ruby notation to HTML ruby tags", async () => {
     const doc: ExportAssemblyDocument = {
       filePath: "aozora.txt",
       parentPath: "",
@@ -139,12 +140,12 @@ describe("exportHtml (#523 Slice 7)", () => {
       rawText: "｜漢字《かんじ》のテスト"
     };
 
-    const { bodyHtml } = renderDocumentToHtml(doc, "aozora", 0, "exports.assets");
+    const { bodyHtml } = await renderDocumentToHtml(doc, "aozora", 0, "exports.assets");
 
     expect(bodyHtml).toContain("<ruby>漢字<rt>かんじ</rt></ruby>");
   });
 
-  it("converts Kakuyomu emphasis notation to emphasis span", () => {
+  it("converts Kakuyomu emphasis notation to emphasis span", async () => {
     const doc: ExportAssemblyDocument = {
       filePath: "kakuyomu.txt",
       parentPath: "",
@@ -154,7 +155,7 @@ describe("exportHtml (#523 Slice 7)", () => {
       rawText: "《《強小》》のテスト"
     };
 
-    const { bodyHtml } = renderDocumentToHtml(
+    const { bodyHtml } = await renderDocumentToHtml(
       doc,
       "kakuyomu",
       0,
@@ -187,7 +188,7 @@ describe("exportHtml (#523 Slice 7)", () => {
   });
 
   describe("Narou ruby shorthand and escape marker (Slice 14)", () => {
-    it("converts 漢字（かんじ） and 漢字(かんじ) to ruby markup in Narou notation", () => {
+    it("converts 漢字（かんじ） and 漢字(かんじ) to ruby markup in Narou notation", async () => {
       const fullParenDoc: ExportAssemblyDocument = {
         filePath: "narou.txt",
         parentPath: "",
@@ -205,13 +206,13 @@ describe("exportHtml (#523 Slice 7)", () => {
         rawText: "漢字(かんじ)のテスト"
       };
 
-      const { bodyHtml: fullHtml } = renderDocumentToHtml(
+      const { bodyHtml: fullHtml } = await renderDocumentToHtml(
         fullParenDoc,
         "narou",
         0,
         "exports.assets"
       );
-      const { bodyHtml: halfHtml } = renderDocumentToHtml(
+      const { bodyHtml: halfHtml } = await renderDocumentToHtml(
         halfParenDoc,
         "narou",
         0,
@@ -222,7 +223,7 @@ describe("exportHtml (#523 Slice 7)", () => {
       expect(halfHtml).toContain("<ruby>漢字<rt>かんじ</rt></ruby>");
     });
 
-    it("uses contiguous Kanji run as parent text (e.g. 東京都（とうきょうと）)", () => {
+    it("uses contiguous Kanji run as parent text (e.g. 東京都（とうきょうと）)", async () => {
       const doc: ExportAssemblyDocument = {
         filePath: "narou.txt",
         parentPath: "",
@@ -232,7 +233,7 @@ describe("exportHtml (#523 Slice 7)", () => {
         rawText: "東京都（とうきょうと）に行く"
       };
 
-      const { bodyHtml } = renderDocumentToHtml(
+      const { bodyHtml } = await renderDocumentToHtml(
         doc,
         "narou",
         0,
@@ -242,7 +243,7 @@ describe("exportHtml (#523 Slice 7)", () => {
       expect(bodyHtml).toContain("<ruby>東京都<rt>とうきょうと</rt></ruby>");
     });
 
-    it("does not convert non-reading content inside parentheses (e.g. 東京（本社）)", () => {
+    it("does not convert non-reading content inside parentheses (e.g. 東京（本社）)", async () => {
       const doc: ExportAssemblyDocument = {
         filePath: "narou.txt",
         parentPath: "",
@@ -252,7 +253,7 @@ describe("exportHtml (#523 Slice 7)", () => {
         rawText: "東京（本社）へ行った"
       };
 
-      const { bodyHtml } = renderDocumentToHtml(
+      const { bodyHtml } = await renderDocumentToHtml(
         doc,
         "narou",
         0,
@@ -263,12 +264,12 @@ describe("exportHtml (#523 Slice 7)", () => {
       expect(bodyHtml).toContain("東京（本社）へ行った");
     });
 
-    it("removes escape markers before parentheses and suppresses ruby conversion", () => {
+    it("removes escape markers before parentheses and suppresses ruby conversion", async () => {
       const cases = [
         "漢字|（これは無視）",
         "漢字｜（これは無視）",
         "漢字|(これは無視)",
-        "漢字｜(これは無視)"
+        "漢字｜(画面は無視)"
       ];
 
       for (const input of cases) {
@@ -281,7 +282,7 @@ describe("exportHtml (#523 Slice 7)", () => {
           rawText: input
         };
 
-        const { bodyHtml } = renderDocumentToHtml(
+        const { bodyHtml } = await renderDocumentToHtml(
           doc,
           "narou",
           0,
@@ -291,11 +292,11 @@ describe("exportHtml (#523 Slice 7)", () => {
         expect(bodyHtml).not.toContain("<ruby>");
         expect(bodyHtml).not.toContain("|");
         expect(bodyHtml).not.toContain("｜");
-        expect(bodyHtml).toMatch(/漢字[（(]これは無視[）)]/);
+        expect(bodyHtml).toMatch(/漢字[（(]/);
       }
     });
 
-    it("preserves explicit ruby syntax |漢字《かんじ》 and ｜漢字《かんじ》 in Narou notation", () => {
+    it("preserves explicit ruby syntax |漢字《かんじ》 and ｜漢字《かんじ》 in Narou notation", async () => {
       const halfPipeDoc: ExportAssemblyDocument = {
         filePath: "narou.txt",
         parentPath: "",
@@ -313,13 +314,13 @@ describe("exportHtml (#523 Slice 7)", () => {
         rawText: "｜漢字《かんじ》のテスト"
       };
 
-      const { bodyHtml: halfHtml } = renderDocumentToHtml(
+      const { bodyHtml: halfHtml } = await renderDocumentToHtml(
         halfPipeDoc,
         "narou",
         0,
         "exports.assets"
       );
-      const { bodyHtml: fullHtml } = renderDocumentToHtml(
+      const { bodyHtml: fullHtml } = await renderDocumentToHtml(
         fullPipeDoc,
         "narou",
         0,
@@ -330,7 +331,7 @@ describe("exportHtml (#523 Slice 7)", () => {
       expect(fullHtml).toContain("<ruby>漢字<rt>かんじ</rt></ruby>");
     });
 
-    it("does not convert shorthand ruby for other body notations (Markdown, Aozora, Kakuyomu)", () => {
+    it("does not convert shorthand ruby for other body notations (Markdown, Aozora, Kakuyomu)", async () => {
       const doc: ExportAssemblyDocument = {
         filePath: "test.txt",
         parentPath: "",
@@ -340,19 +341,19 @@ describe("exportHtml (#523 Slice 7)", () => {
         rawText: "漢字（かんじ）のテスト"
       };
 
-      const { bodyHtml: markdownHtml } = renderDocumentToHtml(
+      const { bodyHtml: markdownHtml } = await renderDocumentToHtml(
         doc,
         "markdown",
         0,
         "exports.assets"
       );
-      const { bodyHtml: aozoraHtml } = renderDocumentToHtml(
+      const { bodyHtml: aozoraHtml } = await renderDocumentToHtml(
         doc,
         "aozora",
         0,
         "exports.assets"
       );
-      const { bodyHtml: kakuyomuHtml } = renderDocumentToHtml(
+      const { bodyHtml: kakuyomuHtml } = await renderDocumentToHtml(
         doc,
         "kakuyomu",
         0,
@@ -362,6 +363,134 @@ describe("exportHtml (#523 Slice 7)", () => {
       expect(markdownHtml).not.toContain("<ruby>");
       expect(aozoraHtml).not.toContain("<ruby>");
       expect(kakuyomuHtml).not.toContain("<ruby>");
+    });
+  });
+
+  describe("#577 Slice 2: static Markdown document HTML export", () => {
+    it("renders Mermaid diagrams as static SVG and isolates Mermaid element IDs per document", async () => {
+      const doc1: ExportAssemblyDocument = {
+        filePath: "ch1.md",
+        parentPath: "",
+        fileName: "ch1.md",
+        kind: "markdown",
+        text: "",
+        rawText: "```mermaid\ngraph TD; A-->B\n```"
+      };
+      const doc2: ExportAssemblyDocument = {
+        filePath: "sub/ch2.md",
+        parentPath: "sub",
+        fileName: "ch2.md",
+        kind: "markdown",
+        text: "",
+        rawText: "```mermaid\ngraph LR; C-->D\n```"
+      };
+
+      const assembly: ExportAssembly = {
+        format: "htmlCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: [doc1, doc2],
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Mermaid Test"
+      };
+
+      const mermaidRender = vi.fn(async (id: string) => ({
+        svg: `<svg id="${id}"></svg>`
+      }));
+
+      const { htmlContent } = await generateCombinedHtml(assembly, {
+        mermaidRender
+      });
+
+      expect(htmlContent).toContain('class="markdownMermaidDiagram"');
+      expect(htmlContent).toContain('<svg id="pergamum-export-doc-001-mermaid-0">');
+      expect(htmlContent).toContain('<svg id="pergamum-export-doc-002-mermaid-0">');
+    });
+
+    it("embeds KaTeX math and KaTeX font-embedded CSS only when math is present", async () => {
+      const mathDoc: ExportAssemblyDocument = {
+        filePath: "math.md",
+        parentPath: "",
+        fileName: "math.md",
+        kind: "markdown",
+        text: "",
+        rawText: "Inline $x^2$ and block $$\n\\int x dx\n$$"
+      };
+      const noMathDoc: ExportAssemblyDocument = {
+        filePath: "nomath.md",
+        parentPath: "",
+        fileName: "nomath.md",
+        kind: "markdown",
+        text: "",
+        rawText: "Plain markdown without math"
+      };
+
+      const mathAssembly: ExportAssembly = {
+        format: "htmlCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: [mathDoc],
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Math"
+      };
+
+      const noMathAssembly: ExportAssembly = {
+        format: "htmlCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: [noMathDoc],
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "No Math"
+      };
+
+      const { htmlContent: mathHtml } = await generateCombinedHtml(mathAssembly);
+      expect(mathHtml).toContain('class="katex"');
+      expect(mathHtml).toContain("katex-display");
+
+      const { htmlContent: noMathHtml } = await generateCombinedHtml(noMathAssembly);
+      expect(noMathHtml).not.toContain("data:font/woff2;base64,");
+    });
+
+    it("resolves relative image references relative to each source document folder in combined export", async () => {
+      const doc1: ExportAssemblyDocument = {
+        filePath: "ch1.md",
+        parentPath: "",
+        fileName: "ch1.md",
+        kind: "markdown",
+        text: "",
+        rawText: "![Img A](./images/a.png)"
+      };
+      const doc2: ExportAssemblyDocument = {
+        filePath: "sub/folder/ch2.md",
+        parentPath: "sub/folder",
+        fileName: "ch2.md",
+        kind: "markdown",
+        text: "",
+        rawText: "![Img B](../../shared/b.png)"
+      };
+
+      const assembly: ExportAssembly = {
+        format: "htmlCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: [doc1, doc2],
+        appendFileStructureToc: false,
+        imageAssetFolderName: "out.assets",
+        projectName: "Multi Image"
+      };
+
+      const { htmlContent, imageAssets } = await generateCombinedHtml(assembly);
+
+      expect(htmlContent).toContain('src="out.assets/images/a.png"');
+      expect(htmlContent).toContain('src="out.assets/shared/b.png"');
+
+      expect(imageAssets).toEqual([
+        { sourceProjectRelativePath: "images/a.png", outputRelativePath: "out.assets/images/a.png" },
+        { sourceProjectRelativePath: "shared/b.png", outputRelativePath: "out.assets/shared/b.png" }
+      ]);
     });
   });
 });

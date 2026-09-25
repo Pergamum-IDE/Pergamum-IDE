@@ -28,6 +28,20 @@ import {
   markdownItCallout,
   type MarkdownCalloutLabels
 } from "./preview/markdownCallout";
+import { renderMarkdownStaticExport } from "./export/markdownStaticExportRenderer";
+import { codeHighlightExportCss } from "./preview/codeHighlight";
+import type {
+  MermaidPreviewMessages,
+  MermaidRenderFn
+} from "./preview/markdownMermaidRendering";
+
+const defaultExportMermaidMessages: MermaidPreviewMessages = {
+  emptyMessage: "ダイアグラム内容が空です",
+  errorMessage: "Mermaid ダイアグラムの描画に失敗しました",
+  errorHint: "構文を確認してください",
+  showDetailsLabel: "詳細を表示"
+};
+
 
 export function isNetworkExternalImageSrc(src: string): boolean {
   const value = src.trim();
@@ -411,16 +425,27 @@ export function collectProjectLocalImagesForMarkdown(
   };
 }
 
-export function renderDocumentToHtml(
+export interface RenderDocumentToHtmlResult {
+  readonly bodyHtml: string;
+  readonly assets: readonly ExportImageAssetCopyItem[];
+  readonly usesMath?: boolean;
+  readonly katexCss?: string | null;
+  readonly exportCss?: string;
+}
+
+export async function renderDocumentToHtml(
   doc: ExportAssemblyDocument,
   bodyNotation: ExportBodyNotation,
   headingRemovalLevel: HeadingRemovalLevel,
   imageAssetFolderName: string,
-  options?: { isPdf?: boolean; calloutLabels?: MarkdownCalloutLabels }
-): {
-  readonly bodyHtml: string;
-  readonly assets: readonly ExportImageAssetCopyItem[];
-} {
+  options?: {
+    isPdf?: boolean;
+    calloutLabels?: MarkdownCalloutLabels;
+    mermaidMessages?: MermaidPreviewMessages;
+    mermaidIdPrefix?: string;
+    mermaidRender?: MermaidRenderFn;
+  }
+): Promise<RenderDocumentToHtmlResult> {
   const rawText = doc.kind === "markdown" ? doc.rawText : doc.text;
   const headingProcessed =
     doc.kind === "markdown"
@@ -428,22 +453,45 @@ export function renderDocumentToHtml(
       : rawText;
 
   if (bodyNotation === "markdown") {
-    const docForCollection: ExportAssemblyDocument = {
-      ...doc,
-      rawText: headingProcessed
-    };
+    if (options?.isPdf) {
+      const docForCollection: ExportAssemblyDocument = {
+        ...doc,
+        rawText: headingProcessed
+      };
 
-    const { modifiedMarkdownText, assets } =
-      collectProjectLocalImagesForDocument(
-        docForCollection,
-        imageAssetFolderName
-      );
+      const { modifiedMarkdownText, assets } =
+        collectProjectLocalImagesForDocument(
+          docForCollection,
+          imageAssetFolderName
+        );
 
-    const parser = options?.isPdf ? pdfMarkdownParser : markdownParser;
-    const renderedHtml = parser.render(modifiedMarkdownText, {
-      markdownCalloutLabels: options?.calloutLabels
+      const parser = pdfMarkdownParser;
+      const renderedHtml = parser.render(modifiedMarkdownText, {
+        markdownCalloutLabels: options?.calloutLabels
+      });
+      return { bodyHtml: renderedHtml, assets };
+    }
+
+    const staticExportResult = await renderMarkdownStaticExport({
+      markdown: headingProcessed,
+      imageResolutionContext: {
+        kind: "sourceFile",
+        sourceMarkdownProjectRelativePath: doc.filePath
+      },
+      imageAssetFolderName,
+      calloutLabels: options?.calloutLabels,
+      mermaidMessages: options?.mermaidMessages ?? defaultExportMermaidMessages,
+      mermaidIdPrefix: options?.mermaidIdPrefix,
+      mermaidRender: options?.mermaidRender
     });
-    return { bodyHtml: renderedHtml, assets };
+
+    return {
+      bodyHtml: staticExportResult.html,
+      assets: staticExportResult.imageAssets,
+      usesMath: staticExportResult.usesMath,
+      katexCss: staticExportResult.katexCss,
+      exportCss: staticExportResult.exportCss
+    };
   }
 
   if (bodyNotation === "aozora") {
@@ -556,15 +604,17 @@ export interface CombinedHtmlResult {
   readonly imageAssets: readonly ExportImageAssetCopyItem[];
 }
 
-export function generateCombinedHtml(
+export async function generateCombinedHtml(
   assembly: ExportAssembly,
   options?: {
     isPdf?: boolean;
     pdfWritingMode?: PdfWritingMode;
     /** #568: localized callout labels; Japanese when omitted. */
     calloutLabels?: MarkdownCalloutLabels;
+    mermaidMessages?: MermaidPreviewMessages;
+    mermaidRender?: MermaidRenderFn;
   }
-): CombinedHtmlResult {
+): Promise<CombinedHtmlResult> {
   const titleText = assembly.projectName
     ? escapeHtmlText(assembly.projectName)
     : "Pergamum Export";
@@ -577,19 +627,33 @@ export function generateCombinedHtml(
   const seenAssets = new Set<string>();
 
   const docSections: string[] = [];
+  let combinedUsesMath = false;
+  let aggregatedKatexCss: string | null = null;
 
   for (let i = 0; i < assembly.documents.length; i += 1) {
     const doc = assembly.documents[i];
     const docIndexStr = String(i + 1).padStart(3, "0");
     const docId = `pergamum-export-doc-${docIndexStr}`;
+    const mermaidIdPrefix = `pergamum-export-doc-${docIndexStr}-mermaid`;
 
-    const { bodyHtml, assets } = renderDocumentToHtml(
-      doc,
-      assembly.bodyNotation,
-      assembly.headingRemovalLevel,
-      assembly.imageAssetFolderName,
-      options
-    );
+    const { bodyHtml, assets, usesMath, katexCss } =
+      await renderDocumentToHtml(
+        doc,
+        assembly.bodyNotation,
+        assembly.headingRemovalLevel,
+        assembly.imageAssetFolderName,
+        {
+          ...options,
+          mermaidIdPrefix
+        }
+      );
+
+    if (usesMath) {
+      combinedUsesMath = true;
+      if (katexCss && !aggregatedKatexCss) {
+        aggregatedKatexCss = katexCss;
+      }
+    }
 
     for (const asset of assets) {
       if (!seenAssets.has(asset.sourceProjectRelativePath)) {
@@ -708,7 +772,11 @@ export function generateCombinedHtml(
         `      text-emphasis-style: sesame;`,
         `      -webkit-text-emphasis-style: sesame;`,
         `    }`,
-        markdownCalloutExportCss
+        markdownCalloutExportCss,
+        ...(assembly.bodyNotation === "markdown" ? [codeHighlightExportCss] : []),
+        ...(assembly.bodyNotation === "markdown" && combinedUsesMath && aggregatedKatexCss
+          ? [aggregatedKatexCss]
+          : [])
       ].join("\n");
 
   const htmlContent = [
