@@ -339,7 +339,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
       ]);
     });
 
-    it("defines editor.ruby.rule in settings UI catalog with only aozora option for this PoC", () => {
+    it("defines editor.ruby.rule in settings UI catalog with aozora and denden options", () => {
       const rubyRuleItem = getSettingCatalogItem("editor.ruby.rule");
       expect(rubyRuleItem).toBeDefined();
       expect(rubyRuleItem?.category).toBe("editor");
@@ -353,10 +353,14 @@ describe("Settings UI Catalog Schema (#226)", () => {
           {
             value: "aozora",
             labelKey: "settings.editor.ruby.rule.option.aozora.label"
+          },
+          {
+            value: "denden",
+            labelKey: "settings.editor.ruby.rule.option.denden.label"
           }
         ]);
         const optionValues = rubyRuleItem.control.options.map((opt) => opt.value);
-        expect(optionValues).toEqual(["aozora"]);
+        expect(optionValues).toEqual(["aozora", "denden"]);
         expect(optionValues).not.toContain("kakuyomu");
         expect(optionValues).not.toContain("narou");
       }

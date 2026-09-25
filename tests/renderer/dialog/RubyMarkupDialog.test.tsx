@@ -129,4 +129,54 @@ describe("RubyMarkupDialog", () => {
 
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it("supports denden rule selection and generates {text|rubyText} syntax", () => {
+    const onApply = vi.fn();
+    renderDialog({ isOpen: true, selectedText: "電子出版", initialRule: "denden", onApply });
+
+    const ruleSelect = container.querySelector<HTMLSelectElement>("select")!;
+    expect(ruleSelect.value).toBe("denden");
+
+    const textInput = container.querySelector<HTMLInputElement>("input[type='text']")!;
+    setInputValue(textInput, "でんししゅっぱん");
+
+    expect(container.textContent).toContain("{電子出版|でんししゅっぱん}");
+
+    const confirmButton = container.querySelector<HTMLButtonElement>(".appDialogButton-confirm")!;
+    act(() => {
+      confirmButton.click();
+    });
+
+    expect(onApply).toHaveBeenCalledWith("{電子出版|でんししゅっぱん}");
+  });
+
+  it("normalizes full-width ｜ to half-width | on denden ruby insertion", () => {
+    const onApply = vi.fn();
+    renderDialog({ isOpen: true, selectedText: "漢字", initialRule: "denden", onApply });
+
+    const textInput = container.querySelector<HTMLInputElement>("input[type='text']")!;
+    setInputValue(textInput, "かん｜じ");
+
+    expect(container.textContent).toContain("{漢字|かん|じ}");
+
+    const confirmButton = container.querySelector<HTMLButtonElement>(".appDialogButton-confirm")!;
+    act(() => {
+      confirmButton.click();
+    });
+
+    expect(onApply).toHaveBeenCalledWith("{漢字|かん|じ}");
+  });
+
+  it("shows denden footer note only when rule is denden", () => {
+    renderDialog({ isOpen: true, selectedText: "漢字", initialRule: "aozora" });
+    expect(container.textContent).not.toContain("全角の「｜」は半角の「|」に変換して挿入します。");
+
+    const ruleSelect = container.querySelector<HTMLSelectElement>("select")!;
+    act(() => {
+      ruleSelect.value = "denden";
+      ruleSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("全角の「｜」は半角の「|」に変換して挿入します。");
+  });
 });

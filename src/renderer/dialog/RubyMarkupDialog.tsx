@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from "react";
+import { Fragment, useId, useState, type FormEvent } from "react";
 import type { RubyMarkupRule } from "../../shared/settings";
 import type { Translate } from "../../shared/i18n";
 import {
@@ -6,7 +6,10 @@ import {
   RUBY_TEXT_MAX_GRAPHEMES,
   validateRubyText
 } from "../../shared/rubyMarkupSettings";
-import { applyRubyMarkup } from "../../shared/rubyMarkupGenerator";
+import {
+  applyRubyMarkup,
+  renderDendenRubyHtml
+} from "../../shared/rubyMarkupGenerator";
 import { InfoDialog } from "./InfoDialog";
 
 export interface RubyMarkupDialogProps {
@@ -34,7 +37,7 @@ function RubyMarkupDialogContent({
   const ruleSelectId = `${dialogId}-rule`;
   const rubyInputId = `${dialogId}-rubyText`;
 
-  const isValid = validateRubyText(rubyText);
+  const isValid = validateRubyText(rubyText, rule);
 
   const sourcePreviewText = isValid
     ? applyRubyMarkup({
@@ -55,6 +58,23 @@ function RubyMarkupDialogContent({
     }
     onApply(sourcePreviewText);
     onClose();
+  };
+
+  const renderAppliedPreview = (): JSX.Element | null => {
+    if (!isValid) {
+      return null;
+    }
+    if (rule === "denden") {
+      const parts = rubyText.split("|");
+      const html = renderDendenRubyHtml(selectedText, parts);
+      return <span dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+    return (
+      <ruby>
+        {selectedText}
+        <rt>{rubyText}</rt>
+      </ruby>
+    );
   };
 
   return (
@@ -104,6 +124,9 @@ function RubyMarkupDialogContent({
             <option value="aozora">
               {translate("settings.editor.ruby.rule.option.aozora.label")}
             </option>
+            <option value="denden">
+              {translate("settings.editor.ruby.rule.option.denden.label")}
+            </option>
           </select>
         </div>
 
@@ -131,6 +154,14 @@ function RubyMarkupDialogContent({
           )}
         </div>
 
+        {rule === "denden" && (
+          <div className="appFormField rubyDendenNoteField">
+            <div className="appFormHelp">
+              {translate("rubyMarkup.dialog.dendenNote")}
+            </div>
+          </div>
+        )}
+
         <div className="appFormField rubySourcePreviewField">
           <div className="appFormLabel">
             {translate("rubyMarkup.dialog.sourcePreviewLabel")}
@@ -143,12 +174,7 @@ function RubyMarkupDialogContent({
             {translate("rubyMarkup.dialog.appliedPreviewLabel")}
           </div>
           <div className="rubyAppliedPreview">
-            {isValid ? (
-              <ruby>
-                {selectedText}
-                <rt>{rubyText}</rt>
-              </ruby>
-            ) : null}
+            {renderAppliedPreview()}
           </div>
         </div>
       </form>

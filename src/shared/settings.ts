@@ -277,7 +277,7 @@ export interface ApplicationEditorEmphasisMarkSettings {
   narouMarkText: string;
 }
 
-export type RubyMarkupRule = "aozora";
+export type RubyMarkupRule = "aozora" | "denden";
 
 export interface ApplicationEditorRubyMarkupSettings {
   rule: RubyMarkupRule;

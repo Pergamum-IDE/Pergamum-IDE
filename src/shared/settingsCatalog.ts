@@ -1210,7 +1210,7 @@ export const settingsCatalog = defineSettingsCatalog({
   "editor.ruby.rule": defineEnumSetting({
     key: "editor.ruby.rule",
     scope: "applicationWithProjectOverride",
-    enumValues: ["aozora"],
+    enumValues: ["aozora", "denden"],
     defaultValue: "aozora",
     labelKey: "settings.editor.ruby.rule.label",
     descriptionKey: "settings.editor.ruby.rule.description",
