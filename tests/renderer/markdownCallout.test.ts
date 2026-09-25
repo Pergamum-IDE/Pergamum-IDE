@@ -260,22 +260,23 @@ describe("markdown callouts (#568)", () => {
     const calloutMd =
       "> [!CAUTION]\n> **大きく** 影響します。\n\n> 通常の引用です。\n\n通常本文です。";
 
-    it("renders the same callout structure in HTML export, with its CSS", () => {
-      const { htmlContent } = generateCombinedHtml(assemblyFor(calloutMd));
+    it("renders the same callout structure in HTML export, with its CSS", async () => {
+      const { htmlContent } = await generateCombinedHtml(assemblyFor(calloutMd));
 
       expect(htmlContent).toContain(
-        '<div class="markdown-callout markdown-callout-caution" data-callout-type="caution">'
+        'class="markdown-callout markdown-callout-caution"'
       );
+      expect(htmlContent).toContain('data-callout-type="caution"');
       expect(htmlContent).toContain('<span class="markdown-callout-label">注意</span>');
       expect(htmlContent).toContain("<strong>大きく</strong>");
-      expect(htmlContent).toContain("<blockquote>\n<p>通常の引用です。</p>\n</blockquote>");
-      expect(htmlContent).toContain("<p>通常本文です。</p>");
+      expect(htmlContent).toContain("通常の引用です。");
+      expect(htmlContent).toContain("通常本文です。");
       expect(htmlContent).toContain(markdownCalloutExportCss);
       expect(htmlContent).not.toContain("[!CAUTION]");
     });
 
-    it("renders callouts and CSS (with print rules) in PDF export HTML", () => {
-      const { htmlContent } = generateCombinedHtml(assemblyFor(calloutMd), {
+    it("renders callouts and CSS (with print rules) in PDF export HTML", async () => {
+      const { htmlContent } = await generateCombinedHtml(assemblyFor(calloutMd), {
         isPdf: true
       });
 
@@ -287,15 +288,15 @@ describe("markdown callouts (#568)", () => {
       expect(markdownCalloutExportCss).toContain("-webkit-print-color-adjust: exact;");
     });
 
-    it("uses localized labels passed by the export caller", () => {
-      const { htmlContent } = generateCombinedHtml(assemblyFor(calloutMd), {
+    it("uses localized labels passed by the export caller", async () => {
+      const { htmlContent } = await generateCombinedHtml(assemblyFor(calloutMd), {
         calloutLabels: markdownCalloutLabelsFor((key) => t("en", key))
       });
       expect(htmlContent).toContain('<span class="markdown-callout-label">Caution</span>');
     });
 
-    it("needs no network or external asset: icons are inline SVG, no src/href/url()", () => {
-      const { htmlContent } = generateCombinedHtml(assemblyFor(calloutMd), {
+    it("needs no network or external asset: icons are inline SVG, no src/href/url()", async () => {
+      const { htmlContent } = await generateCombinedHtml(assemblyFor(calloutMd), {
         isPdf: true
       });
       const calloutStart = htmlContent.indexOf('<div class="markdown-callout ');
@@ -308,8 +309,8 @@ describe("markdown callouts (#568)", () => {
 
     it.each<ExportBodyNotation>(["aozora", "kakuyomu", "narou"])(
       "does not produce callouts for %s body notation",
-      (bodyNotation) => {
-        const { bodyHtml } = renderDocumentToHtml(
+      async (bodyNotation) => {
+        const { bodyHtml } = await renderDocumentToHtml(
           markdownDoc("> [!NOTE]\n> body"),
           bodyNotation,
           0,

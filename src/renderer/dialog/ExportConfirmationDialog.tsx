@@ -687,7 +687,7 @@ export function ExportConfirmationDialog({
           return;
         }
 
-        const { htmlContent, imageAssets } = generateCombinedHtml(assembly, {
+        const { htmlContent, imageAssets } = await generateCombinedHtml(assembly, {
           calloutLabels: markdownCalloutLabelsFor(translate)
         });
 
@@ -725,7 +725,7 @@ export function ExportConfirmationDialog({
           return;
         }
 
-        const { htmlContent, imageAssets } = generateCombinedHtml(assembly, {
+        const { htmlContent, imageAssets } = await generateCombinedHtml(assembly, {
           isPdf: true,
           pdfWritingMode,
           calloutLabels: markdownCalloutLabelsFor(translate)

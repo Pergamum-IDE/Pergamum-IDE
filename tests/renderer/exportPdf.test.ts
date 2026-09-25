@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import {
   countExternalImageReferences,
@@ -17,7 +18,7 @@ import type {
   ExportAssemblyDocument
 } from "../../src/renderer/exportTypes";
 
-describe("exportPdf (#523 Slice 8)", () => {
+describe("exportPdf (#523 Slice 8 / #577 Slice 3)", () => {
   it("detects network external image sources correctly", () => {
     expect(isNetworkExternalImageSrc("https://example.com/pic.png")).toBe(true);
     expect(isNetworkExternalImageSrc("http://example.com/pic.png")).toBe(true);
@@ -57,7 +58,7 @@ describe("exportPdf (#523 Slice 8)", () => {
     expect(count).toBe(3);
   });
 
-  it("replaces network external images with placeholder in PDF rendering mode", () => {
+  it("resolves project local images in PDF rendering mode using static Markdown export renderer", async () => {
     const doc: ExportAssemblyDocument = {
       filePath: "manuscript/chapter1.md",
       parentPath: "manuscript",
@@ -65,10 +66,10 @@ describe("exportPdf (#523 Slice 8)", () => {
       kind: "markdown",
       text: "",
       rawText:
-        "Here is local: ![Local Map](../assets/map.png)\nAnd external: ![Remote Logo](https://example.com/logo.png)\nAnd external no alt: ![](https://example.com/noalt.png)"
+        "Here is local: ![Local Map](../assets/map.png)\nAnd external: ![Remote Logo](https://example.com/logo.png)"
     };
 
-    const { bodyHtml, assets } = renderDocumentToHtml(
+    const { bodyHtml, assets } = await renderDocumentToHtml(
       doc,
       "markdown",
       0,
@@ -80,15 +81,17 @@ describe("exportPdf (#523 Slice 8)", () => {
       '<img src="exports.assets/assets/map.png" alt="Local Map">'
     );
     expect(bodyHtml).toContain(
-      '<span class="pergamum-export-image-placeholder">[画像: Remote Logo]</span>'
+      '<img src="https://example.com/logo.png" alt="Remote Logo">'
     );
-    expect(bodyHtml).toContain(
-      '<span class="pergamum-export-image-placeholder">[画像]</span>'
-    );
-    expect(assets).toHaveLength(1);
+    expect(assets).toEqual([
+      {
+        sourceProjectRelativePath: "assets/map.png",
+        outputRelativePath: "exports.assets/assets/map.png"
+      }
+    ]);
   });
 
-  it("generates combined HTML with PDF page styles when isPdf is true", () => {
+  it("generates combined HTML with PDF page styles when isPdf is true", async () => {
     const docs: ExportAssemblyDocument[] = [
       {
         filePath: "chapter1.md",
@@ -110,7 +113,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       projectName: "PDF Novel"
     };
 
-    const { htmlContent } = generateCombinedHtml(assembly, { isPdf: true });
+    const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: true });
 
     expect(htmlContent).toContain("@page {");
     expect(htmlContent).toContain("size: A4;");
@@ -120,7 +123,7 @@ describe("exportPdf (#523 Slice 8)", () => {
     expect(htmlContent).toContain(".pergamum-export-image-placeholder");
   });
 
-  it("generates combined HTML with A4 landscape and vertical writing CSS when pdfWritingMode is vertical-rl", () => {
+  it("generates combined HTML with A4 landscape and vertical writing CSS when pdfWritingMode is vertical-rl", async () => {
     const docs: ExportAssemblyDocument[] = [
       {
         filePath: "chapter1.md",
@@ -143,7 +146,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       projectName: "PDF Vertical Novel"
     };
 
-    const { htmlContent } = generateCombinedHtml(assembly, {
+    const { htmlContent } = await generateCombinedHtml(assembly, {
       isPdf: true,
       pdfWritingMode: "vertical-rl"
     });
@@ -157,7 +160,7 @@ describe("exportPdf (#523 Slice 8)", () => {
     expect(htmlContent).toContain("出力ファイル構造目次");
   });
 
-  it("does not add vertical writing styles to non-PDF HTML export", () => {
+  it("does not add vertical writing styles to non-PDF HTML export", async () => {
     const docs: ExportAssemblyDocument[] = [
       {
         filePath: "chapter1.md",
@@ -180,7 +183,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       projectName: "HTML Novel"
     };
 
-    const { htmlContent } = generateCombinedHtml(assembly, { isPdf: false });
+    const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: false });
 
     expect(htmlContent).not.toContain("size: A4 landscape;");
     expect(htmlContent).not.toContain('class="pergamum-export-pdf-vertical"');
@@ -266,7 +269,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       expect(resultEmpty.status).toBe("skipped");
     });
 
-    it("embeds requested font family into generated PDF CSS", () => {
+    it("embeds requested font family into generated PDF CSS", async () => {
       const docs: ExportAssemblyDocument[] = [
         {
           filePath: "doc.md",
@@ -288,13 +291,13 @@ describe("exportPdf (#523 Slice 8)", () => {
         pdfFontFamily: "Yu Mincho"
       };
 
-      const { htmlContent } = generateCombinedHtml(assembly, { isPdf: true });
+      const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: true });
       expect(htmlContent).toContain('font-family: "Yu Mincho"');
     });
   });
 
   describe("TOC internal anchor links (#523 Slice 13)", () => {
-    it("generates sequential zero-padded IDs for document sections and links TOC entries to them", () => {
+    it("generates sequential zero-padded IDs for document sections and links TOC entries to them", async () => {
       const docs: ExportAssemblyDocument[] = [
         {
           filePath: "manuscript/001_intro.md",
@@ -324,7 +327,7 @@ describe("exportPdf (#523 Slice 8)", () => {
         projectName: "Novel"
       };
 
-      const { htmlContent } = generateCombinedHtml(assembly, { isPdf: false });
+      const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: false });
 
       expect(htmlContent).toContain(
         '<section class="pergamum-export-document" data-file-path="manuscript/001_intro.md" data-parent-path="manuscript">'
@@ -347,7 +350,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       );
     });
 
-    it("preserves TOC links for both PDF horizontal and PDF vertical export", () => {
+    it("preserves TOC links for both PDF horizontal and PDF vertical export", async () => {
       const docs: ExportAssemblyDocument[] = [
         {
           filePath: "ch1.md",
@@ -381,11 +384,11 @@ describe("exportPdf (#523 Slice 8)", () => {
         projectName: "PDF Vertical"
       };
 
-      const { htmlContent: horizontalHtml } = generateCombinedHtml(
+      const { htmlContent: horizontalHtml } = await generateCombinedHtml(
         horizontalAssembly,
         { isPdf: true, pdfWritingMode: "horizontal" }
       );
-      const { htmlContent: verticalHtml } = generateCombinedHtml(
+      const { htmlContent: verticalHtml } = await generateCombinedHtml(
         verticalAssembly,
         { isPdf: true, pdfWritingMode: "vertical-rl" }
       );
@@ -412,7 +415,7 @@ describe("exportPdf (#523 Slice 8)", () => {
       );
     });
 
-    it("escapes special characters in file paths for TOC links and attributes", () => {
+    it("escapes special characters in file paths for TOC links and attributes", async () => {
       const docs: ExportAssemblyDocument[] = [
         {
           filePath: 'folder & test/<special> "file".md',
@@ -434,7 +437,7 @@ describe("exportPdf (#523 Slice 8)", () => {
         projectName: "Escape Test"
       };
 
-      const { htmlContent } = generateCombinedHtml(assembly, { isPdf: false });
+      const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: false });
 
       expect(htmlContent).toContain(
         'data-file-path="folder &amp; test/&lt;special&gt; &quot;file&quot;.md"'
@@ -444,4 +447,203 @@ describe("exportPdf (#523 Slice 8)", () => {
       );
     });
   });
+
+  describe("Slice 3 preview-compatible rendering for PDF export (#577 Slice 3)", () => {
+    it("renders Mermaid diagrams as static SVGs in PDF combined HTML", async () => {
+      const mockMermaidRender = async (
+        id: string,
+        source: string
+      ) => ({
+        kind: "success" as const,
+        svg: `<svg id="${id}" data-code="${source}"></svg>`
+      });
+
+      const docs: ExportAssemblyDocument[] = [
+        {
+          filePath: "docs/architecture.md",
+          parentPath: "docs",
+          fileName: "architecture.md",
+          kind: "markdown",
+          text: "",
+          rawText: "```mermaid\ngraph TD\n  A --> B\n```"
+        }
+      ];
+
+      const assembly: ExportAssembly = {
+        format: "pdfCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Diagram PDF"
+      };
+
+      const { htmlContent } = await generateCombinedHtml(assembly, {
+        isPdf: true,
+        mermaidRender: mockMermaidRender
+      });
+
+      expect(htmlContent).toContain('<svg id="pergamum-export-doc-001-mermaid-0"');
+    });
+
+    it("includes KaTeX rendered math in PDF HTML when math is present", async () => {
+      const docs: ExportAssemblyDocument[] = [
+        {
+          filePath: "math.md",
+          parentPath: "",
+          fileName: "math.md",
+          kind: "markdown",
+          text: "",
+          rawText: "Formula: $E = mc^2$"
+        }
+      ];
+
+      const assembly: ExportAssembly = {
+        format: "pdfCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Math PDF"
+      };
+
+      const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: true });
+
+      expect(htmlContent).toContain('class="katex"');
+    });
+
+    it("excludes KaTeX CSS in PDF HTML when no math is present", async () => {
+      const docs: ExportAssemblyDocument[] = [
+        {
+          filePath: "plain.md",
+          parentPath: "",
+          fileName: "plain.md",
+          kind: "markdown",
+          text: "",
+          rawText: "No math here"
+        }
+      ];
+
+      const assembly: ExportAssembly = {
+        format: "pdfCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Plain PDF"
+      };
+
+      const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: true });
+
+      expect(htmlContent).not.toContain('class="katex"');
+      expect(htmlContent).not.toContain("data:font/woff2;base64,");
+    });
+
+    it("includes callout markup and callout CSS in PDF combined HTML", async () => {
+      const docs: ExportAssemblyDocument[] = [
+        {
+          filePath: "note.md",
+          parentPath: "",
+          fileName: "note.md",
+          kind: "markdown",
+          text: "",
+          rawText: "> [!NOTE]\n> Important PDF Note"
+        }
+      ];
+
+      const assembly: ExportAssembly = {
+        format: "pdfCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Note PDF"
+      };
+
+      const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: true });
+
+      expect(htmlContent).toContain('class="markdown-callout markdown-callout-note"');
+      expect(htmlContent).toContain(".markdown-callout");
+    });
+
+    it("includes code highlighting markup and code highlight CSS in PDF combined HTML", async () => {
+      const docs: ExportAssemblyDocument[] = [
+        {
+          filePath: "code.md",
+          parentPath: "",
+          fileName: "code.md",
+          kind: "markdown",
+          text: "",
+          rawText: "```js\nconst x = 42;\n```"
+        }
+      ];
+
+      const assembly: ExportAssembly = {
+        format: "pdfCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Code PDF"
+      };
+
+      const { htmlContent } = await generateCombinedHtml(assembly, { isPdf: true });
+
+      expect(htmlContent).toContain('class="hljs language-js"');
+      expect(htmlContent).toContain(".hljs");
+    });
+
+    it("isolates Mermaid element IDs across multiple documents in combined PDF HTML", async () => {
+      const mockMermaidRender = async (
+        id: string,
+        _source: string
+      ) => ({
+        kind: "success" as const,
+        svg: `<svg id="${id}"></svg>`
+      });
+
+      const docs: ExportAssemblyDocument[] = [
+        {
+          filePath: "doc1.md",
+          parentPath: "",
+          fileName: "doc1.md",
+          kind: "markdown",
+          text: "",
+          rawText: "```mermaid\ngraph TD\n  A --> B\n```"
+        },
+        {
+          filePath: "doc2.md",
+          parentPath: "",
+          fileName: "doc2.md",
+          kind: "markdown",
+          text: "",
+          rawText: "```mermaid\ngraph LR\n  C --> D\n```"
+        }
+      ];
+
+      const assembly: ExportAssembly = {
+        format: "pdfCombined",
+        bodyNotation: "markdown",
+        headingRemovalLevel: 0,
+        documents: docs,
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Multi PDF"
+      };
+
+      const { htmlContent } = await generateCombinedHtml(assembly, {
+        isPdf: true,
+        mermaidRender: mockMermaidRender
+      });
+
+      expect(htmlContent).toContain('<svg id="pergamum-export-doc-001-mermaid-0"></svg>');
+      expect(htmlContent).toContain('<svg id="pergamum-export-doc-002-mermaid-0"></svg>');
+    });
+  });
 });
+
