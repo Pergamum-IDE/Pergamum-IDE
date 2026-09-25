@@ -1421,6 +1421,7 @@ export function App(): JSX.Element {
     glossaryExportWizardOccurrenceCounts,
     setGlossaryExportWizardOccurrenceCounts
   ] = useState<Map<string, OccurrenceCountValue> | undefined>(undefined);
+  const exportWizardRunIdRef = useRef(0);
   // #384: Command Palette `%` project-search request handed to the Search pane
   // (also #457: Ctrl+Shift+F / Ctrl+Shift+H, which additionally sets `tab`).
   // `token` is a session-monotonic counter so a repeat `%` re-applies.
@@ -4488,43 +4489,74 @@ export function App(): JSX.Element {
 
   // #581 Slice 1: open the Glossary Export Wizard for multi-entry export
   function handleOpenGlossaryExportWizard(): void {
-    // 1. Open wizard dialog IMMEDIATELY (0ms, before any IPC or text search)
+    const runId = ++exportWizardRunIdRef.current;
     setIsGlossaryExportWizardOpen(true);
-    setGlossaryExportWizardOccurrenceCounts(new Map());
 
-    // 2. Schedule progressive occurrence count computation after first paint
+    const initialMap = new Map<string, OccurrenceCountValue>();
+    for (const entry of glossaryEntries) {
+      initialMap.set(entry.id, { status: "loading" });
+    }
+    setGlossaryExportWizardOccurrenceCounts(initialMap);
+
     setTimeout(() => {
       void (async () => {
-        const docs = project?.documents ?? [];
+        if (exportWizardRunIdRef.current !== runId) return;
+
+        const activeProject = project;
+        const activeContext = activeProjectContext;
+        const docs = activeProject?.documents ?? [];
         if (docs.length === 0 || glossaryEntries.length === 0) {
+          const finishedMap = new Map<string, OccurrenceCountValue>();
+          for (const entry of glossaryEntries) {
+            finishedMap.set(entry.id, { status: "ready", count: 0 });
+          }
+          if (exportWizardRunIdRef.current === runId) {
+            setGlossaryExportWizardOccurrenceCounts(finishedMap);
+          }
           return;
         }
 
-        const counts = new Map<string, OccurrenceCountValue>();
-        for (const entry of glossaryEntries) {
-          counts.set(entry.id, "loading");
-        }
-        setGlossaryExportWizardOccurrenceCounts(new Map(counts));
+        const readText = activeContext
+          ? createProjectSearchReadText(activeContext)
+          : async (relPath: string) => {
+              try {
+                const file =
+                  await window.pergamum.projects.readProjectDocument(relPath);
+                return file.content;
+              } catch {
+                return null;
+              }
+            };
 
-        const readText = (relPath: string) =>
-          window.pergamum.projects.readProjectDocumentAozora(relPath);
+        const currentMap = new Map<string, OccurrenceCountValue>(initialMap);
 
         for (const entry of glossaryEntries) {
+          if (exportWizardRunIdRef.current !== runId) return;
+
           try {
             const res = await countGlossaryEntryOccurrences({
               entry,
               documents: docs,
               readText
             });
-            counts.set(entry.id, res.total);
+            if (exportWizardRunIdRef.current !== runId) return;
+            currentMap.set(entry.id, { status: "ready", count: res.total });
           } catch {
-            counts.set(entry.id, "failed");
+            if (exportWizardRunIdRef.current !== runId) return;
+            currentMap.set(entry.id, { status: "failed" });
           }
-          // Progressive update after each entry so table cells update smoothly without freezing UI
-          setGlossaryExportWizardOccurrenceCounts(new Map(counts));
+
+          if (exportWizardRunIdRef.current === runId) {
+            setGlossaryExportWizardOccurrenceCounts(new Map(currentMap));
+          }
         }
       })();
     }, 50);
+  }
+
+  function handleCloseGlossaryExportWizard(): void {
+    exportWizardRunIdRef.current++;
+    setIsGlossaryExportWizardOpen(false);
   }
 
   async function confirmGlossaryExportOverwrite(): Promise<boolean> {
@@ -12867,7 +12899,7 @@ export function App(): JSX.Element {
           occurrenceCountsByEntryId={glossaryExportWizardOccurrenceCounts}
           translate={translate}
           opener={null}
-          onClose={() => setIsGlossaryExportWizardOpen(false)}
+          onClose={handleCloseGlossaryExportWizard}
         />
       </GlossaryExportWizardErrorBoundary>
 

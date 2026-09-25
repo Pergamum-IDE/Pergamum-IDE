@@ -15,7 +15,7 @@ import {
   type GlossaryTag
 } from "../../shared/glossary";
 import { buildFontFamilyCss, type FontFamilySetting } from "../../shared/fontSettings";
-import type { Language, Translate } from "../../shared/i18n";
+import { formatLocalizedNumber, type Language, type Translate } from "../../shared/i18n";
 import {
   DEFAULT_PDF_PAGE_NUMBER_SETTINGS,
   formatPdfPageNumberSummaryText,
@@ -27,7 +27,16 @@ import { FontPickerDialog } from "./FontPickerDialog";
 import { InfoDialog } from "./InfoDialog";
 import { PdfPageNumberSettingsDialog } from "./PdfPageNumberSettingsDialog";
 
-export type OccurrenceCountValue = number | "loading" | "failed";
+export type OccurrenceCountState =
+  | { status: "loading" }
+  | { status: "ready"; count: number }
+  | { status: "failed" };
+
+export type OccurrenceCountValue =
+  | OccurrenceCountState
+  | number
+  | "loading"
+  | "failed";
 
 export interface GlossaryExportWizardRowState {
   readonly entryId: string;
@@ -175,9 +184,21 @@ export function GlossaryExportWizardDialog({
     return null;
   }
 
-  const selectedCount = rows.filter((row) => row.enabled).length;
+  const selectedRows = rows.filter((row) => row.enabled);
+  const selectedCount = selectedRows.length;
   const totalCount = rows.length;
-  const canGoNext = selectedCount > 0;
+
+  const hasSelectedLoading = selectedRows.some((row) => {
+    if (!occurrenceCountsByEntryId) return true;
+    const val = occurrenceCountsByEntryId.get(row.entryId);
+    if (val === undefined) return true;
+    if (typeof val === "object" && val !== null) {
+      return val.status === "loading";
+    }
+    return val === "loading";
+  });
+
+  const canGoNext = selectedCount > 0 && !hasSelectedLoading;
 
   function handleToggleRow(entryId: string): void {
     setRows((current) =>
@@ -236,13 +257,24 @@ export function GlossaryExportWizardDialog({
     if (val === undefined) {
       return "-";
     }
+    if (typeof val === "object" && val !== null) {
+      if (val.status === "loading") {
+        return translate("glossaryExportWizard.occurrenceLoading");
+      }
+      if (val.status === "failed") {
+        return translate("glossaryExportWizard.occurrenceFailed");
+      }
+      return formatLocalizedNumber(val.count, uiLanguage);
+    }
     if (val === "loading") {
       return translate("glossaryExportWizard.occurrenceLoading");
     }
     if (val === "failed") {
       return translate("glossaryExportWizard.occurrenceFailed");
     }
-    return String(val);
+    return typeof val === "number"
+      ? formatLocalizedNumber(val, uiLanguage)
+      : String(val);
   }
 
   const footerActions = (
@@ -513,11 +545,15 @@ export function GlossaryExportWizardDialog({
                     totalCount
                   })}
                 </span>
-                {!canGoNext && (
+                {selectedCount === 0 ? (
                   <p className="glossaryExportWizardErrorText">
                     {translate("glossaryExportWizard.noSelectionError")}
                   </p>
-                )}
+                ) : hasSelectedLoading ? (
+                  <p className="glossaryExportWizardErrorText">
+                    {translate("glossaryExportWizard.occurrenceCountingWait")}
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : (

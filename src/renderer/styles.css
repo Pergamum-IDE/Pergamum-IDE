@@ -12014,9 +12014,18 @@ label.settingsItemHeader {
   color: #8c959f;
 }
 
+.glossaryExportWizardColCount,
 .glossaryExportWizardCellCount {
   font-size: 13px;
+  text-align: right;
+}
+
+.glossaryExportWizardCellCount {
   color: #57606a;
+}
+
+.glossaryExportWizardColToggle {
+  text-align: right;
 }
 
 .glossaryExportWizardCellToggle {

@@ -267,6 +267,100 @@ describe("GlossaryExportWizardDialog (#581 Slice 1 blocker fix)", () => {
     expect(container.textContent).toContain("glossaryExportWizard.step1Title");
   });
 
+  it("disables Next button and displays occurrenceCountingWait message while selected entries are loading", () => {
+    const loadingMap = new Map<string, OccurrenceCountValue>([
+      ["e1", { status: "loading" }],
+      ["e2", { status: "loading" }],
+      ["e3", { status: "loading" }]
+    ]);
+
+    renderDialog({ occurrenceCountsByEntryId: loadingMap });
+
+    const nextBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "glossaryExportWizard.nextButton"
+    );
+    expect(nextBtn?.disabled).toBe(true);
+    expect(container.textContent).toContain("glossaryExportWizard.occurrenceCountingWait");
+  });
+
+  it("enables Next button once all selected entries settle (ready or failed)", () => {
+    const settledMap = new Map<string, OccurrenceCountValue>([
+      ["e1", { status: "ready", count: 12 }],
+      ["e2", { status: "failed" }],
+      ["e3", { status: "ready", count: 0 }]
+    ]);
+
+    renderDialog({ occurrenceCountsByEntryId: settledMap });
+
+    const nextBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "glossaryExportWizard.nextButton"
+    )!;
+    expect(nextBtn.disabled).toBe(false);
+    expect(container.textContent).not.toContain("glossaryExportWizard.occurrenceCountingWait");
+    expect(container.textContent).not.toContain("glossaryExportWizard.noSelectionError");
+  });
+
+  it("unblocks Next button when a loading entry is toggled OFF", () => {
+    const partialLoadingMap = new Map<string, OccurrenceCountValue>([
+      ["e1", { status: "loading" }],
+      ["e2", { status: "ready", count: 5 }],
+      ["e3", { status: "ready", count: 2 }]
+    ]);
+
+    renderDialog({ occurrenceCountsByEntryId: partialLoadingMap });
+
+    const nextBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "glossaryExportWizard.nextButton"
+    )!;
+    expect(nextBtn.disabled).toBe(true);
+
+    const checkboxes = container.querySelectorAll<HTMLInputElement>(
+      "input.exportConfirmationDialogIncludeInput"
+    );
+
+    // Toggle e1 (the loading one) OFF
+    act(() => {
+      checkboxes[0].click();
+    });
+
+    expect(checkboxes[0].checked).toBe(false);
+    // Remaining selected rows (e2, e3) are ready, so Next should now be enabled
+    expect(nextBtn.disabled).toBe(false);
+  });
+
+  it("disables Next button again if an OFF loading entry is toggled back ON", () => {
+    const partialLoadingMap = new Map<string, OccurrenceCountValue>([
+      ["e1", { status: "loading" }],
+      ["e2", { status: "ready", count: 5 }],
+      ["e3", { status: "ready", count: 2 }]
+    ]);
+
+    renderDialog({ occurrenceCountsByEntryId: partialLoadingMap });
+
+    const checkboxes = container.querySelectorAll<HTMLInputElement>(
+      "input.exportConfirmationDialogIncludeInput"
+    );
+
+    // Toggle e1 OFF
+    act(() => {
+      checkboxes[0].click();
+    });
+
+    const nextBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "glossaryExportWizard.nextButton"
+    )!;
+    expect(nextBtn.disabled).toBe(false);
+
+    // Toggle e1 back ON
+    act(() => {
+      checkboxes[0].click();
+    });
+
+    expect(checkboxes[0].checked).toBe(true);
+    expect(nextBtn.disabled).toBe(true);
+    expect(container.textContent).toContain("glossaryExportWizard.occurrenceCountingWait");
+  });
+
   it("renders with real ja translations and PDF format without throwing", () => {
     const realTranslate = (key: any, params?: any): string => {
       let template: string = jaTranslations[key as keyof typeof jaTranslations] ?? String(key);
@@ -289,5 +383,33 @@ describe("GlossaryExportWizardDialog (#581 Slice 1 blocker fix)", () => {
     expect(container.textContent).toContain("PDF既定");
     expect(container.textContent).toContain("PDF本文フォント候補");
     expect(container.querySelector(".glossaryExportWizardErrorFallback")).toBeNull();
+  });
+
+  it("formats occurrence counts with locale number formatting (e.g. 4,300) and displays updated column headers", () => {
+    const realTranslate = (key: any, params?: any): string => {
+      let template: string = jaTranslations[key as keyof typeof jaTranslations] ?? String(key);
+      if (params) {
+        Object.entries(params).forEach(([k, v]) => {
+          template = template.replace(new RegExp(`\\{${k}\\}`, "g"), String(v));
+        });
+      }
+      return template;
+    };
+
+    const formattedMap = new Map<string, OccurrenceCountValue>([
+      ["e1", { status: "ready", count: 4300 }],
+      ["e2", { status: "ready", count: 1234567 }]
+    ]);
+
+    renderDialog({ occurrenceCountsByEntryId: formattedMap, translate: realTranslate, uiLanguage: "ja" });
+
+    expect(container.textContent).toContain("4,300");
+    expect(container.textContent).toContain("1,234,567");
+
+    const countColHeader = container.querySelector(".glossaryExportWizardColCount");
+    expect(countColHeader?.textContent).toBe("出現頻度");
+
+    const handleColHeader = container.querySelector(".glossaryExportWizardColHandle");
+    expect(handleColHeader?.textContent).toBe("");
   });
 });
