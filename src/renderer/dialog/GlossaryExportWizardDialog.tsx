@@ -299,14 +299,17 @@ export function GlossaryExportWizardDialog({
   }
 
   async function handleExecuteExport(): Promise<void> {
-    if (format !== "html" || !canExecuteExport) {
+    if (!canExecuteExport) {
       return;
     }
     setIsExporting(true);
     setExportResultStatus(null);
 
     try {
-      const fileName = `${baseFileName}.html`;
+      const ext = format === "pdf" ? ".pdf" : ".html";
+      const fileName = baseFileName.toLowerCase().endsWith(ext)
+        ? baseFileName
+        : `${baseFileName}${ext}`;
       const normalizedFolder = outputFolder.trim().replace(/[/\\]+$/, "");
       const outputFilePath = `${normalizedFolder}/${fileName}`;
 
@@ -331,6 +334,7 @@ export function GlossaryExportWizardDialog({
       }
 
       const plan: CombinedGlossaryExportPlan = {
+        format,
         entries: selectedRows.map((r) => r.entry),
         occurrenceCountsByEntryId,
         outputFilePath,
@@ -338,12 +342,84 @@ export function GlossaryExportWizardDialog({
         imageAssetFolderName: imageAssetFolderName || DEFAULT_IMAGE_ASSET_FOLDER_NAME,
         includeToc,
         tocPosition,
+        pdfFontCandidates,
+        pdfPageSettings,
         documentTitle: translate("glossaryExportWizard.tocTitle")
       };
 
       let result: CombinedGlossaryExportRunResult;
       if (onExportCombined) {
         result = await onExportCombined(plan);
+      } else if (format === "pdf" && window.pergamum?.files?.exportPdfCombined) {
+        const htmlContent = buildCombinedGlossaryExportHtml({
+          documentTitle: plan.documentTitle ?? "語彙集",
+          sections: selectedRows.map((r) => {
+            const countVal = occurrenceCountsByEntryId?.get(r.entryId);
+            let occurrences: GlossaryEntryOccurrenceCounts | null = null;
+            if (
+              typeof countVal === "object" &&
+              countVal !== null &&
+              "occurrences" in countVal &&
+              countVal.occurrences
+            ) {
+              occurrences = countVal.occurrences as GlossaryEntryOccurrenceCounts;
+            } else if (
+              typeof countVal === "object" &&
+              countVal !== null &&
+              countVal.status === "ready"
+            ) {
+              occurrences = {
+                atoms: r.entry.atoms.map((a) => ({ atomId: a.id, value: a.value, count: 0 })),
+                total: countVal.count,
+                documentCount: 0,
+                skippedFileCount: 0
+              };
+            }
+            return {
+              entry: r.entry,
+              occurrences,
+              description: null
+            };
+          }),
+          content: defaultGlossaryExportContentOptions,
+          includeToc,
+          tocPosition,
+          labels: {
+            infoHeading: translate("glossaryExport.document.infoHeading"),
+            representative: translate("glossaryExport.document.representative"),
+            atoms: translate("glossaryExport.document.atoms"),
+            tags: translate("glossaryExport.document.tags"),
+            noTags: translate("glossaryExport.document.noTags"),
+            createdAt: translate("glossaryExport.document.createdAt"),
+            updatedAt: translate("glossaryExport.document.updatedAt"),
+            occurrencesHeading: translate("glossaryExport.document.occurrencesHeading"),
+            atomColumn: translate("glossaryExport.document.atomColumn"),
+            countColumn: translate("glossaryExport.document.countColumn"),
+            total: translate("glossaryExport.document.total"),
+            occurrenceScope: translate("glossaryExport.document.occurrenceScope", { count: 0 }),
+            occurrenceSkipped: null,
+            descriptionHeading: translate("glossaryExport.document.descriptionHeading"),
+            emptyDescription: translate("glossaryExport.document.emptyDescription")
+          },
+          tocTitle: translate("glossaryExportWizard.tocTitle"),
+          tocNavLabel: translate("glossaryExportWizard.tocNavLabel"),
+          lang: uiLanguage,
+          katexCss: null
+        });
+
+        const res = await window.pergamum.files.exportPdfCombined({
+          defaultFileName: fileName,
+          htmlContent,
+          imageAssets: [],
+          projectRootPath: null,
+          targetPath: outputFilePath,
+          pdfFontFamily: pdfFontCandidates.length > 0 ? pdfFontCandidates[0].family : null,
+          pdfPageNumberSettings: pdfPageSettings,
+          allowOverwrite: true
+        });
+        result = res.ok
+          ? { ok: true, outputPath: res.outputPath, warningCount: res.warningCount }
+          : { ok: false, reason: "failed" };
       } else if (window.pergamum?.files?.exportHtmlCombined) {
         const htmlContent = buildCombinedGlossaryExportHtml({
           documentTitle: plan.documentTitle ?? "語彙集",
@@ -514,7 +590,7 @@ export function GlossaryExportWizardDialog({
             <button
               type="button"
               className="glossaryExportWizardExportButton"
-              disabled={format === "pdf" || !canExecuteExport}
+              disabled={!canExecuteExport}
               onClick={() => {
                 void handleExecuteExport();
               }}
@@ -929,11 +1005,7 @@ export function GlossaryExportWizardDialog({
               </div>
 
               {/* Notice or Status Row */}
-              {format === "pdf" ? (
-                <div className="glossaryExportWizardSliceNotice">
-                  <p>{translate("glossaryExportWizard.pdfSlice3Notice")}</p>
-                </div>
-              ) : exportResultStatus ? (
+              {exportResultStatus ? (
                 <div
                   className={
                     exportResultStatus.kind === "success"

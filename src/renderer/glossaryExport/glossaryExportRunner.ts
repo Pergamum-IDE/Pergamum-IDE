@@ -1,9 +1,16 @@
 import type {
   ExportHtmlCombinedRequest,
   ExportHtmlCombinedResult,
-  ExportImageAssetCopyItem
+  ExportImageAssetCopyItem,
+  ExportPdfCombinedRequest,
+  ExportPdfCombinedResult
 } from "../../shared/api";
+import { buildFontFamilyCss, type FontFamilySetting } from "../../shared/fontSettings";
 import type { GlossaryEntry, GlossaryEntryId } from "../../shared/glossary";
+import {
+  DEFAULT_PDF_PAGE_NUMBER_SETTINGS,
+  type PdfPageNumberSettings
+} from "../../shared/pdfPageNumbering";
 import {
   buildCombinedGlossaryExportHtml,
   buildGlossaryEntryExportHtml,
@@ -92,9 +99,10 @@ export async function runGlossaryExport(
 }
 
 /**
- * #581 Slice 2: combined glossary export plan.
+ * #581 Slice 2 & 3: combined glossary export plan.
  */
 export interface CombinedGlossaryExportPlan {
+  readonly format?: "html" | "pdf";
   readonly entries: readonly GlossaryEntry[];
   readonly occurrenceCountsByEntryId?: ReadonlyMap<string, unknown>;
   readonly outputFilePath: string;
@@ -102,6 +110,8 @@ export interface CombinedGlossaryExportPlan {
   readonly imageAssetFolderName: string;
   readonly includeToc: boolean;
   readonly tocPosition: "front" | "back";
+  readonly pdfFontCandidates?: readonly FontFamilySetting[];
+  readonly pdfPageSettings?: PdfPageNumberSettings;
   readonly documentTitle?: string;
   readonly contentOptions?: GlossaryExportContentOptions;
 }
@@ -119,6 +129,9 @@ export interface CombinedGlossaryExportRunDeps {
   readonly writeHtml: (
     request: ExportHtmlCombinedRequest
   ) => Promise<ExportHtmlCombinedResult>;
+  readonly writePdf?: (
+    request: ExportPdfCombinedRequest
+  ) => Promise<ExportPdfCombinedResult>;
   readonly tocTitle?: string;
   readonly tocNavLabel?: string;
 }
@@ -187,6 +200,11 @@ export async function runCombinedGlossaryExport(
   const usesMath = sections.some((sec) => sec.description?.usesMath);
   const katexCss = usesMath ? await deps.loadKatexCss() : null;
 
+  const pdfFontFamily =
+    plan.pdfFontCandidates && plan.pdfFontCandidates.length > 0
+      ? buildFontFamilyCss(plan.pdfFontCandidates)
+      : null;
+
   const htmlContent = buildCombinedGlossaryExportHtml({
     documentTitle: plan.documentTitle ?? "語彙集",
     sections,
@@ -197,8 +215,33 @@ export async function runCombinedGlossaryExport(
     tocTitle: deps.tocTitle,
     tocNavLabel: deps.tocNavLabel,
     lang: deps.lang,
-    katexCss
+    katexCss,
+    pdfFontFamily
   });
+
+  if (plan.format === "pdf") {
+    if (!deps.writePdf) {
+      return { ok: false, reason: "failed" };
+    }
+
+    const pdfResult = await deps.writePdf({
+      defaultFileName: plan.fileName,
+      htmlContent,
+      imageAssets,
+      projectRootPath: null,
+      targetPath: plan.outputFilePath,
+      pdfFontFamily:
+        plan.pdfFontCandidates && plan.pdfFontCandidates.length > 0
+          ? plan.pdfFontCandidates[0].family
+          : null,
+      pdfPageNumberSettings: plan.pdfPageSettings ?? DEFAULT_PDF_PAGE_NUMBER_SETTINGS,
+      allowOverwrite: true
+    });
+
+    return pdfResult.ok
+      ? { ok: true, outputPath: pdfResult.outputPath, warningCount: pdfResult.warningCount }
+      : { ok: false, reason: "failed" };
+  }
 
   const result = await deps.writeHtml({
     defaultFileName: plan.fileName,

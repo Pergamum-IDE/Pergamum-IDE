@@ -4617,6 +4617,11 @@ export function App(): JSX.Element {
         window.pergamum.files.exportHtmlCombined({
           ...request,
           projectRootPath: activeProject?.rootPath ?? null
+        }),
+      writePdf: (request) =>
+        window.pergamum.files.exportPdfCombined({
+          ...request,
+          projectRootPath: activeProject?.rootPath ?? null
         })
     });
   }

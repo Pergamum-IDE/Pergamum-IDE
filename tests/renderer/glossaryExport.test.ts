@@ -16,7 +16,7 @@ import {
   type GlossaryExportDocumentLabels,
   type RenderedGlossaryDescription
 } from "../../src/renderer/glossaryExport/glossaryExportHtml";
-import { runGlossaryExport } from "../../src/renderer/glossaryExport/glossaryExportRunner";
+import { runCombinedGlossaryExport, runGlossaryExport } from "../../src/renderer/glossaryExport/glossaryExportRunner";
 import { inlineKatexWoff2Fonts } from "../../src/renderer/glossaryExport/katexExportCss";
 import type { MermaidPreviewMessages } from "../../src/renderer/preview/markdownMermaidRendering";
 
@@ -497,5 +497,84 @@ describe("App glossary export wiring (#574 Slice 6)", () => {
     expect(exportBlock).toContain("projectRootPath: activeProject.rootPath");
     expect(exportBlock).not.toContain("openDocumentsStateRef");
     expect(exportBlock).not.toContain("logRendererDebugEvent");
+  });
+});
+
+describe("runCombinedGlossaryExport (#581 Slice 2 & 3)", () => {
+  const e1 = entry({ id: "e1", description: "Desc 1" });
+  const e2 = entry({ id: "e2", description: "Desc 2" });
+
+  it("exports combined HTML format using writeHtml", async () => {
+    const writeHtml = vi.fn(async () => ({ ok: true as const, outputPath: "/out/glossary.html", warningCount: 0 }));
+    const writePdf = vi.fn();
+    const renderDescription = vi.fn(async (desc: string) => ({ html: `<p>${desc}</p>`, imageAssets: [], usesMath: false }));
+
+    const res = await runCombinedGlossaryExport(
+      {
+        format: "html",
+        entries: [e1, e2],
+        outputFilePath: "/out/glossary.html",
+        fileName: "glossary.html",
+        imageAssetFolderName: "glossary.assets",
+        includeToc: true,
+        tocPosition: "front"
+      },
+      {
+        renderDescription,
+        loadKatexCss: vi.fn(async () => ""),
+        labels: () => labels,
+        lang: "ja",
+        writeHtml,
+        writePdf
+      }
+    );
+
+    expect(res).toEqual({ ok: true, outputPath: "/out/glossary.html", warningCount: 0 });
+    expect(writeHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetPath: "/out/glossary.html",
+        defaultFileName: "glossary.html"
+      })
+    );
+    expect(writePdf).not.toHaveBeenCalled();
+  });
+
+  it("exports combined PDF format using writePdf and passes font & page number settings", async () => {
+    const writeHtml = vi.fn();
+    const writePdf = vi.fn(async () => ({ ok: true as const, outputPath: "/out/glossary.pdf", warningCount: 0 }));
+    const renderDescription = vi.fn(async (desc: string) => ({ html: `<p>${desc}</p>`, imageAssets: [], usesMath: false }));
+
+    const res = await runCombinedGlossaryExport(
+      {
+        format: "pdf",
+        entries: [e1, e2],
+        outputFilePath: "/out/glossary.pdf",
+        fileName: "glossary.pdf",
+        imageAssetFolderName: "glossary.assets",
+        includeToc: true,
+        tocPosition: "back",
+        pdfFontCandidates: [{ family: "Noto Serif CJK JP" }],
+        pdfPageSettings: { position: "bottom-center", format: "dash" }
+      },
+      {
+        renderDescription,
+        loadKatexCss: vi.fn(async () => ""),
+        labels: () => labels,
+        lang: "ja",
+        writeHtml,
+        writePdf
+      }
+    );
+
+    expect(res).toEqual({ ok: true, outputPath: "/out/glossary.pdf", warningCount: 0 });
+    expect(writePdf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetPath: "/out/glossary.pdf",
+        defaultFileName: "glossary.pdf",
+        pdfFontFamily: "Noto Serif CJK JP",
+        pdfPageNumberSettings: { position: "bottom-center", format: "dash" }
+      })
+    );
+    expect(writeHtml).not.toHaveBeenCalled();
   });
 });

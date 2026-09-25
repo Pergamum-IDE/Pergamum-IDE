@@ -530,5 +530,69 @@ describe("GlossaryExportWizardDialog (#581 Slice 1 blocker fix)", () => {
       })
     );
   });
+
+  it("enables export button in Step 2 when format is PDF and sends format: pdf in plan", async () => {
+    const onSelectFolder = vi.fn().mockResolvedValue({ ok: true, folderPath: "/user/documents" });
+    const onCheckFileExists = vi.fn().mockResolvedValue({ exists: false });
+    const onExportCombined = vi.fn().mockResolvedValue({ ok: true, outputPath: "/user/documents/glossary-export.pdf", warningCount: 0 });
+
+    renderDialog({
+      onSelectFolder,
+      onCheckFileExists,
+      onExportCombined
+    });
+
+    // Switch format to PDF in Step 1
+    const select = container.querySelector("select.glossaryExportWizardSelect") as HTMLSelectElement;
+    act(() => {
+      select.value = "pdf";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    // Navigate to Step 2
+    const nextBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "glossaryExportWizard.nextButton"
+    )!;
+    act(() => {
+      nextBtn.click();
+    });
+
+    // Notice should no longer be present
+    expect(container.textContent).not.toContain("glossaryExportWizard.pdfSlice3Notice");
+
+    // Set output folder
+    const textInputs = Array.from(
+      container.querySelectorAll<HTMLInputElement>("input.glossaryExportWizardTextInput")
+    );
+    const folderInput = textInputs.find((input) => input.id.endsWith("-output-folder")) ?? textInputs[0];
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    )!.set!;
+    act(() => {
+      nativeInputValueSetter.call(folderInput, "/user/documents");
+      folderInput.dispatchEvent(new Event("input", { bubbles: true }));
+      folderInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    // Click Export execution button
+    const exportBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "export.wizard.executeExport"
+    )!;
+    expect(exportBtn.disabled).toBe(false);
+
+    await act(async () => {
+      exportBtn.click();
+    });
+
+    expect(onExportCombined).toHaveBeenCalledWith(
+      expect.objectContaining({
+        format: "pdf",
+        entries: [entryA, entryB, entryC],
+        outputFilePath: "/user/documents/glossary-export.pdf",
+        fileName: "glossary-export.pdf"
+      })
+    );
+  });
 });
 

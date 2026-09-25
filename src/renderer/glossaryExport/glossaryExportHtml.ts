@@ -370,6 +370,7 @@ export interface BuildCombinedGlossaryExportHtmlInput {
   readonly tocNavLabel?: string;
   readonly lang: string;
   readonly katexCss: string | null;
+  readonly pdfFontFamily?: string | null;
 }
 
 export function renderGlossaryEntrySectionHtml(
@@ -440,8 +441,13 @@ export function buildCombinedGlossaryExportHtml(
 
   const usesMath = input.sections.some((sec) => sec.description?.usesMath);
 
+  const pdfFontStyle = input.pdfFontFamily
+    ? `body { font-family: ${input.pdfFontFamily}; }`
+    : "";
+
   const styles = [
     baseCss,
+    pdfFontStyle,
     markdownCalloutExportCss,
     codeHighlightExportCss,
     usesMath && input.katexCss ? input.katexCss : ""
