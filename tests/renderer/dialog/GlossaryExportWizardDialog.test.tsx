@@ -254,7 +254,8 @@ describe("GlossaryExportWizardDialog (#581 Slice 1 blocker fix)", () => {
     expect(container.textContent).toContain("glossaryExportWizard.step2Title");
     expect(container.textContent).toContain("HTML");
     expect(container.textContent).toContain("3件");
-    expect(container.textContent).toContain("glossaryExportWizard.notImplementedNotice");
+    expect(container.textContent).toContain("glossaryExportWizard.includeToc");
+    expect(container.textContent).toContain("glossaryExportWizard.outputFolderLabel");
 
     const backBtn = Array.from(container.querySelectorAll("button")).find(
       (b) => b.textContent === "glossaryExportWizard.backButton"
@@ -412,4 +413,122 @@ describe("GlossaryExportWizardDialog (#581 Slice 1 blocker fix)", () => {
     const handleColHeader = container.querySelector(".glossaryExportWizardColHandle");
     expect(handleColHeader?.textContent).toBe("");
   });
+
+  it("handles Step 2 TOC toggle and position dropdown state correctly", () => {
+    renderDialog();
+
+    // Navigate to Step 2
+    const nextBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "glossaryExportWizard.nextButton"
+    )!;
+    act(() => {
+      nextBtn.click();
+    });
+
+    const tocCheckbox = container.querySelector(
+      "input.glossaryExportWizardCheckbox"
+    ) as HTMLInputElement;
+    const selects = Array.from(container.querySelectorAll<HTMLSelectElement>("select.glossaryExportWizardSelect"));
+    const tocSelect = selects.find((s) => s.id.endsWith("-toc-position")) ?? selects[0];
+
+    // Default: TOC checkbox is unchecked (OFF) and position dropdown is disabled
+    expect(tocCheckbox.checked).toBe(false);
+    expect(tocSelect.disabled).toBe(true);
+
+    // Toggle TOC ON
+    act(() => {
+      tocCheckbox.click();
+    });
+    expect(tocCheckbox.checked).toBe(true);
+    expect(tocSelect.disabled).toBe(false);
+
+    // Change position to "back" (巻末)
+    act(() => {
+      tocSelect.value = "back";
+      tocSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(tocSelect.value).toBe("back");
+
+    // Toggle TOC OFF then back ON -> position remains "back"
+    act(() => {
+      tocCheckbox.click();
+    });
+    expect(tocCheckbox.checked).toBe(false);
+    expect(tocSelect.disabled).toBe(true);
+
+    act(() => {
+      tocCheckbox.click();
+    });
+    expect(tocCheckbox.checked).toBe(true);
+    expect(tocSelect.value).toBe("back");
+  });
+
+  it("executes combined HTML export with selected options and checks for overwrites", async () => {
+    const onSelectFolder = vi.fn().mockResolvedValue({ ok: true, folderPath: "/user/documents" });
+    const onCheckFileExists = vi.fn().mockResolvedValue({ exists: true });
+    const onConfirmOverwrite = vi.fn().mockResolvedValue(true);
+    const onExportCombined = vi.fn().mockResolvedValue({ ok: true, outputPath: "/user/documents/glossary-export.html", warningCount: 0 });
+
+    renderDialog({
+      onSelectFolder,
+      onCheckFileExists,
+      onConfirmOverwrite,
+      onExportCombined
+    });
+
+    // Navigate to Step 2
+    const nextBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "glossaryExportWizard.nextButton"
+    )!;
+    act(() => {
+      nextBtn.click();
+    });
+
+    // Set folder path
+    const textInputs = Array.from(
+      container.querySelectorAll<HTMLInputElement>("input.glossaryExportWizardTextInput")
+    );
+    const folderInput = textInputs.find((input) => input.id.endsWith("-output-folder")) ?? textInputs[0];
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    )!.set!;
+    act(() => {
+      nativeInputValueSetter.call(folderInput, "/user/documents");
+      folderInput.dispatchEvent(new Event("input", { bubbles: true }));
+      folderInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    // Enable TOC
+    const tocCheckbox = container.querySelector(
+      "input.glossaryExportWizardCheckbox"
+    ) as HTMLInputElement;
+    act(() => {
+      tocCheckbox.click();
+    });
+
+    // Click Export execution button
+    const exportBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "export.wizard.executeExport"
+    )!;
+
+    await act(async () => {
+      exportBtn.click();
+    });
+
+    expect(onCheckFileExists).toHaveBeenCalledWith({
+      filePath: "/user/documents/glossary-export.html"
+    });
+    expect(onConfirmOverwrite).toHaveBeenCalled();
+    expect(onExportCombined).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entries: [entryA, entryB, entryC],
+        outputFilePath: "/user/documents/glossary-export.html",
+        fileName: "glossary-export.html",
+        includeToc: true,
+        tocPosition: "front"
+      })
+    );
+  });
 });
+

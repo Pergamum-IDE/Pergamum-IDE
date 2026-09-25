@@ -12075,6 +12075,47 @@ label.settingsItemHeader {
   color: var(--app-dialog-text, #24292f);
 }
 
+.glossaryExportWizardTocRow {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.glossaryExportWizardTocToggleLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.glossaryExportWizardTocPositionBlock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.glossaryExportWizardFolderInputGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.glossaryExportWizardFolderInputGroup .glossaryExportWizardTextInput {
+  flex: 1;
+}
+
+.glossaryExportWizardBrowseButton {
+  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border-radius: 6px;
+  background: var(--app-dialog-button-bg, #f6f8fa);
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .glossaryExportWizardSliceNotice {
   padding: 12px 16px;
   border-radius: 6px;
@@ -12082,6 +12123,24 @@ label.settingsItemHeader {
   border: 1px solid #d4a72c;
   color: #573600;
   font-size: 12px;
+}
+
+.glossaryExportWizardSuccessStatus {
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: #dafbe1;
+  border: 1px solid #1a7f37;
+  color: #1a7f37;
+  font-size: 13px;
+}
+
+.glossaryExportWizardErrorStatus {
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: #ffebe9;
+  border: 1px solid #ff8182;
+  color: #cf222e;
+  font-size: 13px;
 }
 
 .glossaryExportWizardFooterActions {
