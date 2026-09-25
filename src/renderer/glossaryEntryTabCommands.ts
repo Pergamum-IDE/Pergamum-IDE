@@ -12,14 +12,18 @@ import type { Translate } from "../shared/i18n";
  * entry points. Ctrl+G's `openFromEditorSelection` (Slice 12) is the only
  * keybound member; the others stay palette-hidden and un-keybound.
  *
- * #573 Slice 7: the bottom Glossary Entry Editor Pane these commands were
- * named after is gone — they now open glossary Description tabs (a new,
- * unsaved entry tab for create; the entry's tab for edit). The command ids
- * are kept stable; the pane-only `closePane` command was removed.
+ * #573 Slice 7: these commands open glossary Description tabs (a new,
+ * unsaved entry tab for create; the entry's tab for edit). The pane-only
+ * `closePane` command was removed.
+ *
+ * #574 Slice 5: the internal names follow the tab architecture; the command
+ * id STRINGS (`glossary.openCreateEntryPane` / `glossary.openEditEntryPane`)
+ * and their `command.glossary.*` title keys are legacy names kept for
+ * compatibility (debug logs, command plumbing).
  */
 
 /** Which UI asked to create / edit a glossary entry (kept for logging). */
-export type GlossaryEntryEditorPaneSource =
+export type GlossaryEntryOpenSource =
   | "glossary-pane"
   | "glossary-settings"
   | "editor-selection"
@@ -41,29 +45,30 @@ export function presetRepresentativeOrDefault(
     : DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE;
 }
 
-export interface OpenGlossaryEntryCreatePaneOptions {
-  source: GlossaryEntryEditorPaneSource;
+export interface OpenNewGlossaryEntryTabOptions {
+  source: GlossaryEntryOpenSource;
   presetRepresentative?: string;
 }
 
-export interface OpenGlossaryEntryEditPaneOptions {
-  source: GlossaryEntryEditorPaneSource;
+export interface OpenGlossaryEntryTabOptions {
+  source: GlossaryEntryOpenSource;
   entryId: string;
 }
-export const glossaryEntryEditorPaneCommandIds = {
-  openCreatePane: defineCommandId<
-    readonly [options: OpenGlossaryEntryCreatePaneOptions],
+export const glossaryEntryTabCommandIds = {
+  // Command ids kept for compatibility; they open glossaryDescription tabs.
+  openNewEntryTab: defineCommandId<
+    readonly [options: OpenNewGlossaryEntryTabOptions],
     void
   >("glossary.openCreateEntryPane"),
-  openEditPane: defineCommandId<
-    readonly [options: OpenGlossaryEntryEditPaneOptions],
+  openEntryTab: defineCommandId<
+    readonly [options: OpenGlossaryEntryTabOptions],
     void
   >("glossary.openEditEntryPane"),
   /**
    * #436 Slice 12: Ctrl+G. `selectedText` is the active Markdown editor's
    * RAW current selection (`""` when empty) — normalization and the
    * create-vs-edit-vs-ambiguous resolution both happen in the controller
-   * (via `resolveGlossaryEntryEditorPaneTargetFromSelection`), not here.
+   * (via `resolveGlossaryEntryTargetFromSelection`), not here.
    */
   openFromEditorSelection: defineCommandId<
     readonly [selectedText: string],
@@ -71,34 +76,34 @@ export const glossaryEntryEditorPaneCommandIds = {
   >("glossary.openFromEditorSelection")
 } as const;
 
-export interface GlossaryEntryEditorPaneCommandController {
-  openGlossaryEntryCreatePane(
-    options: OpenGlossaryEntryCreatePaneOptions
+export interface GlossaryEntryTabCommandController {
+  openNewGlossaryEntryTab(
+    options: OpenNewGlossaryEntryTabOptions
   ): void | Promise<void>;
-  openGlossaryEntryEditPane(
-    options: OpenGlossaryEntryEditPaneOptions
+  openGlossaryEntryTab(
+    options: OpenGlossaryEntryTabOptions
   ): void | Promise<void>;
-  openGlossaryEntryEditorPaneFromSelection(
+  openGlossaryEntryTabFromSelection(
     selectedText: string
   ): void | Promise<void>;
 }
 
-export interface GlossaryEntryEditorPaneCommandTitles {
-  openCreatePane: string;
-  openCreatePaneDescription: string;
-  openEditPane: string;
-  openEditPaneDescription: string;
+export interface GlossaryEntryTabCommandTitles {
+  openNewEntryTab: string;
+  openNewEntryTabDescription: string;
+  openEntryTab: string;
+  openEntryTabDescription: string;
   openFromEditorSelection: string;
   openFromEditorSelectionDescription: string;
 }
 
-type OpenCreatePaneCommand = Command<
-  readonly [options: OpenGlossaryEntryCreatePaneOptions],
+type OpenNewEntryTabCommand = Command<
+  readonly [options: OpenNewGlossaryEntryTabOptions],
   void
 >;
 
-type OpenEditPaneCommand = Command<
-  readonly [options: OpenGlossaryEntryEditPaneOptions],
+type OpenEntryTabCommand = Command<
+  readonly [options: OpenGlossaryEntryTabOptions],
   void
 >;
 
@@ -107,16 +112,16 @@ type OpenFromEditorSelectionCommand = Command<
   void
 >;
 
-export function createGlossaryEntryEditorPaneCommandTitles(
+export function createGlossaryEntryTabCommandTitles(
   translate: Translate
-): GlossaryEntryEditorPaneCommandTitles {
+): GlossaryEntryTabCommandTitles {
   return {
-    openCreatePane: translate("command.glossary.openCreateEntryPane"),
-    openCreatePaneDescription: translate(
+    openNewEntryTab: translate("command.glossary.openCreateEntryPane"),
+    openNewEntryTabDescription: translate(
       "command.glossary.openCreateEntryPane.description"
     ),
-    openEditPane: translate("command.glossary.openEditEntryPane"),
-    openEditPaneDescription: translate(
+    openEntryTab: translate("command.glossary.openEditEntryPane"),
+    openEntryTabDescription: translate(
       "command.glossary.openEditEntryPane.description"
     ),
     openFromEditorSelection: translate(
@@ -128,31 +133,31 @@ export function createGlossaryEntryEditorPaneCommandTitles(
   };
 }
 
-export function createGlossaryEntryEditorPaneCommands(
-  controller: GlossaryEntryEditorPaneCommandController,
-  titles: GlossaryEntryEditorPaneCommandTitles
+export function createGlossaryEntryTabCommands(
+  controller: GlossaryEntryTabCommandController,
+  titles: GlossaryEntryTabCommandTitles
 ): readonly [
-  OpenCreatePaneCommand,
-  OpenEditPaneCommand,
+  OpenNewEntryTabCommand,
+  OpenEntryTabCommand,
   OpenFromEditorSelectionCommand
 ] {
   return [
     {
-      id: glossaryEntryEditorPaneCommandIds.openCreatePane,
-      title: titles.openCreatePane,
-      description: titles.openCreatePaneDescription,
+      id: glossaryEntryTabCommandIds.openNewEntryTab,
+      title: titles.openNewEntryTab,
+      description: titles.openNewEntryTabDescription,
       palette: { visible: false },
-      execute: (options) => controller.openGlossaryEntryCreatePane(options)
+      execute: (options) => controller.openNewGlossaryEntryTab(options)
     },
     {
-      id: glossaryEntryEditorPaneCommandIds.openEditPane,
-      title: titles.openEditPane,
-      description: titles.openEditPaneDescription,
+      id: glossaryEntryTabCommandIds.openEntryTab,
+      title: titles.openEntryTab,
+      description: titles.openEntryTabDescription,
       palette: { visible: false },
-      execute: (options) => controller.openGlossaryEntryEditPane(options)
+      execute: (options) => controller.openGlossaryEntryTab(options)
     },
     {
-      id: glossaryEntryEditorPaneCommandIds.openFromEditorSelection,
+      id: glossaryEntryTabCommandIds.openFromEditorSelection,
       title: titles.openFromEditorSelection,
       description: titles.openFromEditorSelectionDescription,
       // #436 Slice 12: keybinding-only for now (Ctrl+G) — active Markdown
@@ -160,23 +165,23 @@ export function createGlossaryEntryEditorPaneCommands(
       // "まずは keybinding 用 command として実装するだけでもよい").
       palette: { visible: false },
       execute: (selectedText) =>
-        controller.openGlossaryEntryEditorPaneFromSelection(selectedText)
+        controller.openGlossaryEntryTabFromSelection(selectedText)
     }
   ];
 }
 
-export function registerGlossaryEntryEditorPaneCommands(
+export function registerGlossaryEntryTabCommands(
   registry: CommandRegistry,
-  controller: GlossaryEntryEditorPaneCommandController,
-  titles: GlossaryEntryEditorPaneCommandTitles
+  controller: GlossaryEntryTabCommandController,
+  titles: GlossaryEntryTabCommandTitles
 ): void {
   const [
-    openCreatePaneCommand,
-    openEditPaneCommand,
+    openNewEntryTabCommand,
+    openEntryTabCommand,
     openFromEditorSelectionCommand
-  ] = createGlossaryEntryEditorPaneCommands(controller, titles);
+  ] = createGlossaryEntryTabCommands(controller, titles);
 
-  registry.register(openCreatePaneCommand);
-  registry.register(openEditPaneCommand);
+  registry.register(openNewEntryTabCommand);
+  registry.register(openEntryTabCommand);
   registry.register(openFromEditorSelectionCommand);
 }

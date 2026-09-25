@@ -1,5 +1,5 @@
 import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
-import { DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE } from "./glossaryEntryEditorPaneCommands";
+import { DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE } from "./glossaryEntryTabCommands";
 
 /**
  * #436 Slice 12.
@@ -8,7 +8,7 @@ import { DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE } from "./glossaryEntryEdi
  * the current Markdown editor selection"). Deliberately separate from both
  * the CodeMirror keymap extension (`glossarySelectionShortcutExtension.ts`,
  * which only extracts the RAW selected text) and `App.tsx` (which owns the
- * actual pane transition / dirty confirm) — so this logic is independently
+ * actual glossary Description tab open) — so this logic is independently
  * unit-testable and reusable by a future right-click context-menu entry
  * point (`source: "editor-context-menu"`) without duplicating it.
  */
@@ -57,7 +57,7 @@ export type GlossarySelectionResolution =
  * and `matchFlags` is never consulted (deliberately out of scope — see the
  * Slice 12 spec's "絶対にやらないこと").
  */
-export function resolveGlossaryEntryEditorPaneTargetFromSelection(
+export function resolveGlossaryEntryTargetFromSelection(
   selectedText: string | null | undefined,
   entries: readonly GlossaryEntry[]
 ): GlossarySelectionResolution {

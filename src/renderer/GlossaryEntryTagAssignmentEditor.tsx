@@ -1,4 +1,5 @@
 import { useState, type DragEvent } from "react";
+import gripperIconRaw from "../../assets/icons/codicons/dialog/gripper.svg?raw";
 import type { GlossaryTag } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import { partitionGlossaryTagsForEntry } from "./glossaryEntryDraft";
@@ -8,9 +9,6 @@ import { GlossaryTagChip } from "./GlossaryTagChip";
  *  atom / File Explorer / tab reorder drags. */
 const TAG_ASSIGNMENT_MIME =
   "application/x-pergamum-glossary-entry-tag-assignment";
-
-/** The grab-to-move glyph shown at the head of every tag row. */
-const TAG_DRAG_HANDLE_GLYPH = "⣿";
 
 type DragSource = "assigned" | "available";
 
@@ -33,7 +31,7 @@ interface GlossaryEntryTagAssignmentEditorProps {
 
 /**
  * #375: the Glossary Entry editor's ORDERED tag assignment editor — two lists.
- * Left = assigned tags in entry assignment order (`⣿` D&D reorder; `tags[0]`
+ * Left = assigned tags in entry assignment order (drag handle D&D reorder; `tags[0]`
  * gets the #400 primary flag/shadow treatment via `GlossaryTagChip`). Right
  * = the remaining project tags in
  * project-wide `sortOrder`. Right → left assigns (at the drop slot), left →
@@ -208,7 +206,7 @@ export function GlossaryEntryTagAssignmentEditor({
                     }
                   }}
                 >
-                  <span aria-hidden="true">{TAG_DRAG_HANDLE_GLYPH}</span>
+                  <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: gripperIconRaw }} />
                 </button>
                 <GlossaryTagChip
                   tag={tag}
@@ -288,7 +286,7 @@ export function GlossaryEntryTagAssignmentEditor({
                     }
                   }}
                 >
-                  <span aria-hidden="true">{TAG_DRAG_HANDLE_GLYPH}</span>
+                  <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: gripperIconRaw }} />
                 </button>
                 <GlossaryTagChip tag={tag} />
               </li>

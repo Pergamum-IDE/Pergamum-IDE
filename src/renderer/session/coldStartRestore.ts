@@ -12,8 +12,8 @@
  *      Session-Restore shortcut), verifying the saved identity
  *   4. reopens its Markdown editors (`projectMarkdown` / `standaloneMarkdown`;
  *      `untitled` is skipped in #274) and #573 glossary Description tabs
- *      (re-read by entry id; no View State), preserving relative order and
- *      skipping missing resources locally
+ *      (re-read by entry id), preserving relative order and skipping
+ *      missing resources locally
  *   5. resolves the active editor (saved → filename fallback → no-active)
  *   6. hands the assembled working environment + pending #273 View States
  *      to the host to apply
@@ -352,9 +352,10 @@ async function buildRestoredEditor(
         },
         sessionIdentity: sessionEditorIdentity(editor),
         fallbackFilename: fallbackFilenameForSessionEditor(editor),
-        // View State is deferred for glossary tabs (not restored).
-        viewStateKey: null,
-        viewState: null
+        // #574 Slice 1: applied by the Description editor only if its
+        // content digest still matches the entry's current Description.
+        viewStateKey: serializeEditorId(id),
+        viewState: editor.viewState
       };
     }
   }

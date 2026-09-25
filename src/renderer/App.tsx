@@ -180,14 +180,23 @@ import {
   createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
   createNewGlossaryDescriptionCurrentEditor,
+  glossaryDescriptionEditorTitle,
   updateGlossaryDescriptionEditorDraft,
   updateGlossaryDescriptionEditorText,
   currentEditorProjectRelativePath,
   currentEditorTitle,
   isCurrentEditorDirty,
   markdownDocumentForEditor,
-  type CurrentEditor
+  type CurrentEditor,
+  type GlossaryDescriptionCurrentEditor
 } from "./currentEditor";
+import {
+  countGlossaryImageReferences,
+  glossaryDescriptionImageReferenceRewrites,
+  glossaryEntryDescriptionUpdateInput,
+  rebaseGlossaryDescriptionEditorBaseline,
+  rewriteGlossaryDescriptionImageReferences
+} from "./glossaryImageReferenceMoveUpdate";
 import { DocumentTabBar } from "./DocumentTabBar";
 import { useTabSwitchShortcuts } from "./editorTabShortcuts";
 import { useGlobalKeyboardShortcuts } from "./globalKeyboardShortcuts";
@@ -237,6 +246,19 @@ import {
   type AppDialogChoiceId
 } from "./dialog/appDialogTypes";
 import { runEditorCloseFlow } from "./documentTabCloseFlow";
+import {
+  GlossaryExportDialog,
+  type GlossaryExportDialogRequest
+} from "./dialog/GlossaryExportDialog";
+import type { GlossaryExportPlan } from "./glossaryExport/glossaryExportModel";
+import { renderGlossaryDescriptionForExport } from "./glossaryExport/glossaryExportHtml";
+import { countGlossaryEntryOccurrences } from "./glossaryExport/glossaryExportOccurrences";
+import {
+  runGlossaryExport,
+  type GlossaryExportRunResult
+} from "./glossaryExport/glossaryExportRunner";
+import { loadKatexExportCss } from "./glossaryExport/katexExportCss";
+import { markdownCalloutLabelsFor } from "./preview/markdownCallout";
 import {
   resolveDirtyWorkingCopies,
   type DirtyWorkingCopyResolutionResult
@@ -320,6 +342,10 @@ import {
   glossaryEditorFromRecoveryDraft,
   recoveryDocumentKeyForGlossaryEditor
 } from "./recovery/glossaryRecovery";
+import {
+  sanitizeGlossaryRecoveryDraftTags,
+  type GlossaryRecoveryDraft
+} from "../shared/glossaryRecoveryDraft";
 import { RecoveryCandidateDialog } from "./recovery/RecoveryCandidateDialog";
 import {
   createRecoveryCommandTitles,
@@ -390,12 +416,12 @@ import {
 // has a new home.
 import {
   DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
-  createGlossaryEntryEditorPaneCommandTitles,
-  glossaryEntryEditorPaneCommandIds,
+  createGlossaryEntryTabCommandTitles,
+  glossaryEntryTabCommandIds,
   presetRepresentativeOrDefault,
-  registerGlossaryEntryEditorPaneCommands
-} from "./glossaryEntryEditorPaneCommands";
-import { resolveGlossaryEntryEditorPaneTargetFromSelection } from "./glossarySelectionResolution";
+  registerGlossaryEntryTabCommands
+} from "./glossaryEntryTabCommands";
+import { resolveGlossaryEntryTargetFromSelection } from "./glossarySelectionResolution";
 import {
   EditorNavigation,
   type EditorResolveResult,
@@ -1254,7 +1280,7 @@ export function App(): JSX.Element {
   async function openGlossaryDescriptionTabFromSelection(
     selectedText: string
   ): Promise<void> {
-    const resolution = resolveGlossaryEntryEditorPaneTargetFromSelection(
+    const resolution = resolveGlossaryEntryTargetFromSelection(
       selectedText,
       glossaryEntries
     );
@@ -1279,7 +1305,7 @@ export function App(): JSX.Element {
   // when/isEnabled/logging path every other UI-triggered command does.
   function handleGlossarySelectionShortcut(selectedText: string): void {
     executeUiCommand(
-      glossaryEntryEditorPaneCommandIds.openFromEditorSelection,
+      glossaryEntryTabCommandIds.openFromEditorSelection,
       { source: "editorSurface" },
       selectedText
     );
@@ -1381,6 +1407,9 @@ export function App(): JSX.Element {
   // doc comment for why this is never re-derived while the dialog is open.
   const [documentMapPngExportSnapshot, setDocumentMapPngExportSnapshot] =
     useState<DocumentMapPngExportSnapshot | null>(null);
+  // #574 Slice 6: the Glossary Export Dialog's target (`null` = closed).
+  const [glossaryExportRequest, setGlossaryExportRequest] =
+    useState<GlossaryExportDialogRequest | null>(null);
   // #384: Command Palette `%` project-search request handed to the Search pane
   // (also #457: Ctrl+Shift+F / Ctrl+Shift+H, which additionally sets `tab`).
   // `token` is a session-monotonic counter so a repeat `%` re-applies.
@@ -1663,9 +1692,17 @@ export function App(): JSX.Element {
     readonly referenceCount: number;
     readonly documentCount: number;
     readonly imageCount: number;
+    /** #574 Slice 2: glossary entries whose Description would be updated. */
+    readonly glossaryEntryCount: number;
   } | null>(null);
   const pendingImageReferenceMoveUpdateRef = useRef<{
     readonly plans: readonly ImageReferenceMoveUpdatePlan[];
+    /**
+     * #574 Slice 2: the image moves to follow in glossary Descriptions
+     * (recomputed against the live data at apply time). Empty when no
+     * glossary entry referenced a moved image.
+     */
+    readonly glossaryMovedImages: readonly MovedImageFile[];
   } | null>(null);
   // #272: Session persistence seam. `App` only *observes* already-derived
   // session inputs and forwards them to the coordinator, plus exposes a
@@ -1728,7 +1765,16 @@ export function App(): JSX.Element {
         const active = activeOpenDocument(state);
         const editor = activeCurrentEditor(state);
 
-        if (!active || editor?.kind !== "markdown") {
+        // #574 Slice 1: a SAVED glossary Description tab's Description
+        // editor is captured too (it was excluded here, which is why its
+        // View State never reached the Session). A never-saved new-entry tab
+        // is not in the Session at all.
+        const hasSessionViewState =
+          editor?.kind === "markdown" ||
+          (editor?.kind === "glossaryDescription" &&
+            !glossaryEntryDraftIsNew(editor.draft));
+
+        if (!active || !hasSessionViewState) {
           return null;
         }
 
@@ -3834,20 +3880,20 @@ export function App(): JSX.Element {
     // points (Glossary side pane "語彙を追加", Glossary Management add / edit,
     // Ctrl+G). Their command ids predate #573 and are kept stable; they now
     // open glossary Description tabs instead of the removed bottom pane.
-    registerGlossaryEntryEditorPaneCommands(
+    registerGlossaryEntryTabCommands(
       registry,
       {
-        openGlossaryEntryCreatePane: (options) => {
+        openNewGlossaryEntryTab: (options) => {
           openNewGlossaryDescriptionTab(options.presetRepresentative);
         },
-        openGlossaryEntryEditPane: async (options) => {
+        openGlossaryEntryTab: async (options) => {
           await openGlossaryDescriptionTab(options.entryId);
         },
-        openGlossaryEntryEditorPaneFromSelection: async (selectedText) => {
+        openGlossaryEntryTabFromSelection: async (selectedText) => {
           await openGlossaryDescriptionTabFromSelection(selectedText);
         }
       },
-      createGlossaryEntryEditorPaneCommandTitles(translate)
+      createGlossaryEntryTabCommandTitles(translate)
     );
     // #457: Ctrl+Shift+F / Ctrl+Shift+H - application-menu accelerators
     // only (palette-hidden, same rationale as Ctrl+G above), since they
@@ -4178,9 +4224,9 @@ export function App(): JSX.Element {
   // #436 Slice 3 / #573 Slice 7: the Glossary side pane's "語彙を追加" opens a
   // new, unsaved glossary Description tab (nothing is written to the DB until
   // its first save).
-  function openGlossaryCreateEntryPaneFromSidebar(): void {
+  function openNewGlossaryEntryTabFromSidebar(): void {
     executeUiCommand(
-      glossaryEntryEditorPaneCommandIds.openCreatePane,
+      glossaryEntryTabCommandIds.openNewEntryTab,
       { source: "workspaceSidebar" },
       {
         source: "glossary-pane",
@@ -4402,7 +4448,7 @@ export function App(): JSX.Element {
   // edit action opens (or focuses) that entry's tab.
   function handleAddGlossaryEntryFromManager(): void {
     executeUiCommand(
-      glossaryEntryEditorPaneCommandIds.openCreatePane,
+      glossaryEntryTabCommandIds.openNewEntryTab,
       { source: "editorSurface" },
       {
         source: "glossary-settings",
@@ -4413,7 +4459,7 @@ export function App(): JSX.Element {
 
   function handleEditGlossaryEntryFromManager(entryId: GlossaryEntryId): void {
     executeUiCommand(
-      glossaryEntryEditorPaneCommandIds.openEditPane,
+      glossaryEntryTabCommandIds.openEntryTab,
       { source: "editorSurface" },
       { source: "glossary-settings", entryId }
     );
@@ -4421,6 +4467,109 @@ export function App(): JSX.Element {
 
   // #375: Glossary Management tab — hard delete of an entry through the shared
   // destructive confirm dialog.
+  // #574 Slice 6: a Glossary Management row's Export action.
+  function handleExportGlossaryEntryFromManager(
+    entryId: GlossaryEntryId,
+    entryLabel: string
+  ): void {
+    setGlossaryExportRequest({ entryId, entryLabel });
+  }
+
+  async function confirmGlossaryExportOverwrite(): Promise<boolean> {
+    try {
+      return (
+        (await confirmDialog({
+          title: translate("glossaryExport.overwriteConfirm.title"),
+          message: {
+            kind: "plainText",
+            text: translate("glossaryExport.overwriteConfirm.message")
+          },
+          icon: {
+            kind: "warning",
+            tooltip: translate("dialog.icon.warning")
+          },
+          clipboardText: null,
+          cancelLabel: translate("common.cancel"),
+          tone: "destructive",
+          confirmLabel: translate("glossaryExport.overwriteConfirm.confirm")
+        })) === "confirm"
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  // #574 Slice 6: export ONE glossary entry as HTML. Uses the entry's SAVED
+  // state (a fresh `getById`, never an open tab's draft); occurrences are
+  // counted like the Search pane's glossary search; images and the file go
+  // through the existing #523 HTML export IPC. No entry content is logged.
+  async function exportGlossaryEntry(
+    plan: GlossaryExportPlan
+  ): Promise<GlossaryExportRunResult> {
+    const activeProject = project;
+    const activeContext = activeProjectContext;
+
+    if (!activeProject || !activeContext) {
+      return { ok: false, reason: "failed" };
+    }
+
+    return await runGlossaryExport(plan, {
+      getEntry: (entryId) => window.pergamum.glossary.getById(entryId),
+      countOccurrences: (entry) =>
+        countGlossaryEntryOccurrences({
+          entry,
+          documents: activeProject.documents,
+          readText: createProjectSearchReadText(activeContext)
+        }),
+      renderDescription: (description, imageAssetFolderName) =>
+        renderGlossaryDescriptionForExport(description, {
+          imageAssetFolderName,
+          calloutLabels: markdownCalloutLabelsFor(translate),
+          mermaidMessages: {
+            emptyMessage: translate("preview.mermaid.emptyMessage"),
+            errorMessage: translate("preview.mermaid.errorMessage"),
+            errorHint: translate("preview.mermaid.errorHint"),
+            showDetailsLabel: translate("preview.mermaid.showDetails")
+          }
+        }),
+      loadKatexCss: loadKatexExportCss,
+      labels: (occurrences) => ({
+        infoHeading: translate("glossaryExport.document.infoHeading"),
+        representative: translate("glossaryExport.document.representative"),
+        atoms: translate("glossaryExport.document.atoms"),
+        tags: translate("glossaryExport.document.tags"),
+        noTags: translate("glossaryExport.document.noTags"),
+        createdAt: translate("glossaryExport.document.createdAt"),
+        updatedAt: translate("glossaryExport.document.updatedAt"),
+        occurrencesHeading: translate(
+          "glossaryExport.document.occurrencesHeading"
+        ),
+        atomColumn: translate("glossaryExport.document.atomColumn"),
+        countColumn: translate("glossaryExport.document.countColumn"),
+        total: translate("glossaryExport.document.total"),
+        occurrenceScope: translate("glossaryExport.document.occurrenceScope", {
+          count: occurrences?.documentCount ?? 0
+        }),
+        occurrenceSkipped:
+          occurrences && occurrences.skippedFileCount > 0
+            ? translate("glossaryExport.document.occurrenceSkipped", {
+                count: occurrences.skippedFileCount
+              })
+            : null,
+        descriptionHeading: translate(
+          "glossaryExport.document.descriptionHeading"
+        ),
+        emptyDescription: translate("glossaryExport.document.emptyDescription")
+      }),
+      lang: displayLanguage,
+      writeHtml: (request) =>
+        window.pergamum.files.exportHtmlCombined({
+          ...request,
+          projectRootPath: activeProject.rootPath
+        })
+    });
+  }
+
   async function handleDeleteGlossaryEntryFromManager(
     entryId: string
   ): Promise<void> {
@@ -5190,11 +5339,34 @@ export function App(): JSX.Element {
   //     Ctrl+S creates the entry; nothing is written to the DB here).
   // Returns whether a tab opened, the row should fall back to `.recovered.md`,
   // or it is kept for later.
+  // #574 Slice 3: the recovered draft's tag ids are validated against the
+  // project's CURRENT tags before any tab opens — a tag deleted after the
+  // snapshot is dropped (only the tag id; Description / atoms / search
+  // settings / identity are kept), so the restored tab can still be saved.
+  // Applies to every path below (existing entry, never-saved entry, deleted
+  // entry recovered as new). `removedTagCount` is reported only when a tab
+  // actually opened.
   async function restoreGlossaryRecoveryCandidate(
     recoveryId: string
-  ): Promise<"opened" | "fallback" | "kept"> {
+  ): Promise<{
+    readonly outcome: "opened" | "fallback" | "kept";
+    readonly removedTagCount: number;
+    readonly hasRecoveryConflict: boolean;
+  }> {
+    const notRestored = (
+      outcome: "fallback" | "kept"
+    ): {
+      readonly outcome: "fallback" | "kept";
+      readonly removedTagCount: 0;
+      readonly hasRecoveryConflict: false;
+    } => ({
+      outcome,
+      removedTagCount: 0,
+      hasRecoveryConflict: false
+    });
+
     if (isLifecycleCommitBarrierActiveNow()) {
-      return "kept";
+      return notRestored("kept");
     }
 
     let read: Awaited<
@@ -5207,26 +5379,66 @@ export function App(): JSX.Element {
       });
     } catch {
       setStatus({ key: "status.recoveryRestoreFailed" });
-      return "kept";
+      return notRestored("kept");
     }
 
     if (!read.ok) {
-      return "kept";
+      return notRestored("kept");
     }
 
     switch (read.result.kind) {
       case "missing":
-        return "kept";
+        return notRestored("kept");
       case "differentProject":
         setStatus({ key: "status.recoveryGlossaryOtherProject" });
-        return "kept";
+        return notRestored("kept");
       case "invalid":
-        return "fallback";
+        return notRestored("fallback");
       case "draft":
         break;
     }
 
-    const { draft } = read.result;
+    let existingTagIds: string[];
+
+    try {
+      existingTagIds = (await window.pergamum.glossary.listTags()).map(
+        (tag) => tag.id
+      );
+    } catch {
+      // Cannot validate the tags — keep the row rather than open a tab that
+      // might not be savable.
+      setStatus({ key: "status.recoveryRestoreFailed" });
+      return notRestored("kept");
+    }
+
+    const sanitized = sanitizeGlossaryRecoveryDraftTags(
+      read.result.draft,
+      existingTagIds
+    );
+    const { outcome, hasRecoveryConflict } = await openRecoveredGlossaryDraft(
+      sanitized.draft
+    );
+
+    return {
+      outcome,
+      removedTagCount:
+        outcome === "opened" ? sanitized.removedTagIds.length : 0,
+      hasRecoveryConflict: outcome === "opened" && hasRecoveryConflict
+    };
+  }
+
+  // #573 Slice 9: open a (validated) recovered draft as a dirty glossary tab.
+  // #574 Slice 4: `hasRecoveryConflict` — the existing entry was updated after
+  // the snapshot; the opened tab carries `recoveryConflict` so Save asks
+  // before overwriting. A new / deleted-as-new entry never conflicts.
+  async function openRecoveredGlossaryDraft(
+    draft: GlossaryRecoveryDraft
+  ): Promise<{
+    readonly outcome: "opened" | "kept";
+    readonly hasRecoveryConflict: boolean;
+  }> {
+    const kept = { outcome: "kept", hasRecoveryConflict: false } as const;
+
     let currentEntry: GlossaryEntry | null = null;
 
     if (draft.entryId !== null) {
@@ -5246,7 +5458,7 @@ export function App(): JSX.Element {
           key: "status.recoveryGlossaryTabBusy",
           values: { name: currentEditorTitle(openTab.editor) }
         });
-        return "kept";
+        return kept;
       }
 
       const recoveredEditor = glossaryEditorFromRecoveryDraft(
@@ -5254,6 +5466,10 @@ export function App(): JSX.Element {
         currentEntry,
         currentEntry.id
       );
+      const opened = {
+        outcome: "opened",
+        hasRecoveryConflict: Boolean(recoveredEditor.recoveryConflict)
+      } as const;
 
       if (openTab) {
         // A clean tab (e.g. from session restore) takes the recovered draft
@@ -5267,17 +5483,15 @@ export function App(): JSX.Element {
 
         openDocumentsStateRef.current = replacement.state;
         setOpenDocumentsState(replacement.state);
-        return (await openEditorFromExplicitActivation(tabId))
-          ? "opened"
-          : "kept";
+        return (await openEditorFromExplicitActivation(tabId)) ? opened : kept;
       }
 
       return (await openEditorFromExplicitActivation(tabId, {
         history: "record",
         resolvedEditor: recoveredEditor
       }))
-        ? "opened"
-        : "kept";
+        ? opened
+        : kept;
     }
 
     // Never saved, or the saved entry was deleted since: recover as a new,
@@ -5300,8 +5514,8 @@ export function App(): JSX.Element {
         resolvedEditor: glossaryEditorFromRecoveryDraft(draft, null, localId)
       }
     ))
-      ? "opened"
-      : "kept";
+      ? { outcome: "opened", hasRecoveryConflict: false }
+      : kept;
   }
 
   async function handleRecoveryRestoreSelected(
@@ -5325,18 +5539,42 @@ export function App(): JSX.Element {
     const glossaryFallbackIds = new Set<string>();
     const glossaryOpenedIds: string[] = [];
 
+    let removedGlossaryTagCount = 0;
+    let glossaryRecoveryConflictCount = 0;
+
     for (const recoveryId of recoveryIds) {
       if (byId.get(recoveryId)?.documentType !== "glossary.description") {
         continue;
       }
 
-      const outcome = await restoreGlossaryRecoveryCandidate(recoveryId);
+      const { outcome, removedTagCount, hasRecoveryConflict } =
+        await restoreGlossaryRecoveryCandidate(recoveryId);
 
       if (outcome === "opened") {
+        // A conflict does NOT keep the row: the open dirty tab now holds the
+        // recovered data (its Save asks before overwriting).
         glossaryOpenedIds.push(recoveryId);
+        removedGlossaryTagCount += removedTagCount;
+        glossaryRecoveryConflictCount += hasRecoveryConflict ? 1 : 0;
       } else if (outcome === "fallback") {
         glossaryFallbackIds.add(recoveryId);
       }
+    }
+
+    // #574 Slice 3: a non-blocking notice — the count only, never tag labels
+    // or Description text. Restoring still counts as a success (finalized).
+    if (removedGlossaryTagCount > 0) {
+      setStatus({
+        key: "status.recoveryGlossaryTagsRemoved",
+        values: { count: removedGlossaryTagCount }
+      });
+    }
+
+    // #574 Slice 4: a non-blocking warning (no Description / surface text).
+    if (glossaryRecoveryConflictCount > 0) {
+      notificationController.notify({
+        message: translate("notification.recoveryGlossaryConflict")
+      });
     }
 
     if (glossaryOpenedIds.length > 0) {
@@ -7763,6 +8001,27 @@ export function App(): JSX.Element {
       return "rejected";
     }
 
+    // #574 Slice 4: a tab restored from Recovery over an entry updated since
+    // the snapshot never overwrites it silently — every save route (Ctrl+S,
+    // Save All, close / lifecycle "save") comes through here and asks first.
+    // Cancel leaves the tab dirty and the conflict marked.
+    if (
+      openDocument.editor.recoveryConflict &&
+      !glossaryEntryDraftIsNew(draft)
+    ) {
+      if (!(await confirmRecoveredGlossaryOverwrite())) {
+        return "cancelled";
+      }
+
+      // The draft confirmed must be the draft saved.
+      if (
+        findOpenDocument(openDocumentsStateRef.current, editorId)?.editor !==
+        openDocument.editor
+      ) {
+        return "cancelled";
+      }
+    }
+
     const result = await saveInFlightGuard.run<SaveFileOutcome>(
       async () => {
         let savedEntry: GlossaryEntry;
@@ -7790,7 +8049,7 @@ export function App(): JSX.Element {
           if (duplicateAtomValue !== null) {
             notificationController.notify({
               message: translate(
-                "glossaryEntryEditorPane.saveFailed.duplicateAtomValue",
+                "glossaryEditor.saveFailed.duplicateAtomValue",
                 { value: duplicateAtomValue }
               )
             });
@@ -7877,6 +8136,32 @@ export function App(): JSX.Element {
     );
 
     return result ?? "ignored";
+  }
+
+  // #574 Slice 4: confirm overwriting a glossary entry updated after the
+  // Recovery snapshot the tab was restored from. Any dialog failure → no save.
+  async function confirmRecoveredGlossaryOverwrite(): Promise<boolean> {
+    try {
+      return (
+        (await confirmDialog({
+          title: translate("dialog.recoveryGlossaryConflict.title"),
+          message: {
+            kind: "plainText",
+            text: translate("dialog.recoveryGlossaryConflict.message")
+          },
+          icon: {
+            kind: "warning",
+            tooltip: translate("dialog.icon.warning")
+          },
+          clipboardText: null,
+          dismissOnBackdropClick: false,
+          tone: "destructive",
+          confirmLabel: translate("dialog.recoveryGlossaryConflict.confirm")
+        })) === "confirm"
+      );
+    } catch {
+      return false;
+    }
   }
 
   async function readProjectDocument(
@@ -9353,6 +9638,264 @@ export function App(): JSX.Element {
    * the C1 "moved document" flow and the C2 "moved image reference" flow —
    * the difference is only which document path / rewrites are passed in.
    */
+  // #574 Slice 2: every open glossary Description tab (saved or new).
+  function openGlossaryDescriptionEditors(
+    state: OpenDocumentsState
+  ): GlossaryDescriptionCurrentEditor[] {
+    return state.documents.flatMap((openDocument) =>
+      openDocument.editor.kind === "glossaryDescription"
+        ? [openDocument.editor]
+        : []
+    );
+  }
+
+  // #574 Slice 2: rewrite an OPEN glossary tab's CURRENT draft Description —
+  // exactly like an open Markdown document (#414 P1-2): the active tab via
+  // its live editor, an inactive one via a real transaction on its #392
+  // cached EditorState (both Undo-reversible). A tab that has never been
+  // shown in this session has no EditorState yet; its draft text is then
+  // updated directly (the editor will be built from it). Dirty edits are
+  // kept — only the matching destinations change.
+  function applyGlossaryTabImageReferenceRewrites(
+    tabEditorId: EditorId,
+    movedImages: readonly MovedImageFile[]
+  ): "updated" | "unchanged" | "failed" {
+    const openTab = findOpenDocument(openDocumentsStateRef.current, tabEditorId);
+
+    if (openTab?.editor.kind !== "glossaryDescription") {
+      return "unchanged";
+    }
+
+    const description = openTab.editor.draft.description;
+    const rewrites = glossaryDescriptionImageReferenceRewrites(
+      description,
+      movedImages
+    );
+
+    if (rewrites.length === 0) {
+      return "unchanged";
+    }
+
+    const specs = markdownImageLinkRewriteChangeSpecs(description, rewrites);
+
+    if (specs === null) {
+      return "failed";
+    }
+
+    const changeSpecs = specs.map((spec) => ({ ...spec }));
+    const activeId = openDocumentsStateRef.current.activeDocumentId;
+    const isActiveGlossaryBuffer =
+      !isEditorAreaSpecialTabActive &&
+      paragraphIndentControllerRef.current !== null &&
+      activeId !== null &&
+      editorIdEquals(tabEditorId, activeId);
+
+    if (isActiveGlossaryBuffer) {
+      return paragraphIndentControllerRef.current?.applyReplaceInBufferChanges(
+        changeSpecs
+      )
+        ? "updated"
+        : "failed";
+    }
+
+    const documentKey = serializeEditorId(tabEditorId);
+    const cached = markdownEditorDocumentStatesRef.current.get(documentKey);
+    let nextText: string;
+    let nextBreaks: LineEndingBreakSet;
+
+    if (cached) {
+      const transactionResult = applyChangesToCachedMarkdownEditorDocumentState(
+        cached,
+        description,
+        changeSpecs,
+        "input.replace"
+      );
+
+      if (!transactionResult) {
+        return "failed";
+      }
+
+      markdownEditorDocumentStatesRef.current.set(
+        documentKey,
+        transactionResult.nextDocumentState
+      );
+      nextText = transactionResult.content;
+      nextBreaks = transactionResult.lineEndingBreaks;
+    } else {
+      const rewritten = applyMarkdownImageLinkRewritesToText(
+        description,
+        rewrites
+      );
+
+      if (rewritten === null) {
+        return "failed";
+      }
+
+      nextText = rewritten;
+      nextBreaks = buildLineEndingBreakSet(analyzeLineEndings(rewritten));
+    }
+
+    setOpenDocumentsState((current) =>
+      updateOpenEditor(current, tabEditorId, (editor) =>
+        updateGlossaryDescriptionEditorText(editor, nextText, nextBreaks)
+      )
+    );
+    return "updated";
+  }
+
+  // #574 Slice 2: follow a completed image Move / Rename in glossary
+  // Descriptions. Per entry: its OPEN tab's draft is rewritten first; only
+  // if that succeeded (or the tab needs nothing / is not open) is the
+  // stored Description updated — then the tab's saved baseline is rebased
+  // onto the stored result (draft untouched, so dirty stays dirty and clean
+  // stays clean). A failed tab rewrite leaves the stored entry alone too, so
+  // a later Ctrl+S can never write an old link back over an updated one.
+  // Never-saved new-entry tabs only get the draft rewrite.
+  async function applyGlossaryImageReferenceMoveUpdates(
+    movedImages: readonly MovedImageFile[]
+  ): Promise<{
+    readonly updatedEntryCount: number;
+    readonly updatedReferenceCount: number;
+    readonly updatedImageOldPaths: ReadonlySet<string>;
+    readonly failedNames: readonly string[];
+  }> {
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+    const updatedEntryIds = new Set<string>();
+    const updatedImageOldPaths = new Set<string>();
+    const failedNames: string[] = [];
+    let updatedReferenceCount = 0;
+    let storedEntries: GlossaryEntry[];
+
+    const noteRewrites = (
+      rewrites: readonly { readonly oldImageProjectRelativePath: string }[]
+    ): void => {
+      updatedReferenceCount += rewrites.length;
+      for (const rewrite of rewrites) {
+        updatedImageOldPaths.add(rewrite.oldImageProjectRelativePath);
+      }
+    };
+
+    try {
+      storedEntries = await window.pergamum.glossary.list();
+    } catch {
+      return {
+        updatedEntryCount: 0,
+        updatedReferenceCount: 0,
+        updatedImageOldPaths,
+        failedNames: [glossaryDescriptionEditorTitle("")]
+      };
+    }
+
+    const storedEntryIds = new Set(storedEntries.map((entry) => entry.id));
+    let storedEntryChanged = false;
+
+    for (const storedEntry of storedEntries) {
+      if (
+        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        break;
+      }
+
+      const name = glossaryDescriptionEditorTitle(
+        representativeGlossarySurface(storedEntry)
+      );
+      const tabEditorId = createGlossaryDescriptionEditorId(storedEntry.id);
+      const openTab = findOpenDocument(openDocumentsStateRef.current, tabEditorId);
+      const tabRewrites =
+        openTab?.editor.kind === "glossaryDescription"
+          ? glossaryDescriptionImageReferenceRewrites(
+              openTab.editor.draft.description,
+              movedImages
+            )
+          : [];
+      const tabOutcome = openTab
+        ? applyGlossaryTabImageReferenceRewrites(tabEditorId, movedImages)
+        : "unchanged";
+
+      if (tabOutcome === "failed") {
+        failedNames.push(name);
+        continue;
+      }
+      if (tabOutcome === "updated") {
+        updatedEntryIds.add(storedEntry.id);
+        noteRewrites(tabRewrites);
+      }
+
+      const storedRewrites = glossaryDescriptionImageReferenceRewrites(
+        storedEntry.description,
+        movedImages
+      );
+      const rewritten = rewriteGlossaryDescriptionImageReferences(
+        storedEntry.description,
+        movedImages
+      );
+
+      if (!rewritten) {
+        continue;
+      }
+
+      try {
+        const savedEntry = await window.pergamum.glossary.update(
+          glossaryEntryDescriptionUpdateInput(storedEntry, rewritten.description)
+        );
+
+        storedEntryChanged = true;
+        setOpenDocumentsState((current) =>
+          updateOpenEditor(current, tabEditorId, (editor) =>
+            rebaseGlossaryDescriptionEditorBaseline(editor, savedEntry)
+          )
+        );
+        if (!updatedEntryIds.has(storedEntry.id)) {
+          updatedEntryIds.add(storedEntry.id);
+          noteRewrites(storedRewrites);
+        }
+      } catch {
+        // The entry may have been deleted meanwhile, or the write failed:
+        // report it by name (never its Description text).
+        failedNames.push(name);
+      }
+    }
+
+    // Open tabs with no stored counterpart: never-saved new entries (and an
+    // entry deleted meanwhile) — draft rewrite only.
+    for (const tab of openGlossaryDescriptionEditors(openDocumentsStateRef.current)) {
+      if (storedEntryIds.has(tab.entryId)) {
+        continue;
+      }
+
+      const tabEditorId = createGlossaryDescriptionEditorId(tab.entryId);
+      const tabRewrites = glossaryDescriptionImageReferenceRewrites(
+        tab.draft.description,
+        movedImages
+      );
+      const outcome = applyGlossaryTabImageReferenceRewrites(
+        tabEditorId,
+        movedImages
+      );
+
+      if (outcome === "failed") {
+        failedNames.push(currentEditorTitle(tab));
+      } else if (outcome === "updated") {
+        updatedEntryIds.add(tab.entryId);
+        noteRewrites(tabRewrites);
+      }
+    }
+
+    if (storedEntryChanged) {
+      setGlossaryRefreshToken((token) => token + 1);
+    }
+
+    return {
+      updatedEntryCount: updatedEntryIds.size,
+      updatedReferenceCount,
+      updatedImageOldPaths,
+      failedNames
+    };
+  }
+
   async function applyImageLinkRewritesToProjectDocument(
     documentProjectRelativePath: string,
     rewrites: readonly {
@@ -9545,6 +10088,19 @@ export function App(): JSX.Element {
       }
     }
 
+    // #574 Slice 2: only images that actually completed their move.
+    const completedMoveKeys = new Set(
+      args.completedImageMoves.map((move) =>
+        JSON.stringify([move.oldProjectRelativePath, move.newProjectRelativePath])
+      )
+    );
+    const glossaryMovedImages = (c2Pending?.glossaryMovedImages ?? []).filter(
+      (move) =>
+        completedMoveKeys.has(
+          JSON.stringify([move.oldProjectRelativePath, move.newProjectRelativePath])
+        )
+    );
+
     if (c2Pending) {
       const c2Plans = filterImageReferenceUpdatePlansToCompletedMoves(
         c2Pending.plans,
@@ -9559,7 +10115,7 @@ export function App(): JSX.Element {
       }
     }
 
-    if (byDocument.size === 0) {
+    if (byDocument.size === 0 && glossaryMovedImages.length === 0) {
       return;
     }
 
@@ -9569,6 +10125,7 @@ export function App(): JSX.Element {
       const updatedImages = new Set<string>();
       let sawImageReferences = false;
       const failedDocuments: string[] = [];
+      let updatedGlossaryEntries = 0;
 
       for (const [documentPath, entry] of byDocument) {
         if (entry.movedImages.size > 0) {
@@ -9590,6 +10147,19 @@ export function App(): JSX.Element {
         }
       }
 
+      if (glossaryMovedImages.length > 0) {
+        const glossaryOutcome =
+          await applyGlossaryImageReferenceMoveUpdates(glossaryMovedImages);
+
+        sawImageReferences = true;
+        updatedGlossaryEntries = glossaryOutcome.updatedEntryCount;
+        updatedRewrites += glossaryOutcome.updatedReferenceCount;
+        for (const image of glossaryOutcome.updatedImageOldPaths) {
+          updatedImages.add(image);
+        }
+        failedDocuments.push(...glossaryOutcome.failedNames);
+      }
+
       if (failedDocuments.length > 0) {
         const shown = failedDocuments.slice(0, 5);
         const documents =
@@ -9607,14 +10177,24 @@ export function App(): JSX.Element {
         return;
       }
 
-      if (updatedDocuments === 0) {
+      if (updatedDocuments === 0 && updatedGlossaryEntries === 0) {
         return;
       }
 
       setStatus({
         key: "status.fileExplorerMoveResult",
         values: {
-          message: sawImageReferences
+          message: updatedGlossaryEntries > 0
+            ? translate(
+                "explorer.move.imageReferenceUpdate.status.updatedWithGlossary",
+                {
+                  count: updatedRewrites,
+                  documentCount: updatedDocuments,
+                  glossaryCount: updatedGlossaryEntries,
+                  imageCount: updatedImages.size
+                }
+              )
+            : sawImageReferences
             ? translate("explorer.move.imageReferenceUpdate.status.updated", {
                 count: updatedRewrites,
                 documentCount: updatedDocuments,
@@ -9673,7 +10253,21 @@ export function App(): JSX.Element {
     // than drops a document that percent-encoded a special char.
     const searchPlan = imageReferenceSearchPlan(effectiveMoves);
     const perDocumentPlans: ImageReferenceMoveUpdatePlan[] = [];
+    let glossaryCount: ReturnType<typeof countGlossaryImageReferences> = {
+      entryCount: 0,
+      referenceCount: 0,
+      imageOldPaths: new Set()
+    };
     try {
+      // #574 Slice 2: glossary Descriptions reference project images too
+      // (project-root-relative). A failed glossary read fails planning, like
+      // an unreadable document.
+      glossaryCount = countGlossaryImageReferences(
+        await window.pergamum.glossary.list(),
+        openGlossaryDescriptionEditors(openDocumentsStateRef.current),
+        effectiveMoves
+      );
+
       for (const projectDocument of projectSnapshot.documents) {
         // #414 P1-1: a document we cannot read fails planning — no silent skip.
         const content = await readProjectDocumentTextOrThrow(
@@ -9715,8 +10309,14 @@ export function App(): JSX.Element {
     }
 
     const batch = buildImageReferenceMoveUpdateBatch(perDocumentPlans);
-    if (batch.plans.length === 0) {
+    if (batch.plans.length === 0 && glossaryCount.entryCount === 0) {
       return "proceed";
+    }
+    const referencedImages = new Set(glossaryCount.imageOldPaths);
+    for (const plan of batch.plans) {
+      for (const rewrite of plan.rewrites) {
+        referencedImages.add(rewrite.oldImageProjectRelativePath);
+      }
     }
 
     imageReferenceMoveUpdateResolveRef.current?.("cancel");
@@ -9729,14 +10329,20 @@ export function App(): JSX.Element {
         setImageReferenceMoveUpdateDialogState(null);
         const resolution = resolveImageReferenceMoveUpdateChoice(choice, batch);
         pendingImageReferenceMoveUpdateRef.current = resolution.stagedBatch
-          ? { plans: resolution.stagedBatch.plans }
+          ? {
+              plans: resolution.stagedBatch.plans,
+              glossaryMovedImages:
+                glossaryCount.entryCount > 0 ? effectiveMoves : []
+            }
           : null;
         resolve(resolution.moveDecision);
       };
       setImageReferenceMoveUpdateDialogState({
-        referenceCount: batch.totalReferenceCount,
+        referenceCount:
+          batch.totalReferenceCount + glossaryCount.referenceCount,
         documentCount: batch.documentCount,
-        imageCount: batch.imageCount
+        imageCount: referencedImages.size,
+        glossaryEntryCount: glossaryCount.entryCount
       });
     });
   }
@@ -11591,6 +12197,7 @@ export function App(): JSX.Element {
           effectiveSettings.commandPalette.launchAnimation.durationMs
         }
         onOpenCommandPalette={openCommandPaletteWithPrefix}
+        isGlossaryDescription={activeDocument?.editor.kind === "glossaryDescription"}
         translate={translate}
       />
 
@@ -11729,8 +12336,8 @@ export function App(): JSX.Element {
                           entryId
                         );
                       }}
-                      onOpenGlossaryCreateEntryPane={
-                        openGlossaryCreateEntryPaneFromSidebar
+                      onOpenNewGlossaryEntryTab={
+                        openNewGlossaryEntryTabFromSidebar
                       }
                       glossaryActiveDocumentContent={
                         activeMarkdownDocument
@@ -11851,6 +12458,7 @@ export function App(): JSX.Element {
                         onDeleteEntry={(entryId) =>
                           handleDeleteGlossaryEntryFromManager(entryId)
                         }
+                        onExportEntry={handleExportGlossaryEntryFromManager}
                         onReorderEntries={handleReorderGlossaryEntries}
                       />
                     </section>
@@ -12188,6 +12796,17 @@ export function App(): JSX.Element {
         />
       ) : null}
 
+      <GlossaryExportDialog
+        request={glossaryExportRequest}
+        translate={translate}
+        opener={null}
+        onClose={() => setGlossaryExportRequest(null)}
+        onSelectFolder={(req) => window.pergamum.files.selectExportFolder(req)}
+        onCheckFileExists={(req) => window.pergamum.files.checkFileExists(req)}
+        onConfirmOverwrite={confirmGlossaryExportOverwrite}
+        onExport={exportGlossaryEntry}
+      />
+
       <DocumentMapPngExportDialog
         snapshot={documentMapPngExportSnapshot}
         translate={translate}
@@ -12373,6 +12992,9 @@ export function App(): JSX.Element {
           referenceCount={imageReferenceMoveUpdateDialogState.referenceCount}
           documentCount={imageReferenceMoveUpdateDialogState.documentCount}
           imageCount={imageReferenceMoveUpdateDialogState.imageCount}
+          glossaryEntryCount={
+            imageReferenceMoveUpdateDialogState.glossaryEntryCount
+          }
           translate={translate}
           opener={imageReferenceMoveUpdateOpenerRef.current}
           onUpdate={confirmImageReferenceMoveUpdate}

@@ -173,3 +173,39 @@ export function glossaryRecoveryPayloadText(payloadText: string): string {
 export function isNewGlossaryRecoveryPayload(payloadText: string): boolean {
   return parseGlossaryRecoveryDraft(payloadText)?.entryId === null;
 }
+
+/**
+ * #574 Slice 3: drop tag ids that no longer exist in the project from a
+ * recovered draft, so the restored tab can still be saved (a glossary save
+ * rejects an unknown tag id). Only `tagIds` changes — Description, atoms,
+ * search settings and the entry identity are kept. The remaining tags keep
+ * their order; a repeated id is kept once (the save also rejects
+ * duplicates). Pure: the input is never mutated, and an unchanged draft is
+ * returned as-is.
+ *
+ * `removedTagIds` lists only the ids that were MISSING (deleted tags), for
+ * the user notice — never tag labels or Description text.
+ */
+export function sanitizeGlossaryRecoveryDraftTags(
+  draft: GlossaryRecoveryDraft,
+  existingTagIds: Iterable<string>
+): {
+  readonly draft: GlossaryRecoveryDraft;
+  readonly removedTagIds: readonly string[];
+} {
+  const existing = new Set(existingTagIds);
+  const kept: string[] = [];
+  const removedTagIds: string[] = [];
+
+  for (const tagId of draft.tagIds) {
+    if (!existing.has(tagId)) {
+      removedTagIds.push(tagId);
+    } else if (!kept.includes(tagId)) {
+      kept.push(tagId);
+    }
+  }
+
+  return kept.length === draft.tagIds.length
+    ? { draft, removedTagIds }
+    : { draft: { ...draft, tagIds: kept }, removedTagIds };
+}

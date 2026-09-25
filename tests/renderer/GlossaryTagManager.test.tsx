@@ -138,7 +138,7 @@ describe("GlossaryTagManager (#375) — table", () => {
     expect(headerRow.querySelector("button")).toBeNull();
   });
 
-  it("shows a ⣿ reorder handle (a draggable button) with an accessible label in every row", () => {
+  it("shows a reorder handle (a draggable button) with an accessible label in every row", () => {
     render();
     const handles = container.querySelectorAll<HTMLButtonElement>(
       ".glossaryTagManagerDragHandle"
@@ -152,7 +152,7 @@ describe("GlossaryTagManager (#375) — table", () => {
     expect(handles[0].getAttribute("title")).toBe(
       "glossary.tagManager.reorderHint"
     );
-    expect(handles[0].textContent).toBe("⣿");
+    expect(handles[0].querySelector("svg")).not.toBeNull();
   });
 
   it("makes the handle non-draggable when there is only one tag (nothing to reorder)", () => {

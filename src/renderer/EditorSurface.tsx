@@ -772,6 +772,8 @@ export function EditorSurface({
   // Description tab; collapsed by default so the Description stays primary.
   const [isGlossaryMetadataExpanded, setIsGlossaryMetadataExpanded] =
     useState(false);
+  const [glossaryMetadataPanelExpandedHeight, setGlossaryMetadataPanelExpandedHeight] =
+    useState<number | null>(null);
 
   // #573 Slice 3: both editor kinds share ONE MarkdownEditorSurface at a
   // stable position (after the optional glossary metadata panel), so
@@ -786,9 +788,11 @@ export function EditorSurface({
           translate={translate}
           readOnly={isProjectOwnedReadOnly}
           expanded={isGlossaryMetadataExpanded}
+          expandedHeight={glossaryMetadataPanelExpandedHeight}
           onToggleExpanded={() =>
             setIsGlossaryMetadataExpanded((expanded) => !expanded)
           }
+          onExpandedHeightChange={setGlossaryMetadataPanelExpandedHeight}
           onUpdateDraft={(update) =>
             glossaryDescriptionMetadata.onUpdateDraft(editor.entryId, update)
           }

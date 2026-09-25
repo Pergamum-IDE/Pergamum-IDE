@@ -40,7 +40,7 @@ interface GlossarySidebarProps {
   onActivateEntry: (entryId: GlossaryEntryId) => void;
   /** #436 Slice 3: "語彙を追加" — opens a new, unsaved glossary Description
    *  tab (#573 Slice 7). */
-  onOpenCreateEntryPane: () => void;
+  onOpenNewEntryTab: () => void;
   onNavigateOccurrence: (
     entry: GlossaryEntry,
     direction: "previous" | "next"
@@ -83,7 +83,7 @@ export function GlossarySidebar({
   translate,
   activeDocumentContent,
   onActivateEntry,
-  onOpenCreateEntryPane,
+  onOpenNewEntryTab,
   onNavigateOccurrence,
   normalizeUnicodeToNfc = false
 }: GlossarySidebarProps): JSX.Element {
@@ -376,7 +376,7 @@ export function GlossarySidebar({
           type="button"
           className="workspaceSidebarButton"
           disabled={projectRootPath === null || readOnly}
-          onClick={() => onOpenCreateEntryPane()}
+          onClick={() => onOpenNewEntryTab()}
         >
           {translate("glossary.addEntry")}
         </button>

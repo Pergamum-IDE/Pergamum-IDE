@@ -27,7 +27,8 @@ import {
   createGlossaryDescriptionCurrentEditor,
   createNewGlossaryDescriptionCurrentEditor,
   type CurrentEditor,
-  type GlossaryDescriptionCurrentEditor
+  type GlossaryDescriptionCurrentEditor,
+  type GlossaryDescriptionRecoveryConflict
 } from "../currentEditor";
 import {
   buildLineEndingBreakSet
@@ -63,7 +64,11 @@ export function glossaryRecoveryDraftFromEditor(
     version: GLOSSARY_RECOVERY_DRAFT_VERSION,
     entryId: isNew ? null : editor.draft.entry.id,
     localId: isNew ? editor.entryId : null,
-    baseUpdatedAt: isNew ? null : editor.draft.entry.updatedAt,
+    // #574 Slice 4: a restored, still-conflicted tab keeps the ORIGINAL
+    // base, so a crash before its save does not hide the conflict.
+    baseUpdatedAt: isNew
+      ? null
+      : (editor.recoveryConflict?.baseUpdatedAt ?? editor.draft.entry.updatedAt),
     description: editor.draft.description,
     atoms: editor.draft.atoms.map((atom) => ({
       id: isLocalGlossaryAtomId(atom.id) ? null : atom.id,
@@ -127,6 +132,31 @@ export function buildGlossaryRecoveryPayload(
 }
 
 /**
+ * #574 Slice 4: a recovered draft for an EXISTING entry conflicts when the
+ * entry was updated after the snapshot (`baseUpdatedAt` ≠ its `updatedAt`,
+ * strict string comparison — both are the store's ISO timestamps). No
+ * current entry (new / deleted → recovered as new) or no recorded base
+ * (older rows) is never a conflict.
+ */
+export function glossaryRecoveryConflict(
+  draft: GlossaryRecoveryDraft,
+  currentEntry: GlossaryEntry | null
+): GlossaryDescriptionRecoveryConflict | null {
+  if (
+    currentEntry === null ||
+    draft.baseUpdatedAt === null ||
+    draft.baseUpdatedAt === currentEntry.updatedAt
+  ) {
+    return null;
+  }
+
+  return {
+    baseUpdatedAt: draft.baseUpdatedAt,
+    currentUpdatedAt: currentEntry.updatedAt
+  };
+}
+
+/**
  * Rebuild a DIRTY glossary Description tab from a recovered draft.
  *
  *   - `currentEntry` given (the saved entry still exists): the tab edits that
@@ -168,6 +198,7 @@ export function glossaryEditorFromRecoveryDraft(
     },
     descriptionLineEndingBreaks: buildLineEndingBreakSet(
       analyzeLineEndings(draft.description)
-    )
+    ),
+    recoveryConflict: glossaryRecoveryConflict(draft, currentEntry)
   };
 }

@@ -225,7 +225,7 @@ describe("blocker: closing an editor tab must not break File Explorer visibility
             onActivateProjectDocument: vi.fn(),
             onFileExplorerCreateEntryRequestHandled: vi.fn(),
             onActivateGlossaryEntry: vi.fn(),
-            onOpenGlossaryCreateEntryPane: vi.fn(),
+            onOpenNewGlossaryEntryTab: vi.fn(),
             glossaryActiveDocumentContent: null,
             onNavigateGlossaryOccurrence: vi.fn()
           })
@@ -268,7 +268,7 @@ describe("blocker: closing an editor tab must not break File Explorer visibility
             onActivateProjectDocument: vi.fn(),
             onFileExplorerCreateEntryRequestHandled: vi.fn(),
             onActivateGlossaryEntry: vi.fn(),
-            onOpenGlossaryCreateEntryPane: vi.fn(),
+            onOpenNewGlossaryEntryTab: vi.fn(),
             glossaryActiveDocumentContent: null,
             onNavigateGlossaryOccurrence: vi.fn()
           })

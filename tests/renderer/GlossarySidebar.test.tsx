@@ -100,7 +100,7 @@ function baseProps(overrides: Record<string, unknown> = {}) {
     translate,
     activeDocumentContent: null,
     onActivateEntry: vi.fn(),
-    onOpenCreateEntryPane: vi.fn(),
+    onOpenNewEntryTab: vi.fn(),
     onNavigateOccurrence: vi.fn(),
     ...overrides
   };
@@ -285,7 +285,7 @@ describe("GlossarySidebar (#375)", () => {
 
     act(() => button("glossary.addEntry").click());
 
-    expect(props.onOpenCreateEntryPane).toHaveBeenCalledTimes(1);
+    expect(props.onOpenNewEntryTab).toHaveBeenCalledTimes(1);
     // #436 Slice 5: the old inline create form is gone entirely.
     expect(container.querySelector(".glossaryCreateForm")).toBeNull();
     expect(container.querySelector("form")).toBeNull();

@@ -132,15 +132,15 @@ describe("DocumentMapSettingsSection (#375)", () => {
     expect(lastDocumentMap(onChangeSettings).viewportLensOpacity).toBe(0.7);
   });
 
-  it("renders one dialogue-pair row per pair with a ⣿ handle", () => {
+  it("renders one dialogue-pair row per pair with a drag handle", () => {
     render();
     const rows = container.querySelectorAll(
       ".documentMapSettingsDialoguePairRow"
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0].querySelector(".glossaryEntryTagAssignmentDragHandle")?.textContent).toBe(
-      "⣿"
-    );
+    expect(
+      rows[0].querySelector(".glossaryEntryTagAssignmentDragHandle svg")
+    ).not.toBeNull();
     expect(
       rows[0]
         .querySelector(".glossaryEntryTagAssignmentDragHandle")

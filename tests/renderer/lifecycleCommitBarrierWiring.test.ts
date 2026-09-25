@@ -25,7 +25,7 @@ describe("renderer lifecycle commit barrier wiring (#271)", () => {
     const markdownBlock = sourceBlock(
       source,
       "function setActiveDocumentContent",
-      "function openGlossaryCreateEntryPaneFromSidebar"
+      "function openNewGlossaryEntryTabFromSidebar"
     );
 
     expect(markdownBlock.indexOf("if (!canMutateActiveWorkingCopy())")).toBeLessThan(

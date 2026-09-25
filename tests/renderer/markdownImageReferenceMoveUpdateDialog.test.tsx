@@ -29,6 +29,7 @@ function mount(props: {
   referenceCount: number;
   documentCount: number;
   imageCount: number;
+  glossaryEntryCount?: number;
   onUpdate: () => void;
   onKeep: () => void;
   onCancel: () => void;
@@ -82,15 +83,34 @@ describe("MarkdownImageReferenceMoveUpdateDialog", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("always shows the Glossary exclusion note and the reference count", () => {
+  it("#574 Slice 2: no Glossary exclusion note any more; always the reference count", () => {
     mount({ referenceCount: 12, documentCount: 1, imageCount: 1, ...noop });
     expect(
       q('[data-testid="markdownImageReferenceMoveUpdateGlossaryNote"]')
-        ?.textContent
-    ).toContain("Glossary");
+    ).toBeNull();
+    expect(
+      q('[data-testid="markdownImageReferenceMoveUpdateGlossaryCount"]')
+    ).toBeNull();
     expect(
       q('[data-testid="markdownImageReferenceMoveUpdateCount"]')?.textContent
     ).toContain("12");
+  });
+
+  it("#574 Slice 2: shows the glossary entry count, batch wording across a document and an entry", () => {
+    mount({
+      referenceCount: 3,
+      documentCount: 1,
+      imageCount: 1,
+      glossaryEntryCount: 2,
+      ...noop
+    });
+    expect(
+      q('[data-testid="markdownImageReferenceMoveUpdateGlossaryCount"]')
+        ?.textContent
+    ).toBe("Glossary entries: 2");
+    expect(q(".markdownImageReferenceMoveUpdateApply")?.textContent).not.toBe(
+      "Update"
+    );
   });
 
   it("single wording + no image/document count lines for one image, one document", () => {

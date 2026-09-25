@@ -5,10 +5,10 @@ import {
 } from "../shared/documentMapSettings";
 import type { Translate } from "../shared/i18n";
 import { DialogueDelimiterPairDialog } from "./DialogueDelimiterPairDialog";
+import gripperIconRaw from "../../assets/icons/codicons/dialog/gripper.svg?raw";
 
 /** Private DataTransfer type for the dialogue-pair reorder drag. */
 const DIALOGUE_PAIR_MIME = "application/x-pergamum-document-map-dialogue-pair";
-const DRAG_HANDLE_GLYPH = "⣿";
 
 export interface DialogueDelimiterPairsEditorProps {
   pairs: readonly DocumentMapDialogueDelimiterPair[];
@@ -192,7 +192,7 @@ export function DialogueDelimiterPairsEditor({
                   }
                 }}
               >
-                <span aria-hidden="true">{DRAG_HANDLE_GLYPH}</span>
+                <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: gripperIconRaw }} />
               </button>
 
               <span

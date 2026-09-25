@@ -133,6 +133,12 @@ function allSourceText(): string {
  * PreviewRendererDropdown.tsx: its `onKeyDown` handles only the callout
  * menu's own Arrow/Home/End/Enter/Escape/Tab navigation while it is open.
  *
+ * GlossaryDescriptionMetadataPanel.tsx (#574) is the same category: the panel height
+ * resize handle's `onKeyDown` implements Arrow Up / Down and Home / End height
+ * adjustments for its own `<div role="separator">` while focused — a keyboard
+ * fallback for vertical drag resizing, scoped to the handle, not a global
+ * shortcut listener.
+ *
  * globalKeyboardShortcuts.ts (#541) is the same category as
  * editorTabShortcuts.ts: a small, reusable app-wide shortcut registry
  * (Ctrl+P Preview toggle, with more shortcuts expected to register through
@@ -150,6 +156,7 @@ const onKeyDownExemptFileNames = new Set([
   "DocumentTabBar.tsx",
   "FileExplorer.tsx",
   "GlossaryEntryMetadataFields.tsx",
+  "GlossaryDescriptionMetadataPanel.tsx",
   "GlossaryTagManager.tsx",
   "GlossaryEntryTagAssignmentEditor.tsx",
   "DocumentMapSettingsSection.tsx",

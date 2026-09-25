@@ -109,6 +109,7 @@ function mountPanel(options: { readOnly?: boolean; initialDraft?: GlossaryEntryD
       options.initialDraft ?? createGlossaryEntryDraft(entry())
     );
     const [expanded, setExpanded] = useState(false);
+    const [expandedHeight, setExpandedHeight] = useState<number | null>(null);
 
     return (
       <GlossaryDescriptionMetadataPanel
@@ -117,7 +118,9 @@ function mountPanel(options: { readOnly?: boolean; initialDraft?: GlossaryEntryD
         translate={translate}
         readOnly={options.readOnly ?? false}
         expanded={expanded}
+        expandedHeight={expandedHeight}
         onToggleExpanded={() => setExpanded((value) => !value)}
+        onExpandedHeightChange={setExpandedHeight}
         onUpdateDraft={(update) =>
           setDraft((current) => {
             const next = update(current);
@@ -161,6 +164,62 @@ describe("GlossaryDescriptionMetadataPanel (#573 Slice 5)", () => {
       panel.container.querySelector(".glossaryDescriptionMetadataSummary")
         ?.textContent
     ).toBe("代表: コードフェンス表記: 3タグ: Markdown, 記法");
+  });
+
+  it("uses chevrons-right.svg when collapsed and chevrons-down.svg when expanded (#574)", () => {
+    const panel = mountPanel();
+    const iconSpan = panel.container.querySelector(
+      ".glossaryDescriptionMetadataToggleIcon"
+    );
+
+    expect(iconSpan?.innerHTML).toContain("feather-chevrons-right");
+    expect(iconSpan?.innerHTML).not.toContain("feather-chevrons-down");
+
+    panel.toggle();
+
+    expect(iconSpan?.innerHTML).toContain("feather-chevrons-down");
+    expect(iconSpan?.innerHTML).not.toContain("feather-chevrons-right");
+  });
+
+  it("renders resize handle only when expanded and preserves in-memory height on collapse/expand (#574)", () => {
+    const panel = mountPanel();
+    expect(
+      panel.container.querySelector(".glossaryDescriptionMetadataResizeHandle")
+    ).toBeNull();
+
+    panel.toggle();
+    const handle = panel.container.querySelector<HTMLDivElement>(
+      ".glossaryDescriptionMetadataResizeHandle"
+    )!;
+    expect(handle).not.toBeNull();
+    expect(handle.getAttribute("aria-label")).toBe(
+      "語彙情報パネルの高さを変更"
+    );
+
+    // Keyboard ArrowDown increases height
+    act(() => {
+      handle.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+      );
+    });
+
+    const section = panel.container.querySelector<HTMLElement>(
+      ".glossaryDescriptionMetadataPanel"
+    )!;
+    expect(section.style.height).toBe("170px");
+    // Resizing must NOT mutate the draft
+    expect(panel.drafts).toHaveLength(0);
+
+    // Collapse
+    panel.toggle();
+    expect(
+      panel.container.querySelector(".glossaryDescriptionMetadataResizeHandle")
+    ).toBeNull();
+    expect(section.style.height).toBe("");
+
+    // Re-expand restores the in-memory height 170px
+    panel.toggle();
+    expect(section.style.height).toBe("170px");
   });
 
   it("expands to the shared atom / match-flag / tag editor", () => {

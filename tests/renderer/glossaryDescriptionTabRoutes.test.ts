@@ -34,7 +34,7 @@ import {
 import {
   DEFAULT_GLOSSARY_ENTRY_PRESET_REPRESENTATIVE,
   presetRepresentativeOrDefault
-} from "../../src/renderer/glossaryEntryEditorPaneCommands";
+} from "../../src/renderer/glossaryEntryTabCommands";
 
 const translate: Translate = (key, values) => t("ja", key, values);
 const projectContext = { rootPath: "C:/novel" };
@@ -204,12 +204,37 @@ describe("App routes after removing the lower glossary pane (#573 Slice 7)", () 
     }
   });
 
+  it("#574 Slice 5: internal names follow the tab architecture; command ids stay", () => {
+    expect(existsSync("src/renderer/glossaryEntryEditorPaneCommands.ts")).toBe(false);
+    expect(existsSync("src/renderer/glossaryEntryTabCommands.ts")).toBe(true);
+
+    for (const gone of [
+      "glossaryEntryEditorPaneCommandIds",
+      "registerGlossaryEntryEditorPaneCommands",
+      "resolveGlossaryEntryEditorPaneTargetFromSelection",
+      "openGlossaryCreateEntryPaneFromSidebar",
+      "onOpenGlossaryCreateEntryPane",
+      "glossaryEntryEditorPane.saveFailed"
+    ]) {
+      expect(appSource, gone).not.toContain(gone);
+    }
+
+    const commandsSource = readFileSync(
+      "src/renderer/glossaryEntryTabCommands.ts",
+      "utf8"
+    );
+
+    expect(commandsSource).toContain('>("glossary.openCreateEntryPane")');
+    expect(commandsSource).toContain('>("glossary.openEditEntryPane")');
+    expect(commandsSource).toContain('>("glossary.openFromEditorSelection")');
+  });
+
   it("routes every existing-entry open to the entry's tab", () => {
     expect(appSource).toContain(
       "openGlossaryEntry: (entryId) => openGlossaryDescriptionTab(entryId),"
     );
     expect(appSource).toContain(
-      "openGlossaryEntryEditPane: async (options) => {\n          await openGlossaryDescriptionTab(options.entryId);"
+      "openGlossaryEntryTab: async (options) => {\n          await openGlossaryDescriptionTab(options.entryId);"
     );
 
     const openBlock = block(
@@ -224,7 +249,7 @@ describe("App routes after removing the lower glossary pane (#573 Slice 7)", () 
 
   it("routes create entry points to a new, unsaved tab (no DB write on open)", () => {
     expect(appSource).toContain(
-      "openGlossaryEntryCreatePane: (options) => {\n          openNewGlossaryDescriptionTab(options.presetRepresentative);"
+      "openNewGlossaryEntryTab: (options) => {\n          openNewGlossaryDescriptionTab(options.presetRepresentative);"
     );
 
     const newBlock = block(

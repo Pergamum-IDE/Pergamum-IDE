@@ -19,6 +19,7 @@ import {
 } from "../../src/renderer/currentEditor";
 import type { LineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
 import type { MarkdownEditorParagraphIndentController } from "../../src/renderer/MarkdownEditor";
+import { captureEditorViewState } from "../../src/renderer/editorViewState";
 import { MERMAID_BLOCK_CLASS } from "../../src/renderer/preview/mermaidPreviewPlaceholder";
 import { createProjectDocument } from "../../src/renderer/currentDocument";
 
@@ -381,6 +382,55 @@ describe("EditorSurface source routing (#573 Slice 2)", () => {
     expect(
       surface.container.querySelector(".glossaryDescriptionMetadataPanel")
     ).toBeNull();
+  });
+
+  it("#574: restores a glossary tab's View State when its Description is unchanged, ignores it when stale", () => {
+    const description = "一行目\n二行目\n三行目";
+    const source = mount(
+      createGlossaryDescriptionCurrentEditor({ ...glossaryEntry, description }),
+      "glossary-source"
+    );
+    act(() => {
+      source.view()!.dispatch({ selection: { anchor: 4, head: 7 } });
+    });
+    const captured = captureEditorViewState(source.view()!);
+
+    const applied = vi.fn();
+    const restored = mount(
+      createGlossaryDescriptionCurrentEditor({ ...glossaryEntry, description }),
+      "glossary-restored",
+      {
+        restoreActiveEditorViewState: {
+          key: "glossary-restored",
+          viewState: captured
+        },
+        onRestoreActiveEditorViewStateApplied: applied
+      }
+    );
+    const selection = restored.view()!.state.selection.main;
+
+    expect([selection.anchor, selection.head]).toEqual([4, 7]);
+    expect(applied).toHaveBeenCalledWith("glossary-restored");
+
+    // The entry's Description changed since the snapshot: tab restores, the
+    // stale View State is not applied.
+    const stale = mount(
+      createGlossaryDescriptionCurrentEditor({
+        ...glossaryEntry,
+        description: "別の説明に変わった"
+      }),
+      "glossary-stale",
+      {
+        restoreActiveEditorViewState: {
+          key: "glossary-stale",
+          viewState: captured
+        }
+      }
+    );
+    const staleSelection = stale.view()!.state.selection.main;
+
+    expect(stale.editorText()).toBe("別の説明に変わった");
+    expect([staleSelection.anchor, staleSelection.head]).toEqual([0, 0]);
   });
 
   it("switches between a glossary Description tab and a document tab", () => {

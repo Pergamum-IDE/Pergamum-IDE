@@ -3171,6 +3171,87 @@ label.settingsItemHeader {
 }
 
 /* #537: Document Map PNG export dialog. */
+/* #574 Slice 6: Glossary Export Dialog (same layout as the Document Map PNG
+   export dialog below). */
+.glossaryExportDialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-inline-size: 420px;
+}
+
+.glossaryExportSummary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.glossaryExportSummary dt {
+  font-size: 0.85rem;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryExportSummary dd {
+  margin: 0;
+}
+
+.glossaryExportContentList {
+  margin: 0;
+  padding-inline-start: 1.2em;
+}
+
+.glossaryExportNote,
+.glossaryExportFieldHint,
+.glossaryExportStatus {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryExportControl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.glossaryExportControlLabel {
+  font-size: 0.85rem;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryExportInputWithButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.glossaryExportInput {
+  flex: 1;
+  min-inline-size: 0;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: 4px;
+  background-color: var(--color-bg-input, #fff);
+  color: var(--color-text-main, #333);
+}
+
+.glossaryExportInput:disabled {
+  opacity: 0.6;
+}
+
+.glossaryExportStatus {
+  overflow-wrap: anywhere;
+}
+
+.glossaryExportFieldError,
+.glossaryExportError {
+  font-size: 12px;
+  color: var(--color-text-danger, #d9534f);
+}
+
 .documentMapPngExportDialogBody {
   display: flex;
   flex-direction: column;
@@ -5604,13 +5685,66 @@ label.settingsItemHeader {
   margin: 0;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  padding: 8px 10px;
+  padding: 4px 10px;
+}
+
+.glossaryEditorAtomMatchFlags[data-expanded="false"] {
+  padding-block: 2px 4px;
 }
 
 .glossaryEditorAtomMatchFlags legend {
   padding: 0 4px;
   color: #6b7785;
   font-size: 12px;
+}
+
+.glossaryEditorAtomMatchFlagsToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.glossaryEditorAtomMatchFlagsToggle:hover {
+  background: #eef3f8;
+  color: #17212b;
+}
+
+.glossaryEditorAtomMatchFlagsToggleIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.glossaryEditorAtomMatchFlagsToggleIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.glossaryEditorAtomMatchFlagsToggleIcon:dir(rtl) {
+  transform: scaleX(-1);
+}
+
+.glossaryEditorAtomMatchFlagsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-block: 4px;
+}
+
+.glossaryEditorAtomMatchFlagsBody[hidden] {
+  display: none;
 }
 
 .glossaryEditorAtomMatchFlagsField {
@@ -6195,15 +6329,18 @@ label.settingsItemHeader {
    above the Description editor + preview. Capped so the Description stays
    the main work area; scrolls internally when expanded. */
 .glossaryDescriptionMetadataPanel {
+  display: flex;
+  flex-direction: column;
   flex: 0 0 auto;
   min-width: 0;
   max-block-size: 45%;
-  overflow: auto;
+  overflow: hidden;
   border-block-end: 1px solid #e3e8ee;
   background: #fbfcfd;
 }
 
 .glossaryDescriptionMetadataHeader {
+  flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -6233,17 +6370,21 @@ label.settingsItemHeader {
 }
 
 .glossaryDescriptionMetadataToggleIcon {
-  display: inline-block;
-  transition: transform 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.glossaryDescriptionMetadataToggleIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .glossaryDescriptionMetadataToggleIcon:dir(rtl) {
   transform: scaleX(-1);
-}
-
-.glossaryDescriptionMetadataPanel[data-expanded="true"]
-  .glossaryDescriptionMetadataToggleIcon {
-  transform: rotate(90deg);
 }
 
 .glossaryDescriptionMetadataSummary {
@@ -6262,8 +6403,33 @@ label.settingsItemHeader {
 }
 
 .glossaryDescriptionMetadataBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
   padding-block: 8px 0;
   padding-inline: 16px;
+}
+
+.glossaryDescriptionMetadataBody[hidden] {
+  display: none;
+}
+
+.glossaryDescriptionMetadataResizeHandle {
+  block-size: 6px;
+  min-block-size: 6px;
+  flex: 0 0 auto;
+  border-top: 1px solid #e3e8ee;
+  background: transparent;
+  cursor: row-resize;
+  touch-action: none;
+  margin-top: 4px;
+}
+
+.glossaryDescriptionMetadataResizeHandle:hover,
+.glossaryDescriptionMetadataResizeHandle:active,
+.glossaryDescriptionMetadataResizeHandle:focus-visible {
+  background: var(--workspace-sidebar-focus-ring, #7aa7d9);
+  outline: none;
 }
 
 /* #375: Glossary Management tab — reuses the Tag Manager's cell / drag-handle /
@@ -6324,7 +6490,7 @@ label.settingsItemHeader {
   display: grid;
   grid-template-columns:
     2.5rem minmax(7rem, 1.2fr) minmax(8rem, 1.8fr) 4rem 4rem 6rem 6rem 2.75rem
-    2.75rem;
+    4.5rem 2.75rem;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;

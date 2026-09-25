@@ -91,7 +91,7 @@ describe("project access mode command wiring (#211)", () => {
     const setActiveDocumentContentBlock = sourceBlock(
       source,
       "function setActiveDocumentContent",
-      "function openGlossaryCreateEntryPaneFromSidebar"
+      "function openNewGlossaryEntryTabFromSidebar"
     );
 
     expect(setActiveDocumentContentBlock).toContain(
