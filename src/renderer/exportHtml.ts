@@ -453,25 +453,6 @@ export async function renderDocumentToHtml(
       : rawText;
 
   if (bodyNotation === "markdown") {
-    if (options?.isPdf) {
-      const docForCollection: ExportAssemblyDocument = {
-        ...doc,
-        rawText: headingProcessed
-      };
-
-      const { modifiedMarkdownText, assets } =
-        collectProjectLocalImagesForDocument(
-          docForCollection,
-          imageAssetFolderName
-        );
-
-      const parser = pdfMarkdownParser;
-      const renderedHtml = parser.render(modifiedMarkdownText, {
-        markdownCalloutLabels: options?.calloutLabels
-      });
-      return { bodyHtml: renderedHtml, assets };
-    }
-
     const staticExportResult = await renderMarkdownStaticExport({
       markdown: headingProcessed,
       imageResolutionContext: {
@@ -753,7 +734,11 @@ export async function generateCombinedHtml(
         `      max-width: 100%;`,
         `      height: auto;`,
         `    }`,
-        markdownCalloutExportCss
+        markdownCalloutExportCss,
+        ...(assembly.bodyNotation === "markdown" ? [codeHighlightExportCss] : []),
+        ...(assembly.bodyNotation === "markdown" && combinedUsesMath && aggregatedKatexCss
+          ? [aggregatedKatexCss]
+          : [])
       ].join("\n")
     : [
         `    .pergamum-export-document-anchor {`,
