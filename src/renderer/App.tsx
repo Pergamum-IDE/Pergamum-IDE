@@ -2142,6 +2142,27 @@ export function App(): JSX.Element {
     isGlossaryTagManagerTabActive ||
     isGlossaryEntryManagerTabActive ||
     isDebugLogTabActive;
+
+  const activeEditableSurfaceContent = useMemo(() => {
+    if (isEditorAreaSpecialTabActive || !currentEditor) {
+      return null;
+    }
+    if (currentEditor.kind === "markdown") {
+      return currentDocumentContent(currentEditor.document);
+    }
+    if (currentEditor.kind === "glossaryDescription") {
+      return currentEditor.draft.description;
+    }
+    return null;
+  }, [isEditorAreaSpecialTabActive, currentEditor]);
+
+  useEffect(() => {
+    if (isEditorAreaSpecialTabActive) {
+      setGlossaryOccurrenceTrackingState(
+        inactiveGlossaryOccurrenceTrackingState
+      );
+    }
+  }, [isEditorAreaSpecialTabActive]);
   // #352: the Outline pane shows headings only for an active Markdown editor.
   const activeEditorIsMarkdown =
     !isEditorAreaSpecialTabActive &&
@@ -4789,13 +4810,24 @@ export function App(): JSX.Element {
     entry: GlossaryEntry,
     direction: "previous" | "next"
   ): void {
-    if (activeDocument?.editor.kind !== "markdown") {
+    if (isEditorAreaSpecialTabActive || !activeDocument) {
+      return;
+    }
+
+    const content =
+      activeDocument.editor.kind === "markdown"
+        ? currentDocumentContent(activeDocument.editor.document)
+        : activeDocument.editor.kind === "glossaryDescription"
+          ? activeDocument.editor.draft.description
+          : null;
+
+    if (content === null) {
       return;
     }
 
     const targetDocument = {
       editorId: activeDocument.id,
-      content: currentDocumentContent(activeDocument.editor.document)
+      content
     };
     const outcome = planGlossaryOccurrenceNavigation({
       entry,
@@ -12480,9 +12512,7 @@ export function App(): JSX.Element {
                         openNewGlossaryEntryTabFromSidebar
                       }
                       glossaryActiveDocumentContent={
-                        activeMarkdownDocument
-                          ? currentDocumentContent(activeMarkdownDocument)
-                          : null
+                        activeEditableSurfaceContent
                       }
                       documentMapGlossaryEntries={glossaryEntries}
                       documentMapGlossaryTags={glossaryTags}

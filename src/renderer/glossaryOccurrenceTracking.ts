@@ -158,11 +158,18 @@ export async function resolveGlossaryOccurrenceTrackingSession(
     session.targetMarkdownEditorId
   );
 
-  const targetDocument = targetOpenDocument
-    ? markdownDocumentForEditor(targetOpenDocument.editor)
-    : null;
+  if (!targetOpenDocument) {
+    return { kind: "targetMissing" };
+  }
 
-  if (!targetDocument) {
+  const targetContent =
+    targetOpenDocument.editor.kind === "markdown"
+      ? currentDocumentContent(targetOpenDocument.editor.document)
+      : targetOpenDocument.editor.kind === "glossaryDescription"
+        ? targetOpenDocument.editor.draft.description
+        : null;
+
+  if (targetContent === null) {
     return { kind: "targetMissing" };
   }
 
@@ -175,6 +182,6 @@ export async function resolveGlossaryOccurrenceTrackingSession(
   return {
     kind: "resolved",
     session,
-    targetContent: currentDocumentContent(targetDocument)
+    targetContent
   };
 }
