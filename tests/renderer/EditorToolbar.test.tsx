@@ -187,6 +187,8 @@ function defaultProps(
     isCommandPaletteOpen: false,
     commandPaletteLaunchAnimationDurationMs: 200,
     onOpenCommandPalette: vi.fn(),
+    isFullscreen: false,
+    onToggleFullscreen: vi.fn(),
     translate: mockTranslate,
     ...overrides
   };
@@ -232,7 +234,8 @@ const BUTTON_ORDER = [
   "表を挿入",
   "ルビ",
   "傍点",
-  "プレビューを切り替え"
+  "プレビューを切り替え",
+  "フルスクリーン切り替え"
 ];
 
 describe("EditorToolbar", () => {
@@ -460,7 +463,10 @@ describe("EditorToolbar", () => {
         ?.getAttribute("aria-label")
     ).toBe("見出しを挿入");
     expect(
-      children[children.length - 1].classList.contains("editorToolbarSeparator")
+      children[children.length - 2].classList.contains("editorToolbarSeparator")
+    ).toBe(true);
+    expect(
+      children[children.length - 1].classList.contains("editorToolbarGroup")
     ).toBe(true);
   });
 
@@ -1105,5 +1111,35 @@ describe("EditorToolbar callout dropdown (#570)", () => {
 
     renderToolbar({ canInsertCallout: false });
     expect(calloutOptions()).toHaveLength(0);
+  });
+
+  describe("fullscreen toggle button", () => {
+    it("renders with normal icon and aria-pressed=false when isFullscreen is false", () => {
+      const { onToggleFullscreen } = renderToolbar({ isFullscreen: false });
+      const button = container.querySelector(
+        'button[title="フルスクリーン切り替え"]'
+      ) as HTMLButtonElement;
+
+      expect(button).not.toBeNull();
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+      expect(button.getAttribute("aria-label")).toBe("フルスクリーン切り替え");
+
+      act(() => clickWithPointer(button));
+      expect(onToggleFullscreen).toHaveBeenCalledTimes(1);
+    });
+
+    it("renders with full screen icon and aria-pressed=true when isFullscreen is true", () => {
+      const { onToggleFullscreen } = renderToolbar({ isFullscreen: true });
+      const button = container.querySelector(
+        'button[title="フルスクリーン切り替え"]'
+      ) as HTMLButtonElement;
+
+      expect(button).not.toBeNull();
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+      expect(button.getAttribute("aria-label")).toBe("フルスクリーン切り替え");
+
+      act(() => clickWithPointer(button));
+      expect(onToggleFullscreen).toHaveBeenCalledTimes(1);
+    });
   });
 });

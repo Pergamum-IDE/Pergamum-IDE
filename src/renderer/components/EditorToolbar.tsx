@@ -27,6 +27,8 @@ import checklistIconRaw from "../../../assets/icons/codicons/toolbar/checklist.s
 import outdentIconRaw from "../../../assets/icons/svgrepo/toolbar/outdent.svg?raw";
 import indentIconRaw from "../../../assets/icons/svgrepo/toolbar/indent.svg?raw";
 import togglePreviewIconRaw from "../../../assets/icons/codicons/toolbar/layout-sidebar-right-off.svg?raw";
+import screenNormalIconRaw from "../../../assets/icons/codicons/toolbar/screen-normal.svg?raw";
+import screenFullIconRaw from "../../../assets/icons/codicons/toolbar/screen-full.svg?raw";
 
 export interface EditorToolbarProps {
   /** #529: shared enable gate for Heading / Bold / Italic / Strikethrough /
@@ -83,6 +85,8 @@ export interface EditorToolbarProps {
   onOpenCommandPalette: (initialPrefix: QuickAccessPrefix) => void;
   /** #574: locked to Markdown for glossaryDescription tabs. */
   isGlossaryDescription?: boolean;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
   translate: Translate;
 }
 
@@ -120,6 +124,8 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   commandPaletteLaunchAnimationDurationMs,
   onOpenCommandPalette,
   isGlossaryDescription = false,
+  isFullscreen = false,
+  onToggleFullscreen,
   translate
 }) => {
   const [isTablePopoverOpen, setIsTablePopoverOpen] = useState<boolean>(false);
@@ -496,8 +502,27 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
         </div>
       </div>
 
-      {/* Right-end separator — reserved for a future fullscreen mode command. */}
       <div className="editorToolbarSeparator" role="separator" aria-orientation="vertical" />
+
+      <div className="editorToolbarGroup">
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            aria-pressed={isFullscreen}
+            onClick={onToggleFullscreen}
+            aria-label={translate("toolbar.toggleFullscreen")}
+            title={translate("toolbar.toggleFullscreen")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{
+                __html: isFullscreen ? screenFullIconRaw : screenNormalIconRaw
+              }}
+            />
+          </button>
+        </div>
+      </div>
     </header>
   );
 };

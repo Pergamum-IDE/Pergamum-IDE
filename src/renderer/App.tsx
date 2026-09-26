@@ -1077,6 +1077,32 @@ export function App(): JSX.Element {
     readonly opener: Element | null;
   } | null>(null);
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.pergamum?.window) {
+      return;
+    }
+
+    void window.pergamum.window.getFullscreenState().then((state) => {
+      setIsFullscreen(state);
+    });
+
+    const unsubscribe = window.pergamum.window.onFullscreenStateChanged((state) => {
+      setIsFullscreen(state);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const handleToggleFullscreen = useCallback(() => {
+    if (typeof window !== "undefined" && window.pergamum?.window) {
+      void window.pergamum.window.toggleFullscreen();
+    }
+  }, []);
+
   const [pendingDialogRequest, setPendingDialogRequest] =
     useState<DialogControllerPendingRequest | null>(() =>
       dialogController.getPendingRequest()
@@ -12378,6 +12404,8 @@ export function App(): JSX.Element {
         }
         onOpenCommandPalette={openCommandPaletteWithPrefix}
         isGlossaryDescription={activeDocument?.editor.kind === "glossaryDescription"}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={handleToggleFullscreen}
         translate={translate}
       />
 

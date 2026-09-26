@@ -1917,6 +1917,7 @@ export const enTranslations = {
   "toolbar.strikethrough": "Strikethrough",
   "toolbar.tableGridLabel": "{cols} x {rows}",
   "toolbar.togglePreview": "Toggle preview",
+  "toolbar.toggleFullscreen": "Toggle Full Screen",
   "toolbar.previewRenderer.defaultDescription": "Default preview renderer: {renderer}",
   "toolbar.previewRenderer.defaultIndicator": "Default",
   "toolbar.commandBox.cycleMode": "Cycle command box mode",
