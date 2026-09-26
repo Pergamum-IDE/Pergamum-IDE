@@ -488,8 +488,12 @@ describe("App wiring for File Explorer create commands (#311)", () => {
   });
 
   it("targets the active editor's project file for a global rename (#318)", () => {
+    expect(appSource).toContain(
+      "requestRenameActiveEditorFile: () => {\n          handleRenameActiveEditorFile();\n        }"
+    );
+
     const start = appSource.indexOf(
-      "requestRenameActiveEditorFile: () => {"
+      "const handleRenameActiveEditorFile = useCallback(() => {"
     );
     expect(start).toBeGreaterThan(-1);
     const handler = appSource.slice(start, start + 900);
@@ -497,14 +501,14 @@ describe("App wiring for File Explorer create commands (#311)", () => {
     // Resolve the target from the active editor — never the File Explorer
     // selection — and do nothing when there is no such target.
     expect(handler).toContain(
-      "activeProjectDocumentRelativePath(\n            openDocumentsStateRef.current\n          )"
+      "activeProjectDocumentRelativePath(\n      openDocumentsStateRef.current\n    )"
     );
     expect(handler).toContain("if (relativePath === null) {");
     expect(handler.indexOf("if (relativePath === null) {")).toBeLessThan(
-      handler.indexOf("revealFileExplorer();")
+      handler.indexOf("revealFileExplorerSidebar();")
     );
 
-    expect(handler).toContain("revealFileExplorer();");
+    expect(handler).toContain("revealFileExplorerSidebar();");
     expect(handler).toContain("fileExplorerRenameRequestSeqRef.current += 1;");
     expect(handler).toContain("setFileExplorerRenameEntryRequest({");
     expect(handler).toContain(

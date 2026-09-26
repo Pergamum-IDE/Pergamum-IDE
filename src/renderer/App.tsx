@@ -3798,25 +3798,7 @@ export function App(): JSX.Element {
           });
         },
         requestRenameActiveEditorFile: () => {
-          // #318: a global Rename targets the *active editor's* backing
-          // project file — never the File Explorer's own selection. The
-          // command `when` gate already requires such an editor; this
-          // resolves the concrete path and backstops a stale gate. Nothing
-          // happens (no dialog, no reveal) when there is no such target.
-          const relativePath = activeProjectDocumentRelativePath(
-            openDocumentsStateRef.current
-          );
-
-          if (relativePath === null) {
-            return;
-          }
-
-          revealFileExplorer();
-          fileExplorerRenameRequestSeqRef.current += 1;
-          setFileExplorerRenameEntryRequest({
-            token: fileExplorerRenameRequestSeqRef.current,
-            target: { relativePath }
-          });
+          handleRenameActiveEditorFile();
         }
       },
       createFileExplorerCommandTitles(
@@ -6127,6 +6109,23 @@ export function App(): JSX.Element {
         : current
     );
   }
+
+  const handleRenameActiveEditorFile = useCallback(() => {
+    const relativePath = activeProjectDocumentRelativePath(
+      openDocumentsStateRef.current
+    );
+
+    if (relativePath === null) {
+      return;
+    }
+
+    revealFileExplorerSidebar();
+    fileExplorerRenameRequestSeqRef.current += 1;
+    setFileExplorerRenameEntryRequest({
+      token: fileExplorerRenameRequestSeqRef.current,
+      target: { relativePath }
+    });
+  }, []);
 
   async function closeOneTabWithConfirmation(
     editorId: EditorId
@@ -12773,6 +12772,11 @@ export function App(): JSX.Element {
                         notifyRubyReadOnly={notifyRubyReadOnly}
                         notifyRubyMultiLine={notifyRubyMultiLine}
                         markdownToolbarShortcut={markdownToolbarShortcutConfig}
+                        hasProject={Boolean(project)}
+                        projectAccessMode={project?.accessMode}
+                        onRequestRenameActiveDocument={
+                          handleRenameActiveEditorFile
+                        }
                         onParagraphIndentControllerChange={
                           handleParagraphIndentControllerChange
                         }

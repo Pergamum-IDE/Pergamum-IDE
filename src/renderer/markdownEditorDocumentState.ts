@@ -64,6 +64,7 @@ import { createGlossarySelectionShortcutKeymapExtension } from "./glossarySelect
 import { createEmphasisMarkKeymapExtension } from "./editorEmphasisShortcuts";
 import { createRubyKeymapExtension } from "./editorRubyShortcuts";
 import { createMarkdownToolbarShortcutKeymapExtension } from "./editorMarkdownToolbarShortcuts";
+import { createRenameShortcutKeymapExtension } from "./editorRenameShortcut";
 import { createActiveFindGutterMarkerExtension } from "./find/activeFindGutterMarkerExtension";
 import { activeFindHighlightField } from "./find/activeFindHighlightExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
@@ -337,6 +338,7 @@ export function createMarkdownEditorDocumentState(
       ...(options.markdownToolbarShortcutEnabled
         ? [createMarkdownToolbarShortcutKeymapExtension()]
         : []),
+      createRenameShortcutKeymapExtension(),
       // #424 Slice 2: inert until the Find panel dispatches its first
       // "mark all" effect; safe on every document's state.
       activeFindHighlightField,
