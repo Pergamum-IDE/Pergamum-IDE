@@ -19,7 +19,10 @@ describe("application menu command registration", () => {
         openProject: () => undefined,
         closeProject: () => undefined,
         openBulkTextImportDialog: () => undefined,
-        toggleRecentProjects: () => undefined
+        toggleRecentProjects: () => undefined,
+        zoomIn: () => undefined,
+        zoomOut: () => undefined,
+        resetZoom: () => undefined
       },
       {
         openAbout: "About Pergamum",
@@ -36,7 +39,13 @@ describe("application menu command registration", () => {
         openBulkTextImportDialog: "Bulk Import Text Files",
         openBulkTextImportDialogDescription: "Bulk Import Text Files",
         toggleRecentProjects: "Toggle Recent Projects",
-        toggleRecentProjectsDescription: "Toggle Recent Projects"
+        toggleRecentProjectsDescription: "Toggle Recent Projects",
+        zoomIn: "Zoom In",
+        zoomInDescription: "Zoom In",
+        zoomOut: "Zoom Out",
+        zoomOutDescription: "Zoom Out",
+        resetZoom: "Reset Zoom",
+        resetZoomDescription: "Reset Zoom"
       }
     );
     registerEditorCommands(

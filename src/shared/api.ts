@@ -476,7 +476,13 @@ export const FONT_CACHE_CHANNELS = {
 export const WINDOW_CHANNELS = {
   toggleFullscreen: "window:toggleFullscreen",
   getFullscreenState: "window:getFullscreenState",
-  onFullscreenStateChanged: "window:onFullscreenStateChanged"
+  onFullscreenStateChanged: "window:onFullscreenStateChanged",
+  getZoomFactor: "window:getZoomFactor",
+  setZoomFactor: "window:setZoomFactor",
+  zoomIn: "window:zoomIn",
+  zoomOut: "window:zoomOut",
+  resetZoom: "window:resetZoom",
+  onZoomFactorChanged: "window:onZoomFactorChanged"
 } as const;
 
 /**
@@ -1652,6 +1658,14 @@ export interface PergamumApi {
     getFullscreenState: () => Promise<boolean>;
     onFullscreenStateChanged: (
       callback: (isFullscreen: boolean) => void
+    ) => () => void;
+    getZoomFactor: () => Promise<number>;
+    setZoomFactor: (factor: number) => Promise<number>;
+    zoomIn: () => Promise<number>;
+    zoomOut: () => Promise<number>;
+    resetZoom: () => Promise<number>;
+    onZoomFactorChanged: (
+      callback: (zoomFactor: number) => void
     ) => () => void;
   };
 }

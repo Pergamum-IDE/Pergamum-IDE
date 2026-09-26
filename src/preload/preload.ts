@@ -468,6 +468,26 @@ const pergamumApi: PergamumApi = {
       return () => {
         ipcRenderer.off(WINDOW_CHANNELS.onFullscreenStateChanged, listener);
       };
+    },
+    getZoomFactor: () => ipcRenderer.invoke(WINDOW_CHANNELS.getZoomFactor),
+    setZoomFactor: (factor) =>
+      ipcRenderer.invoke(WINDOW_CHANNELS.setZoomFactor, { factor }),
+    zoomIn: () => ipcRenderer.invoke(WINDOW_CHANNELS.zoomIn),
+    zoomOut: () => ipcRenderer.invoke(WINDOW_CHANNELS.zoomOut),
+    resetZoom: () => ipcRenderer.invoke(WINDOW_CHANNELS.resetZoom),
+    onZoomFactorChanged: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        zoomFactor: unknown
+      ) => {
+        if (typeof zoomFactor === "number" && Number.isFinite(zoomFactor)) {
+          callback(zoomFactor);
+        }
+      };
+      ipcRenderer.on(WINDOW_CHANNELS.onZoomFactorChanged, listener);
+      return () => {
+        ipcRenderer.off(WINDOW_CHANNELS.onZoomFactorChanged, listener);
+      };
     }
   }
 };

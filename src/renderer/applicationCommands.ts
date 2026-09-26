@@ -12,6 +12,9 @@ export interface ApplicationCommandController {
   closeProject(): void | Promise<void>;
   openBulkTextImportDialog(): void | Promise<void>;
   toggleRecentProjects(): void;
+  zoomIn(): void | Promise<void>;
+  zoomOut(): void | Promise<void>;
+  resetZoom(): void | Promise<void>;
 }
 
 export interface ApplicationCommandTitles {
@@ -29,6 +32,12 @@ export interface ApplicationCommandTitles {
   openBulkTextImportDialogDescription: string;
   toggleRecentProjects: string;
   toggleRecentProjectsDescription: string;
+  zoomIn: string;
+  zoomInDescription: string;
+  zoomOut: string;
+  zoomOutDescription: string;
+  resetZoom: string;
+  resetZoomDescription: string;
 }
 
 type ApplicationCommand = Command<readonly [], void>;
@@ -62,7 +71,13 @@ export function createApplicationCommandTitles(
     toggleRecentProjects: translate("command.workspace.recentProjects.toggle"),
     toggleRecentProjectsDescription: translate(
       "command.workspace.recentProjects.toggle.description"
-    )
+    ),
+    zoomIn: translate("command.app.zoom.in"),
+    zoomInDescription: translate("command.app.zoom.in.description"),
+    zoomOut: translate("command.app.zoom.out"),
+    zoomOutDescription: translate("command.app.zoom.out.description"),
+    resetZoom: translate("command.app.zoom.reset"),
+    resetZoomDescription: translate("command.app.zoom.reset.description")
   };
 }
 
@@ -114,6 +129,24 @@ export function createApplicationCommands(
       title: titles.toggleRecentProjects,
       description: titles.toggleRecentProjectsDescription,
       execute: () => controller.toggleRecentProjects()
+    },
+    {
+      id: applicationCommandIds.zoomIn,
+      title: titles.zoomIn,
+      description: titles.zoomInDescription,
+      execute: () => controller.zoomIn()
+    },
+    {
+      id: applicationCommandIds.zoomOut,
+      title: titles.zoomOut,
+      description: titles.zoomOutDescription,
+      execute: () => controller.zoomOut()
+    },
+    {
+      id: applicationCommandIds.resetZoom,
+      title: titles.resetZoom,
+      description: titles.resetZoomDescription,
+      execute: () => controller.resetZoom()
     }
   ];
 }

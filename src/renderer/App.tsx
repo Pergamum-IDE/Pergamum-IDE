@@ -3722,7 +3722,16 @@ export function App(): JSX.Element {
         closeProject: () => closeProjectCommandRef.current(),
         openBulkTextImportDialog: () =>
           openBulkTextImportDialogCommandRef.current(),
-        toggleRecentProjects: () => toggleRecentProjectsCommandRef.current()
+        toggleRecentProjects: () => toggleRecentProjectsCommandRef.current(),
+        zoomIn: () => {
+          void window.pergamum.window.zoomIn();
+        },
+        zoomOut: () => {
+          void window.pergamum.window.zoomOut();
+        },
+        resetZoom: () => {
+          void window.pergamum.window.resetZoom();
+        }
       },
       createApplicationCommandTitles(translate)
     );

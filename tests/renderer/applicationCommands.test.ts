@@ -28,7 +28,13 @@ const titles = {
     "Open the dialog for importing external text files as Markdown documents with a selected character encoding.",
   toggleRecentProjects: "Toggle Recent Projects",
   toggleRecentProjectsDescription:
-    "Switch between recently opened projects. Check for unsaved changes before switching projects."
+    "Switch between recently opened projects. Check for unsaved changes before switching projects.",
+  zoomIn: "Zoom In",
+  zoomInDescription: "Zoom in",
+  zoomOut: "Zoom Out",
+  zoomOutDescription: "Zoom out",
+  resetZoom: "Reset Zoom",
+  resetZoomDescription: "Reset zoom"
 };
 const executionOptions = { source: "toolbar" } as const;
 
@@ -45,7 +51,10 @@ describe("application commands", () => {
         openProject: () => undefined,
         closeProject: () => undefined,
         openBulkTextImportDialog: () => undefined,
-        toggleRecentProjects: () => undefined
+        toggleRecentProjects: () => undefined,
+        zoomIn: () => undefined,
+        zoomOut: () => undefined,
+        resetZoom: () => undefined
       },
       titles
     );
@@ -57,7 +66,10 @@ describe("application commands", () => {
       "workspace.project.open",
       "workspace.project.close",
       "import.text.bulk.openDialog",
-      "workspace.recentProjects.toggle"
+      "workspace.recentProjects.toggle",
+      "app.zoom.in",
+      "app.zoom.out",
+      "app.zoom.reset"
     ]);
   });
 
@@ -70,6 +82,9 @@ describe("application commands", () => {
     const closeProject = vi.fn();
     const openBulkTextImportDialog = vi.fn();
     const toggleRecentProjects = vi.fn();
+    const zoomIn = vi.fn();
+    const zoomOut = vi.fn();
+    const resetZoom = vi.fn();
     registry.setCommandContextProvider(() => ({ "project.isOpen": true }));
 
     registerApplicationCommands(
@@ -81,7 +96,10 @@ describe("application commands", () => {
         openProject,
         closeProject,
         openBulkTextImportDialog,
-        toggleRecentProjects
+        toggleRecentProjects,
+        zoomIn,
+        zoomOut,
+        resetZoom
       },
       titles
     );
@@ -105,6 +123,9 @@ describe("application commands", () => {
       applicationCommandIds.toggleRecentProjects,
       executionOptions
     );
+    await registry.execute(applicationCommandIds.zoomIn, executionOptions);
+    await registry.execute(applicationCommandIds.zoomOut, executionOptions);
+    await registry.execute(applicationCommandIds.resetZoom, executionOptions);
 
     expect(openAbout).toHaveBeenCalledTimes(1);
     expect(quitApplication).toHaveBeenCalledTimes(1);
@@ -113,6 +134,9 @@ describe("application commands", () => {
     expect(closeProject).toHaveBeenCalledTimes(1);
     expect(openBulkTextImportDialog).toHaveBeenCalledTimes(1);
     expect(toggleRecentProjects).toHaveBeenCalledTimes(1);
+    expect(zoomIn).toHaveBeenCalledTimes(1);
+    expect(zoomOut).toHaveBeenCalledTimes(1);
+    expect(resetZoom).toHaveBeenCalledTimes(1);
   });
 
   it("exposes About command metadata to the Command Palette", () => {
@@ -127,7 +151,10 @@ describe("application commands", () => {
         openProject: () => undefined,
         closeProject: () => undefined,
         openBulkTextImportDialog: () => undefined,
-        toggleRecentProjects: () => undefined
+        toggleRecentProjects: () => undefined,
+        zoomIn: () => undefined,
+        zoomOut: () => undefined,
+        resetZoom: () => undefined
       },
       titles
     );
@@ -153,7 +180,10 @@ describe("application commands", () => {
         openProject: () => undefined,
         closeProject: () => undefined,
         openBulkTextImportDialog: () => undefined,
-        toggleRecentProjects: () => undefined
+        toggleRecentProjects: () => undefined,
+        zoomIn: () => undefined,
+        zoomOut: () => undefined,
+        resetZoom: () => undefined
       },
       titles
     );
@@ -188,7 +218,13 @@ describe("application commands", () => {
         "translated:command.import.text.bulk.openDialog.description",
       toggleRecentProjects: "translated:command.workspace.recentProjects.toggle",
       toggleRecentProjectsDescription:
-        "translated:command.workspace.recentProjects.toggle.description"
+        "translated:command.workspace.recentProjects.toggle.description",
+      zoomIn: "translated:command.app.zoom.in",
+      zoomInDescription: "translated:command.app.zoom.in.description",
+      zoomOut: "translated:command.app.zoom.out",
+      zoomOutDescription: "translated:command.app.zoom.out.description",
+      resetZoom: "translated:command.app.zoom.reset",
+      resetZoomDescription: "translated:command.app.zoom.reset.description"
     });
   });
 
