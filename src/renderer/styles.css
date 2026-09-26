@@ -6476,6 +6476,9 @@ label.settingsItemHeader {
 }
 
 .glossaryEntryManagerExportAllButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--app-dialog-border, #d0d7de);
   border-radius: 6px;
   background: var(--app-dialog-button-bg, #f6f8fa);
@@ -6483,6 +6486,21 @@ label.settingsItemHeader {
   padding: 6px 14px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.glossaryEntryManagerExportIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 14px;
+  block-size: 14px;
+}
+
+.glossaryEntryManagerExportIcon svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  fill: currentColor;
 }
 
 .glossaryEntryManagerExportAllButton:hover:not(:disabled) {
@@ -12148,7 +12166,6 @@ label.settingsItemHeader {
   justify-content: flex-end;
   gap: 10px;
   padding-top: 12px;
-  border-top: 1px solid var(--app-dialog-border, #e1e4e8);
 }
 
 .glossaryExportWizardCancelButton,

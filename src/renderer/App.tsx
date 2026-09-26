@@ -246,10 +246,7 @@ import {
   type AppDialogChoiceId
 } from "./dialog/appDialogTypes";
 import { runEditorCloseFlow } from "./documentTabCloseFlow";
-import {
-  GlossaryExportDialog,
-  type GlossaryExportDialogRequest
-} from "./dialog/GlossaryExportDialog";
+
 import {
   GlossaryExportWizardDialog,
   GlossaryExportWizardErrorBoundary,
@@ -1415,9 +1412,7 @@ export function App(): JSX.Element {
   // doc comment for why this is never re-derived while the dialog is open.
   const [documentMapPngExportSnapshot, setDocumentMapPngExportSnapshot] =
     useState<DocumentMapPngExportSnapshot | null>(null);
-  // #574 Slice 6: the Glossary Export Dialog's target (`null` = closed).
-  const [glossaryExportRequest, setGlossaryExportRequest] =
-    useState<GlossaryExportDialogRequest | null>(null);
+
   // #581 Slice 1: the Glossary Export Wizard Dialog open state & occurrences map
   const [isGlossaryExportWizardOpen, setIsGlossaryExportWizardOpen] = useState(false);
   const [
@@ -4482,13 +4477,7 @@ export function App(): JSX.Element {
 
   // #375: Glossary Management tab — hard delete of an entry through the shared
   // destructive confirm dialog.
-  // #574 Slice 6: a Glossary Management row's Export action.
-  function handleExportGlossaryEntryFromManager(
-    entryId: GlossaryEntryId,
-    entryLabel: string
-  ): void {
-    setGlossaryExportRequest({ entryId, entryLabel });
-  }
+
 
   // #581 Slice 1: open the Glossary Export Wizard for multi-entry export
   function handleOpenGlossaryExportWizard(): void {
@@ -12609,7 +12598,6 @@ export function App(): JSX.Element {
                         onDeleteEntry={(entryId) =>
                           handleDeleteGlossaryEntryFromManager(entryId)
                         }
-                        onExportEntry={handleExportGlossaryEntryFromManager}
                         onExportAll={handleOpenGlossaryExportWizard}
                         onReorderEntries={handleReorderGlossaryEntries}
                       />
@@ -12948,16 +12936,7 @@ export function App(): JSX.Element {
         />
       ) : null}
 
-      <GlossaryExportDialog
-        request={glossaryExportRequest}
-        translate={translate}
-        opener={null}
-        onClose={() => setGlossaryExportRequest(null)}
-        onSelectFolder={(req) => window.pergamum.files.selectExportFolder(req)}
-        onCheckFileExists={(req) => window.pergamum.files.checkFileExists(req)}
-        onConfirmOverwrite={confirmGlossaryExportOverwrite}
-        onExport={exportGlossaryEntry}
-      />
+
 
       <GlossaryExportWizardErrorBoundary>
         <GlossaryExportWizardDialog

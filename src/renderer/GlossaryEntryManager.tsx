@@ -38,11 +38,6 @@ interface GlossaryEntryManagerProps {
     entryLabel: string
   ) => Promise<unknown> | void;
   /**
-   * #574 Slice 6: open the Glossary Export Dialog for one entry (the
-   * representative surface is passed for the dialog's target / file name).
-   */
-  onExportEntry: (entryId: GlossaryEntryId, entryLabel: string) => void;
-  /**
    * #581 Slice 1: open the Glossary Export Wizard for multi-entry export.
    */
   onExportAll?: () => void;
@@ -80,18 +75,17 @@ const TABLE_COLUMN_KEYS = [
   "glossary.entryManager.columns.createdAt",
   "glossary.entryManager.columns.updatedAt",
   "glossary.entryManager.columns.edit",
-  "glossary.entryManager.columns.export",
   "glossary.entryManager.columns.delete"
 ] as const;
 
 /**
  * #375: the Glossary Management tab — a table-shaped surface for the glossary
  * ENTRIES themselves
- * (`[drag handle][entry][tags][tag count][atoms][created][updated][edit][export][delete]`),
+ * (`[drag handle][entry][tags][tag count][atoms][created][updated][edit][delete]`),
  * with drag-handle reorder of the project-wide `glossary_entries.sort_order`.
  * An "Add entry" primary action sits top-left (not a page heading). Clicking a
  * row opens that entry's glossary Description tab (#573 Slice 7); the
- * drag handle / edit / export / delete controls stop the click from bubbling so they
+ * drag handle / edit / delete controls stop the click from bubbling so they
  * never also open the editor. Edit / delete / create go back to the host. No
  * bulk operations, no column sort / resize.
  */
@@ -101,7 +95,6 @@ export function GlossaryEntryManager({
   onAddEntry,
   onOpenEntry,
   onDeleteEntry,
-  onExportEntry,
   onExportAll,
   onReorderEntries
 }: GlossaryEntryManagerProps): JSX.Element {
@@ -164,7 +157,12 @@ export function GlossaryEntryManager({
             className="glossaryEntryManagerExportAllButton"
             onClick={onExportAll}
           >
-            {translate("glossary.entryManager.exportAll")}
+            <span
+              aria-hidden="true"
+              className="glossaryEntryManagerExportIcon"
+              dangerouslySetInnerHTML={{ __html: exportIcon }}
+            />
+            <span>{translate("glossary.entryManager.exportAll")}</span>
           </button>
         )}
       </div>
@@ -383,25 +381,7 @@ export function GlossaryEntryManager({
                     />
                   </button>
                 </span>
-                {/* #574 Slice 6: Export sits between Edit and the
-                    destructive Delete (kept at the far end). */}
-                <span role="cell" className="glossaryTagManagerCell">
-                  <button
-                    type="button"
-                    className="glossaryTagManagerIconButton glossaryEntryManagerExportButton"
-                    aria-label={translate("glossary.entryManager.exportEntry")}
-                    title={translate("glossary.entryManager.exportEntry")}
-                    onClick={(event) => {
-                      stopRowActivation(event);
-                      onExportEntry(entry.id, surface);
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      dangerouslySetInnerHTML={{ __html: exportIcon }}
-                    />
-                  </button>
-                </span>
+
                 <span role="cell" className="glossaryTagManagerCell">
                   <button
                     type="button"

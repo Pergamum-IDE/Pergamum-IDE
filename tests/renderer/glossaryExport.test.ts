@@ -474,13 +474,11 @@ describe("App glossary export wiring (#574 Slice 6)", () => {
     return appSource.slice(startIndex, endIndex);
   }
 
-  it("the Glossary Management row action opens the export dialog", () => {
+  it("the Glossary Management top-level action opens the export wizard (#583)", () => {
     expect(appSource).toContain(
-      "onExportEntry={handleExportGlossaryEntryFromManager}"
+      "onExportAll={handleOpenGlossaryExportWizard}"
     );
-    expect(appSource).toContain("setGlossaryExportRequest({ entryId, entryLabel });");
-    expect(appSource).toContain("request={glossaryExportRequest}");
-    expect(appSource).toContain("onExport={exportGlossaryEntry}");
+    expect(appSource).not.toContain("onExportEntry={handleExportGlossaryEntryFromManager}");
   });
 
   it("exports saved data, counts like Glossary Search, writes through the #523 IPC", () => {
