@@ -39,7 +39,7 @@ import {
 } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
 import { registerFontCacheIpc } from "./fontCacheIpc";
-import { SESSION_CHANNELS, type ColdStartRestorePayload } from "../shared/api";
+import { SESSION_CHANNELS, WINDOW_CHANNELS, type ColdStartRestorePayload } from "../shared/api";
 import type { AppPlatform } from "../shared/platform";
 import type { WindowSessionState } from "../shared/session";
 import { selectRestoreSession } from "../shared/sessionRestore";
@@ -193,6 +193,24 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
 
   windowLifecycleController?.registerWindow(mainWindow);
   sessionStoreController?.attachWindow(mainWindow);
+
+  mainWindow.on("enter-full-screen", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(
+        WINDOW_CHANNELS.onFullscreenStateChanged,
+        true
+      );
+    }
+  });
+
+  mainWindow.on("leave-full-screen", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(
+        WINDOW_CHANNELS.onFullscreenStateChanged,
+        false
+      );
+    }
+  });
 
   mainWindow.on("closed", () => {
     sessionStoreController?.detachWindow();
@@ -363,6 +381,24 @@ app.whenReady().then(async () => {
   // (above); this attaches the handler now that `app` is ready.
   registerPergamumAssetProtocol();
   registerAppInfoIpc();
+
+  ipcMain.handle(WINDOW_CHANNELS.toggleFullscreen, (event): boolean => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed()) {
+      return false;
+    }
+    const nextState = !window.isFullScreen();
+    window.setFullScreen(nextState);
+    return nextState;
+  });
+
+  ipcMain.handle(WINDOW_CHANNELS.getFullscreenState, (event): boolean => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed()) {
+      return false;
+    }
+    return window.isFullScreen();
+  });
 
   const sessionStore: SessionStore = createSessionStore({
     baseDirectory: path.join(app.getPath("userData"), "sessions")

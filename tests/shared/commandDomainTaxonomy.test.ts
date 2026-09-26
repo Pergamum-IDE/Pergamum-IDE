@@ -76,6 +76,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
   registerEditorCommands(
     registry,
     {
+      newFile: () => undefined,
+      canNewFile: () => true,
       openMarkdownDocument: () => undefined,
       saveCurrentDocument: () => undefined,
       saveCurrentDocumentAs: () => undefined,
@@ -89,6 +91,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
       canDelegateNativeEditCommand: () => true
     },
     {
+      newFile: "New File",
+      newFileDescription: "New File",
       openMarkdownDocument: "Open Markdown File",
       openMarkdownDocumentDescription: "Open Markdown File",
       saveDocument: "Save",

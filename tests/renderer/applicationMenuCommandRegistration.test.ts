@@ -42,6 +42,8 @@ describe("application menu command registration", () => {
     registerEditorCommands(
       registry,
       {
+        newFile: () => undefined,
+        canNewFile: () => true,
         openMarkdownDocument: () => undefined,
         saveCurrentDocument: () => undefined,
         saveCurrentDocumentAs: () => undefined,
@@ -55,6 +57,8 @@ describe("application menu command registration", () => {
         canDelegateNativeEditCommand: () => true
       },
       {
+        newFile: "New File",
+        newFileDescription: "New File",
         openMarkdownDocument: "Open Markdown File",
         openMarkdownDocumentDescription: "Open Markdown File",
         saveDocument: "Save",

@@ -98,6 +98,8 @@ import {
 import type { MarkdownEditorEmphasisMarkShortcutConfig } from "./editorEmphasisShortcuts";
 import type { MarkdownEditorToolbarShortcutConfig } from "./editorMarkdownToolbarShortcuts";
 import type { MarkdownEditorRubyShortcutConfig } from "./editorRubyShortcuts";
+import type { MarkdownEditorRenameShortcutConfig } from "./editorRenameShortcut";
+import type { ProjectAccessMode } from "../shared/api";
 import { ActiveFindPanel } from "./find/ActiveFindPanel";
 import { useActiveFindShortcuts } from "./editorFindShortcuts";
 import {
@@ -591,6 +593,9 @@ interface EditorSurfaceProps {
   notifyRubyMultiLine?: () => void;
   /** #529: see MarkdownEditor.tsx's `markdownToolbarShortcut` prop doc comment. */
   markdownToolbarShortcut?: MarkdownEditorToolbarShortcutConfig | null;
+  hasProject?: boolean;
+  projectAccessMode?: ProjectAccessMode | null;
+  onRequestRenameActiveDocument?: () => void;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -729,6 +734,9 @@ export function EditorSurface({
   notifyRubyReadOnly,
   notifyRubyMultiLine,
   markdownToolbarShortcut,
+  hasProject,
+  projectAccessMode,
+  onRequestRenameActiveDocument,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -775,6 +783,12 @@ export function EditorSurface({
   const [glossaryMetadataPanelExpandedHeight, setGlossaryMetadataPanelExpandedHeight] =
     useState<number | null>(null);
 
+  const isRenameEnabled =
+    Boolean(hasProject) &&
+    projectAccessMode?.kind === "readWrite" &&
+    editor.kind === "markdown" &&
+    editor.document.kind === "project";
+
   // #573 Slice 3: both editor kinds share ONE MarkdownEditorSurface at a
   // stable position (after the optional glossary metadata panel), so
   // switching between a document tab and a glossary Description tab behaves
@@ -801,6 +815,8 @@ export function EditorSurface({
       ) : null}
       <MarkdownEditorSurface
           source={markdownSurfaceSource}
+          isRenameEnabled={isRenameEnabled}
+          onRequestRenameActiveDocument={onRequestRenameActiveDocument}
           isDebugModeEnabled={isDebugModeEnabled}
           isSyncScrollEditorToPreviewEnabled={isSyncScrollEditorToPreviewEnabled}
           isSyncScrollPreviewToEditorEnabled={isSyncScrollPreviewToEditorEnabled}
@@ -883,6 +899,8 @@ export function EditorSurface({
 interface MarkdownEditorSurfaceProps {
   /** #573 Slice 2: what is being edited — see markdownSurfaceSource.ts. */
   source: MarkdownSurfaceSource;
+  isRenameEnabled?: boolean;
+  onRequestRenameActiveDocument?: () => void;
   /** #505 Phase 0: see EditorSurfaceProps's own doc comment. */
   isDebugModeEnabled: boolean;
   /** #505 Phase 1: see EditorSurfaceProps's own doc comment. */
@@ -1008,6 +1026,8 @@ interface MarkdownEditorSurfaceProps {
 
 function MarkdownEditorSurface({
   source,
+  isRenameEnabled,
+  onRequestRenameActiveDocument,
   isDebugModeEnabled,
   isSyncScrollEditorToPreviewEnabled,
   isSyncScrollPreviewToEditorEnabled,
@@ -2850,6 +2870,16 @@ function MarkdownEditorSurface({
     ]
   );
 
+  const renameShortcutConfig = useMemo<MarkdownEditorRenameShortcutConfig>(
+    () => ({
+      isEnabled: Boolean(isRenameEnabled),
+      requestRenameActiveDocument: () => {
+        onRequestRenameActiveDocument?.();
+      }
+    }),
+    [isRenameEnabled, onRequestRenameActiveDocument]
+  );
+
   const handleFindModeChange = useCallback((mode: ActiveFindPanelMode) => {
     setFindMode(mode);
     // Return focus to the query input (the panel's focus effect handles it).
@@ -3358,6 +3388,7 @@ function MarkdownEditorSurface({
           emphasisMarkShortcut={emphasisMarkShortcutConfig}
           rubyShortcut={rubyShortcutConfig}
           markdownToolbarShortcut={markdownToolbarShortcut}
+          renameShortcut={renameShortcutConfig}
           extraPendingSelection={findExtraSelection}
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}
           extraFocusRequest={findFocusRequest}

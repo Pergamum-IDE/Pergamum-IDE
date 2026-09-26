@@ -101,9 +101,11 @@ describe("application menu", () => {
       applicationCommandIds.createProject,
       applicationCommandIds.openProject,
       applicationCommandIds.closeProject,
+      editorCommandIds.newFile,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
       editorCommandIds.saveAll,
+      editorCommandIds.saveAs,
       editorCommandIds.saveAs,
       applicationCommandIds.toggleRecentProjects,
       editorCommandIds.close,
@@ -113,6 +115,7 @@ describe("application menu", () => {
 
   it("keeps the application-menu-sendable allowlist a superset of the File menu", () => {
     for (const commandId of [
+      editorCommandIds.newFile,
       applicationCommandIds.openAbout,
       applicationCommandIds.quitApplication,
       applicationCommandIds.createProject,
@@ -505,6 +508,26 @@ describe("application menu", () => {
     expect(send).toHaveBeenCalledWith(
       APPLICATION_MENU_CHANNELS.command,
       commandPaletteCommandIds.open
+    );
+  });
+
+  it("binds F12 to the Save As command as a hidden item in the File menu", () => {
+    const fileItems = fileMenuItems("win32");
+    const f12Item = fileItems.find((candidate) => candidate.accelerator === "F12");
+
+    expect(f12Item).toBeTruthy();
+    expect(f12Item?.visible).toBe(false);
+    expect(f12Item?.acceleratorWorksWhenHidden).toBe(true);
+
+    const { window, send } = menuWindowMock();
+
+    fileMenuItems("win32", { getMainWindow: () => window }).find(
+      (candidate) => candidate.accelerator === "F12"
+    )?.click?.({} as never, null as never, {} as never);
+
+    expect(send).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.command,
+      editorCommandIds.saveAs
     );
   });
 

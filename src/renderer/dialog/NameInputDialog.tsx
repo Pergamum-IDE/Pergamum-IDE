@@ -55,6 +55,13 @@ export type NameInputDialogSubmitResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly error: NameInputDialogOperationError };
 
+export interface NameInputDialogExtensionSelect {
+  readonly label: string;
+  readonly options: readonly string[];
+  readonly value: string;
+  readonly onChange: (nextExtension: string) => void;
+}
+
 export interface NameInputDialogProps {
   title: string;
   description: string;
@@ -71,6 +78,7 @@ export interface NameInputDialogProps {
    */
   contextLabel?: string;
   contextValue?: string;
+  extensionSelect?: NameInputDialogExtensionSelect;
   icon: NameInputDialogIcon;
   translate: Translate;
   clipboardAdapter: ClipboardAdapter;
@@ -95,6 +103,7 @@ export function NameInputDialog({
   primaryLabel,
   contextLabel,
   contextValue,
+  extensionSelect,
   icon,
   translate,
   clipboardAdapter,
@@ -273,6 +282,23 @@ export function NameInputDialog({
               disabled={busy}
               onChange={(event) => updateValue(event.target.value)}
             />
+            {extensionSelect ? (
+              <select
+                id={`${inputId}-extension`}
+                className="nameInputDialogExtensionSelect"
+                aria-label={extensionSelect.label}
+                title={extensionSelect.label}
+                value={extensionSelect.value}
+                disabled={busy}
+                onChange={(event) => extensionSelect.onChange(event.target.value)}
+              >
+                {extensionSelect.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            ) : null}
           </span>
         </label>
         {activeError ? (

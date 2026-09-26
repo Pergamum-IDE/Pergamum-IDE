@@ -82,8 +82,10 @@ export function isFileExplorerRenameValidationReason(
 
 export function fileExplorerRenameFailureReasonFromValidationError(
   error: FileExplorerNameValidationError
-): "invalidName" | "reservedName" {
-  return error === "reserved" ? "reservedName" : "invalidName";
+): "invalidName" | "invalidCharacter" | "reservedName" {
+  if (error === "reserved") return "reservedName";
+  if (error === "invalidCharacter") return "invalidCharacter";
+  return "invalidName";
 }
 
 function extensionOfName(name: string): string | null {

@@ -38,7 +38,10 @@ import {
   collectMovedProjectDocumentRelocations,
   type ProjectDocumentPathRelocation
 } from "../shared/projectMove";
-import { isFileExplorerCreateValidationReason } from "../shared/fileExplorerCreate";
+import {
+  combineNameAndExtension,
+  isFileExplorerCreateValidationReason
+} from "../shared/fileExplorerCreate";
 import { supportedImageAttachmentFormatForFileName } from "../shared/imageAttachmentFormat";
 import {
   isFileExplorerRenameValidationReason,
@@ -894,6 +897,8 @@ export function FileExplorer({
   >({});
   const [createDialogKind, setCreateDialogKind] =
     useState<FileExplorerCreateKind | null>(null);
+  const [createDialogExtension, setCreateDialogExtension] =
+    useState<string>(".md");
   // #355: when a create is triggered from a context menu, the target folder is
   // an explicit override rather than the current selection:
   //   `undefined` → no override (toolbar / Command Palette → selection-based),
@@ -1685,6 +1690,7 @@ export function FileExplorer({
   const closeCreateDialog = useCallback(() => {
     setCreateDialogKind(null);
     setCreateDialogParentOverride(undefined);
+    setCreateDialogExtension(".md");
   }, []);
 
   const reportRenameUnavailable = useCallback(
@@ -1872,6 +1878,10 @@ export function FileExplorer({
       // #355: honor the context-menu target override when present; otherwise
       // fall back to the selection-derived folder. Same value the dialog shows.
       const parentRelativePath = effectiveCreateParentDirectory;
+      const fileNameToCreate =
+        kind === "file"
+          ? combineNameAndExtension(rawValue, createDialogExtension)
+          : rawValue;
 
       let result: CreateFileExplorerEntryResult;
 
@@ -1880,7 +1890,7 @@ export function FileExplorer({
           kind === "file"
             ? await window.pergamum.projects.createFileExplorerMarkdownFile(
                 parentRelativePath,
-                rawValue
+                fileNameToCreate
               )
             : await window.pergamum.projects.createFileExplorerFolder(
                 parentRelativePath,
@@ -1895,7 +1905,7 @@ export function FileExplorer({
               kind,
               reason: "unknown",
               parentRelativePath,
-              requestedName: rawValue
+              requestedName: fileNameToCreate
             })
           }
         };
@@ -1955,6 +1965,7 @@ export function FileExplorer({
     [
       canCreate,
       closeCreateDialog,
+      createDialogExtension,
       effectiveCreateParentDirectory,
       loadDirectoryForGeneration,
       onActivateDocument,
@@ -4300,11 +4311,26 @@ export function FileExplorer({
           translate={translate}
           clipboardAdapter={clipboardAdapter}
           opener={null}
-          validateName={createFileExplorerNameValidator(
-            createDialogKind,
-            translate
-          )}
+          validateName={(rawValue) =>
+            createFileExplorerNameValidator(createDialogKind, translate, {
+              enablePlainTextDocuments
+            })(
+              createDialogKind === "file"
+                ? combineNameAndExtension(rawValue, createDialogExtension)
+                : rawValue
+            )
+          }
           onSubmit={(rawValue) => submitCreate(createDialogKind, rawValue)}
+          extensionSelect={
+            createDialogKind === "file"
+              ? {
+                  label: translate("explorer.newFile.extensionLabel"),
+                  options: enablePlainTextDocuments ? [".md", ".txt"] : [".md"],
+                  value: createDialogExtension,
+                  onChange: setCreateDialogExtension
+                }
+              : undefined
+          }
           onClose={closeCreateDialog}
         />
       ) : null}

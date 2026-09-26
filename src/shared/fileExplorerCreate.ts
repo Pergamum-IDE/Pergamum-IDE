@@ -65,13 +65,17 @@ export function pathHasReservedFileExplorerSegment(
     .some((segment) => isReservedFileExplorerName(segment));
 }
 
+export const INVALID_FILE_EXPLORER_NAME_CHARACTER_PATTERN = /[<>:"|?*]/;
+
 export type FileExplorerNameValidationError =
   | "empty"
   | "dot"
   | "dotDot"
   | "separator"
   | "controlCharacter"
-  | "reserved";
+  | "reserved"
+  | "trailingPeriodOrWhitespace"
+  | "invalidCharacter";
 
 export type FileExplorerNameValidationResult =
   | { readonly ok: true; readonly name: string }
@@ -99,7 +103,8 @@ export function containsControlCharacter(value: string): boolean {
 export function validateFileExplorerName(
   rawName: string
 ): FileExplorerNameValidationResult {
-  const name = rawName.normalize("NFC").trim();
+  const normalized = rawName.normalize("NFC");
+  const name = normalized.trim();
 
   if (name.length === 0) {
     return { ok: false, error: "empty" };
@@ -109,8 +114,12 @@ export function validateFileExplorerName(
     return { ok: false, error: "dot" };
   }
 
-  if (name === "..") {
+  if (name === ".." || name.includes("..")) {
     return { ok: false, error: "dotDot" };
+  }
+
+  if (/\s$/.test(normalized) || name.endsWith(".")) {
+    return { ok: false, error: "trailingPeriodOrWhitespace" };
   }
 
   if (name.includes("/") || name.includes("\\")) {
@@ -119,6 +128,10 @@ export function validateFileExplorerName(
 
   if (containsControlCharacter(name)) {
     return { ok: false, error: "controlCharacter" };
+  }
+
+  if (INVALID_FILE_EXPLORER_NAME_CHARACTER_PATTERN.test(name)) {
+    return { ok: false, error: "invalidCharacter" };
   }
 
   if (isReservedFileExplorerName(name)) {
@@ -144,7 +157,8 @@ export type MarkdownFileNameResult =
  * name (no separators, not `.` / `..`).
  */
 export function applyMarkdownFileExtension(
-  name: string
+  name: string,
+  options?: { enablePlainTextDocuments?: boolean }
 ): MarkdownFileNameResult {
   const lastDotIndex = name.lastIndexOf(".");
 
@@ -160,7 +174,49 @@ export function applyMarkdownFileExtension(
     return { ok: true, fileName: name };
   }
 
+  if (options?.enablePlainTextDocuments && extension === ".txt") {
+    return { ok: true, fileName: name };
+  }
+
   return { ok: false, error: "unsupportedExtension" };
+}
+
+/**
+ * #587 Slice 2: Combines a user-entered file name with the selected extension
+ * from the New File dialog dropdown.
+ *
+ * Rules:
+ *   - If `rawInput` already ends with a recognized supported extension
+ *     (`.md`, `.markdown`, `.txt`, case-insensitive), keeps the user's typed
+ *     extension unchanged (prevents double extensions like `file.md.md` or
+ *     `file.markdown.md`).
+ *   - If `rawInput` ends with a period or trailing whitespace, returns the
+ *     trimmed string without appending an extension so validation correctly
+ *     flags the trailing dot/space instead of generating invalid combinations
+ *     like `CreateFile.txt.bin..md`.
+ *   - Otherwise, appends `selectedExtension` (e.g. `chapter1` + `.md` => `chapter1.md`).
+ */
+export function combineNameAndExtension(
+  rawInput: string,
+  selectedExtension: string
+): string {
+  const normalized = rawInput.normalize("NFC");
+  const trimmed = normalized.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (
+    lower.endsWith(".md") ||
+    lower.endsWith(".markdown") ||
+    lower.endsWith(".txt")
+  ) {
+    return trimmed;
+  }
+
+  if (trimmed.endsWith(".") || /\s$/.test(normalized)) {
+    return trimmed;
+  }
+
+  return `${trimmed}${selectedExtension}`;
 }
 
 /**

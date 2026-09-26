@@ -17,6 +17,7 @@ import {
   RECOVERY_CHANNELS,
   SESSION_CHANNELS,
   SETTINGS_CHANNELS,
+  WINDOW_CHANNELS,
   type PergamumApi
 } from "../shared/api";
 import {
@@ -449,6 +450,25 @@ const pergamumApi: PergamumApi = {
   fontCache: {
     load: () => ipcRenderer.invoke(FONT_CACHE_CHANNELS.load),
     save: (cache) => ipcRenderer.invoke(FONT_CACHE_CHANNELS.save, cache)
+  },
+  window: {
+    toggleFullscreen: () => ipcRenderer.invoke(WINDOW_CHANNELS.toggleFullscreen),
+    getFullscreenState: () =>
+      ipcRenderer.invoke(WINDOW_CHANNELS.getFullscreenState),
+    onFullscreenStateChanged: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        isFullscreen: unknown
+      ) => {
+        if (typeof isFullscreen === "boolean") {
+          callback(isFullscreen);
+        }
+      };
+      ipcRenderer.on(WINDOW_CHANNELS.onFullscreenStateChanged, listener);
+      return () => {
+        ipcRenderer.off(WINDOW_CHANNELS.onFullscreenStateChanged, listener);
+      };
+    }
   }
 };
 

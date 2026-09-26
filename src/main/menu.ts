@@ -214,6 +214,13 @@ function fileMenu(
     { type: "separator" },
     importMenu(language, options),
     { type: "separator" },
+    commandMenuItem(
+      editorCommandIds.newFile,
+      language,
+      "menu.newFile",
+      options,
+      "CommandOrControl+N"
+    ),
     // #556: CommandOrControl+O was freed up for the Command Palette's
     // project-file-open mode (a renderer-level global shortcut — see
     // App.tsx). Keeping it here as an Electron menu accelerator would
@@ -247,6 +254,7 @@ function fileMenu(
       options,
       "CommandOrControl+Shift+S"
     ),
+    saveAsF12MenuItem(options),
     commandMenuItem(
       applicationCommandIds.toggleRecentProjects,
       language,
@@ -367,6 +375,29 @@ function commandPaletteF1MenuItem(
       sendApplicationMenuCommand(
         options.getMainWindow,
         commandPaletteCommandIds.open,
+        options.debugLogger
+      );
+    }
+  };
+}
+
+/**
+ * #587 Slice 5: F12 as a hidden accelerator alias for `editor.saveAs`.
+ * The primary menu item displays `Ctrl+Shift+S`; F12 is bound as a second,
+ * hidden item matching `commandPaletteF1MenuItem`'s design above.
+ */
+function saveAsF12MenuItem(
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
+  return {
+    label: "Save As (F12)",
+    accelerator: "F12",
+    visible: false,
+    acceleratorWorksWhenHidden: true,
+    click: () => {
+      sendApplicationMenuCommand(
+        options.getMainWindow,
+        editorCommandIds.saveAs,
         options.debugLogger
       );
     }

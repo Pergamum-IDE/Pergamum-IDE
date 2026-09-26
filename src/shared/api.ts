@@ -473,6 +473,12 @@ export const FONT_CACHE_CHANNELS = {
   save: "fontCache:save"
 } as const;
 
+export const WINDOW_CHANNELS = {
+  toggleFullscreen: "window:toggleFullscreen",
+  getFullscreenState: "window:getFullscreenState",
+  onFullscreenStateChanged: "window:onFullscreenStateChanged"
+} as const;
+
 /**
  * #252 follow-up: renderer -> main push of live command enablement (from
  * `CommandRegistry.isEnabledForContext`, the same evaluation the Command
@@ -1640,5 +1646,12 @@ export interface PergamumApi {
   fontCache: {
     load: () => Promise<FontCacheState>;
     save: (cache: FontCache) => Promise<FontCacheState>;
+  };
+  window: {
+    toggleFullscreen: () => Promise<boolean>;
+    getFullscreenState: () => Promise<boolean>;
+    onFullscreenStateChanged: (
+      callback: (isFullscreen: boolean) => void
+    ) => () => void;
   };
 }

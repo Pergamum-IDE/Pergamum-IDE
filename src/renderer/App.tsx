@@ -607,6 +607,7 @@ import {
 } from "./workspaceCommands";
 import {
   createFileExplorerCommandTitles,
+  fileExplorerCommandIds,
   registerFileExplorerCommands
 } from "./fileExplorerCommands";
 import type {
@@ -1076,6 +1077,32 @@ export function App(): JSX.Element {
     readonly opener: Element | null;
   } | null>(null);
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.pergamum?.window) {
+      return;
+    }
+
+    void window.pergamum.window.getFullscreenState().then((state) => {
+      setIsFullscreen(state);
+    });
+
+    const unsubscribe = window.pergamum.window.onFullscreenStateChanged((state) => {
+      setIsFullscreen(state);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const handleToggleFullscreen = useCallback(() => {
+    if (typeof window !== "undefined" && window.pergamum?.window) {
+      void window.pergamum.window.toggleFullscreen();
+    }
+  }, []);
+
   const [pendingDialogRequest, setPendingDialogRequest] =
     useState<DialogControllerPendingRequest | null>(() =>
       dialogController.getPendingRequest()
@@ -1519,6 +1546,7 @@ export function App(): JSX.Element {
   const openBulkTextImportDialogCommandRef = useRef<() => void>(
     () => undefined
   );
+  const newFileCommandRef = useRef<() => void>(() => undefined);
   const openMarkdownDocumentCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -2919,6 +2947,8 @@ export function App(): JSX.Element {
       Boolean(activeMarkdownDocument)) ||
     // #573 Slice 4: Ctrl+S saves a glossary Description tab's draft.
     isGlossaryDescriptionEditorActive;
+  const canSaveCurrentDocumentToolbar =
+    canSave && isDirty && !isReadOnlyProjectOwnedEditor;
   const canSaveAs =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -3699,6 +3729,8 @@ export function App(): JSX.Element {
     registerEditorCommands(
       registry,
       {
+        newFile: () => newFileCommandRef.current(),
+        canNewFile: () => Boolean(isReadWriteProject),
         openMarkdownDocument: () => openMarkdownDocumentCommandRef.current(),
         saveCurrentDocument: () => saveCurrentDocumentCommandRef.current(),
         saveCurrentDocumentAs: () =>
@@ -3794,25 +3826,7 @@ export function App(): JSX.Element {
           });
         },
         requestRenameActiveEditorFile: () => {
-          // #318: a global Rename targets the *active editor's* backing
-          // project file — never the File Explorer's own selection. The
-          // command `when` gate already requires such an editor; this
-          // resolves the concrete path and backstops a stale gate. Nothing
-          // happens (no dialog, no reveal) when there is no such target.
-          const relativePath = activeProjectDocumentRelativePath(
-            openDocumentsStateRef.current
-          );
-
-          if (relativePath === null) {
-            return;
-          }
-
-          revealFileExplorer();
-          fileExplorerRenameRequestSeqRef.current += 1;
-          setFileExplorerRenameEntryRequest({
-            token: fileExplorerRenameRequestSeqRef.current,
-            target: { relativePath }
-          });
+          handleRenameActiveEditorFile();
         }
       },
       createFileExplorerCommandTitles(
@@ -6123,6 +6137,23 @@ export function App(): JSX.Element {
         : current
     );
   }
+
+  const handleRenameActiveEditorFile = useCallback(() => {
+    const relativePath = activeProjectDocumentRelativePath(
+      openDocumentsStateRef.current
+    );
+
+    if (relativePath === null) {
+      return;
+    }
+
+    revealFileExplorerSidebar();
+    fileExplorerRenameRequestSeqRef.current += 1;
+    setFileExplorerRenameEntryRequest({
+      token: fileExplorerRenameRequestSeqRef.current,
+      target: { relativePath }
+    });
+  }, []);
 
   async function closeOneTabWithConfirmation(
     editorId: EditorId
@@ -9407,6 +9438,11 @@ export function App(): JSX.Element {
     applyParagraphIndentOperation("insert");
   removeParagraphIndentCommandRef.current = () =>
     applyParagraphIndentOperation("remove");
+  newFileCommandRef.current = () => {
+    executeUiCommand(fileExplorerCommandIds.createMarkdownFile, {
+      source: "applicationMenu"
+    });
+  };
   openMarkdownDocumentCommandRef.current = openFile;
   saveCurrentDocumentCommandRef.current = async () => {
     await saveFile();
@@ -12370,6 +12406,12 @@ export function App(): JSX.Element {
         }
         onOpenCommandPalette={openCommandPaletteWithPrefix}
         isGlossaryDescription={activeDocument?.editor.kind === "glossaryDescription"}
+        canSaveCurrentDocument={canSaveCurrentDocumentToolbar}
+        onSaveCurrentDocument={() => {
+          void saveFile();
+        }}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={handleToggleFullscreen}
         translate={translate}
       />
 
@@ -12764,6 +12806,11 @@ export function App(): JSX.Element {
                         notifyRubyReadOnly={notifyRubyReadOnly}
                         notifyRubyMultiLine={notifyRubyMultiLine}
                         markdownToolbarShortcut={markdownToolbarShortcutConfig}
+                        hasProject={Boolean(project)}
+                        projectAccessMode={project?.accessMode}
+                        onRequestRenameActiveDocument={
+                          handleRenameActiveEditorFile
+                        }
                         onParagraphIndentControllerChange={
                           handleParagraphIndentControllerChange
                         }

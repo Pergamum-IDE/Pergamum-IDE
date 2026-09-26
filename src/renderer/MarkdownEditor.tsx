@@ -115,6 +115,11 @@ import {
   type MarkdownEditorToolbarShortcutConfig
 } from "./editorMarkdownToolbarShortcuts";
 import {
+  publishCurrentRenameShortcutConfig,
+  unpublishCurrentRenameShortcutConfig,
+  type MarkdownEditorRenameShortcutConfig
+} from "./editorRenameShortcut";
+import {
   publishCurrentActiveEditorSelectionAccess,
   unpublishCurrentActiveEditorSelectionAccess
 } from "./find/activeEditorSelectionAccess";
@@ -152,6 +157,7 @@ import type {
 export type { MarkdownEditorGlossaryCompletionConfig };
 export type { MarkdownEditorActiveFindConfig };
 export type { MarkdownEditorGlossarySelectionShortcutConfig };
+export type { MarkdownEditorRenameShortcutConfig };
 
 interface MarkdownEditorPendingSelection {
   start: number;
@@ -369,6 +375,8 @@ interface MarkdownEditorProps {
    * publish mechanism as `emphasisMarkShortcut` above, for the same reason.
    */
   markdownToolbarShortcut?: MarkdownEditorToolbarShortcutConfig | null;
+  /** #587 Slice 3: F2 rename shortcut from editor body focus. */
+  renameShortcut?: MarkdownEditorRenameShortcutConfig | null;
   /**
    * #424: a Find-panel-driven "select + reveal this range" request, kept
    * entirely separate from `pendingSelection` (which App owns for Outline /
@@ -809,6 +817,7 @@ export function MarkdownEditor({
   emphasisMarkShortcut,
   rubyShortcut,
   markdownToolbarShortcut,
+  renameShortcut,
   extraPendingSelection,
   onExtraPendingSelectionApplied,
   extraFocusRequest,
@@ -1384,6 +1393,16 @@ export function MarkdownEditor({
       unpublishCurrentMarkdownToolbarShortcutConfig(markdownToolbarShortcut);
     };
   }, [markdownToolbarShortcut]);
+
+  useEffect(() => {
+    if (!renameShortcut) {
+      return undefined;
+    }
+    publishCurrentRenameShortcutConfig(renameShortcut);
+    return () => {
+      unpublishCurrentRenameShortcutConfig(renameShortcut);
+    };
+  }, [renameShortcut]);
 
   // #457: publish this editor's live-selection reader into the module-level
   // slot the Project Search / Replace Ctrl+Shift+F / Ctrl+Shift+H selection
