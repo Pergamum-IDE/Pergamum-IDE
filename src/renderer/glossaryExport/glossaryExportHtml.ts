@@ -170,7 +170,6 @@ function occurrencesSectionHtml(
     `</tbody>`,
     `<tfoot><tr><th scope="row">${escapeHtmlText(labels.total)}</th><td class="glossary-export__count">${occurrences.total}</td></tr></tfoot>`,
     `</table>`,
-    `<p class="glossary-export__muted">${escapeHtmlText(labels.occurrenceScope)}</p>`,
     labels.occurrenceSkipped
       ? `<p class="glossary-export__muted">${escapeHtmlText(labels.occurrenceSkipped)}</p>`
       : "",
@@ -347,6 +346,142 @@ export function buildGlossaryEntryExportHtml(
     `</header>`,
     ...sections,
     `</article>`,
+    `</body>`,
+    `</html>`,
+    ``
+  ].join("\n");
+}
+
+export interface CombinedGlossaryEntrySectionInput {
+  readonly entry: GlossaryEntry;
+  readonly occurrences: GlossaryEntryOccurrenceCounts | null;
+  readonly description: RenderedGlossaryDescription | null;
+}
+
+export interface BuildCombinedGlossaryExportHtmlInput {
+  readonly documentTitle: string;
+  readonly sections: readonly CombinedGlossaryEntrySectionInput[];
+  readonly content: GlossaryExportContentOptions;
+  readonly includeToc: boolean;
+  readonly tocPosition: "front" | "back";
+  readonly labels: GlossaryExportDocumentLabels;
+  readonly tocTitle?: string;
+  readonly tocNavLabel?: string;
+  readonly lang: string;
+  readonly katexCss: string | null;
+  readonly pdfFontFamily?: string | null;
+}
+
+export function renderGlossaryEntrySectionHtml(
+  input: CombinedGlossaryEntrySectionInput,
+  content: GlossaryExportContentOptions,
+  labels: GlossaryExportDocumentLabels
+): string {
+  const title = representativeGlossaryAtom(input.entry)?.value ?? input.entry.id;
+  const sections: string[] = [];
+
+  if (content.includeGlossaryInfo) {
+    sections.push(infoSectionHtml(input.entry, labels));
+  }
+  if (content.includeOccurrenceCounts && input.occurrences) {
+    sections.push(occurrencesSectionHtml(input.occurrences, labels));
+  }
+  if (content.includeDescription && input.description) {
+    sections.push(descriptionSectionHtml(input.description, labels));
+  }
+
+  const anchorId = `glossary-entry-${input.entry.id}`;
+
+  return [
+    `<section id="${escapeHtmlAttr(anchorId)}" class="glossary-export glossary-export-entry">`,
+    `<header>`,
+    `<h1>${escapeHtmlText(title)}</h1>`,
+    `</header>`,
+    ...sections,
+    `</section>`
+  ].join("\n");
+}
+
+function renderTocNavHtml(
+  sections: readonly CombinedGlossaryEntrySectionInput[],
+  tocTitle: string = "目次",
+  tocNavLabel: string = "語彙目次"
+): string {
+  const items = sections.map((item) => {
+    const title = representativeGlossaryAtom(item.entry)?.value ?? item.entry.id;
+    const anchorId = `glossary-entry-${item.entry.id}`;
+    return `<li><a href="#${escapeHtmlAttr(anchorId)}">${escapeHtmlText(title)}</a></li>`;
+  });
+
+  return [
+    `<nav class="glossary-export__toc" aria-label="${escapeHtmlAttr(tocNavLabel)}">`,
+    `<h2>${escapeHtmlText(tocTitle)}</h2>`,
+    `<ol>`,
+    ...items,
+    `</ol>`,
+    `</nav>`
+  ].join("\n");
+}
+
+export function buildCombinedGlossaryExportHtml(
+  input: BuildCombinedGlossaryExportHtmlInput
+): string {
+  const renderedSections = input.sections.map((sec) =>
+    renderGlossaryEntrySectionHtml(sec, input.content, input.labels)
+  );
+
+  const tocHtml = input.includeToc
+    ? renderTocNavHtml(
+        input.sections,
+        input.tocTitle ?? "目次",
+        input.tocNavLabel ?? "語彙目次"
+      )
+    : "";
+
+  const usesMath = input.sections.some((sec) => sec.description?.usesMath);
+
+  const pdfFontStyle = input.pdfFontFamily
+    ? `body { font-family: ${input.pdfFontFamily}; }`
+    : "";
+
+  const styles = [
+    baseCss,
+    pdfFontStyle,
+    markdownCalloutExportCss,
+    codeHighlightExportCss,
+    usesMath && input.katexCss ? input.katexCss : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const bodyContent: string[] = [];
+
+  if (input.includeToc && input.tocPosition === "front") {
+    bodyContent.push(tocHtml);
+  }
+
+  bodyContent.push(`<main class="glossary-export-combined">`);
+  bodyContent.push(...renderedSections);
+  bodyContent.push(`</main>`);
+
+  if (input.includeToc && input.tocPosition === "back") {
+    bodyContent.push(tocHtml);
+  }
+
+  return [
+    `<!doctype html>`,
+    `<html lang="${escapeHtmlAttr(input.lang)}">`,
+    `<head>`,
+    `<meta charset="utf-8">`,
+    `<meta name="viewport" content="width=device-width, initial-scale=1">`,
+    `<meta name="generator" content="Pergamum">`,
+    `<title>${escapeHtmlText(input.documentTitle)}</title>`,
+    `<style>`,
+    styles,
+    `</style>`,
+    `</head>`,
+    `<body>`,
+    ...bodyContent,
     `</body>`,
     `</html>`,
     ``

@@ -40,6 +40,22 @@ export interface CountGlossaryEntryOccurrencesInput {
   readonly readText: ProjectDocumentReader;
 }
 
+const DEBUG_PREFIX = "[GlossaryExportOccurrenceDebug]";
+const ENABLE_GLOSSARY_EXPORT_OCCURRENCE_DEBUG = false;
+
+function countSubstring(text: string, needle: string): number {
+  if (!needle) return 0;
+  let count = 0;
+  let index = 0;
+  while (true) {
+    const found = text.indexOf(needle, index);
+    if (found < 0) break;
+    count += 1;
+    index = found + needle.length;
+  }
+  return count;
+}
+
 export async function countGlossaryEntryOccurrences(
   input: CountGlossaryEntryOccurrencesInput
 ): Promise<GlossaryEntryOccurrenceCounts> {
@@ -56,9 +72,62 @@ export async function countGlossaryEntryOccurrences(
     entryLabel
   }));
 
+  if (ENABLE_GLOSSARY_EXPORT_OCCURRENCE_DEBUG) {
+    console.log(DEBUG_PREFIX, {
+      phase: "count-start",
+      entryId: input.entry.id,
+      representativeSurface: entryLabel,
+      effectiveSearchTerms: terms.map((t) => t.value)
+    });
+  }
+
+  let totalOrderSubstringCount = 0;
+  let totalTextLength = 0;
+
+  const wrappedReadText: ProjectDocumentReader = async (relPath: string) => {
+    try {
+      const text = await input.readText(relPath);
+      if (text !== null) {
+        const orderCount = countSubstring(text, "オーダ");
+        totalOrderSubstringCount += orderCount;
+        totalTextLength += text.length;
+
+        if (ENABLE_GLOSSARY_EXPORT_OCCURRENCE_DEBUG) {
+          console.log(DEBUG_PREFIX, {
+            phase: "target-file",
+            entryId: input.entry.id,
+            filePath: relPath,
+            documentKind: relPath.endsWith(".txt") ? "text" : "markdown",
+            source: "readText",
+            textLength: text.length,
+            orderSubstringCount: orderCount
+          });
+        }
+      } else if (ENABLE_GLOSSARY_EXPORT_OCCURRENCE_DEBUG) {
+        console.log(DEBUG_PREFIX, {
+          phase: "count-error",
+          entryId: input.entry.id,
+          filePath: relPath,
+          error: "readText returned null"
+        });
+      }
+      return text;
+    } catch (err) {
+      if (ENABLE_GLOSSARY_EXPORT_OCCURRENCE_DEBUG) {
+        console.log(DEBUG_PREFIX, {
+          phase: "count-error",
+          entryId: input.entry.id,
+          filePath: relPath,
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+      throw err;
+    }
+  };
+
   const result = await runProjectGlossaryAtomSearch({
     documents: input.documents,
-    readText: input.readText,
+    readText: wrappedReadText,
     terms,
     relationMode: "any",
     // Count everything — the Search pane's display caps do not apply.
@@ -84,9 +153,24 @@ export async function countGlossaryEntryOccurrences(
     count: countByAtomId.get(atom.id) ?? 0
   }));
 
+  const total = atomCounts.reduce((sum, atom) => sum + atom.count, 0);
+
+  if (ENABLE_GLOSSARY_EXPORT_OCCURRENCE_DEBUG) {
+    console.log(DEBUG_PREFIX, {
+      phase: "count-summary",
+      entryId: input.entry.id,
+      representativeSurface: entryLabel,
+      effectiveSearchTerms: terms.map((t) => t.value),
+      targetFileCount: result.documentCount,
+      totalTextLength,
+      totalOrderSubstringCount,
+      glossaryOccurrenceCount: total
+    });
+  }
+
   return {
     atoms: atomCounts,
-    total: atomCounts.reduce((sum, atom) => sum + atom.count, 0),
+    total,
     documentCount: terms.length === 0 ? input.documents.length : result.documentCount,
     skippedFileCount: result.skippedFileCount
   };

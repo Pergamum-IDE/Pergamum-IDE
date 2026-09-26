@@ -38,6 +38,7 @@ import type {
   SelectPdfSavePathResult
 } from "../../shared/api";
 import { buildFontFamilyCss, type FontFamilySetting } from "../../shared/fontSettings";
+import { joinExportPath } from "../exportPathHelper";
 import type {
   ExportCandidateListItem,
   ExportCandidateFolderGroup,
@@ -295,13 +296,7 @@ function buildOutputPath(
 ): string {
   const sanitized = sanitizeFileName(fileName);
   const base = sanitized.endsWith(extension) ? sanitized : `${sanitized}${extension}`;
-  if (!folderPath || folderPath.trim().length === 0) {
-    return base;
-  }
-  const isWindows = folderPath.includes("\\");
-  const sep = isWindows ? "\\" : "/";
-  const cleanFolder = folderPath.replace(/[\\/]+$/u, "");
-  return `${cleanFolder}${sep}${base}`;
+  return joinExportPath(folderPath, base);
 }
 
 export function ExportConfirmationDialog({

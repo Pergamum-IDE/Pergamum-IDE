@@ -43,6 +43,10 @@ interface GlossaryEntryManagerProps {
    */
   onExportEntry: (entryId: GlossaryEntryId, entryLabel: string) => void;
   /**
+   * #581 Slice 1: open the Glossary Export Wizard for multi-entry export.
+   */
+  onExportAll?: () => void;
+  /**
    * #375: persist a new project-wide entry order (drag handle / Arrow keys).
    * `entryIdsInOrder` lists every glossary entry exactly once; the host
    * re-packs `glossary_entries.sort_order` and refreshes every glossary
@@ -98,6 +102,7 @@ export function GlossaryEntryManager({
   onOpenEntry,
   onDeleteEntry,
   onExportEntry,
+  onExportAll,
   onReorderEntries
 }: GlossaryEntryManagerProps): JSX.Element {
   // #375: transient drag state for entry reorder (D&D). `dropGap` is a slot
@@ -153,6 +158,15 @@ export function GlossaryEntryManager({
         >
           {translate("glossary.entryManager.addEntry")}
         </button>
+        {onExportAll && (
+          <button
+            type="button"
+            className="glossaryEntryManagerExportAllButton"
+            onClick={onExportAll}
+          >
+            {translate("glossary.entryManager.exportAll")}
+          </button>
+        )}
       </div>
 
       {entries.length === 0 ? (

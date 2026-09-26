@@ -1,10 +1,10 @@
 import type { GlossaryEntryId } from "../../shared/glossary";
 import { sanitizeJsonFileNameStem } from "../../shared/settingsExport";
 import {
-  documentMapPngExportFilePath,
   validateDocumentMapPngBaseFileName,
   type DocumentMapPngBaseFileNameValidationError
 } from "../documentMapPngExportPlan";
+import { joinExportPath } from "../exportPathHelper";
 
 /**
  * #574 Slice 6: glossary entry export — the option / plan model.
@@ -101,7 +101,7 @@ export function planGlossaryExport(
       entryId: options.target.entryId,
       format: options.format,
       content: options.content,
-      outputFilePath: documentMapPngExportFilePath(options.outputFolder, fileName),
+      outputFilePath: joinExportPath(options.outputFolder, fileName),
       fileName,
       imageAssetFolderName: glossaryExportImageAssetFolderName(
         options.baseFileName

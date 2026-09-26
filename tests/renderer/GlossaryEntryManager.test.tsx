@@ -426,4 +426,21 @@ describe("GlossaryEntryManager (#375)", () => {
       container.querySelector(".glossaryEntryManagerAddButton")
     ).not.toBeNull();
   });
+
+  it("renders Glossary Export button when onExportAll is provided and calls callback on click (#581)", () => {
+    const onExportAll = vi.fn();
+    render({ entries: [entryA, entryB], onExportAll });
+
+    const exportAllBtn = container.querySelector(
+      ".glossaryEntryManagerExportAllButton"
+    ) as HTMLButtonElement;
+    expect(exportAllBtn).not.toBeNull();
+    expect(exportAllBtn.textContent).toBe("glossary.entryManager.exportAll");
+
+    act(() => {
+      exportAllBtn.click();
+    });
+
+    expect(onExportAll).toHaveBeenCalledTimes(1);
+  });
 });

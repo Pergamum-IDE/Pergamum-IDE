@@ -250,11 +250,19 @@ import {
   GlossaryExportDialog,
   type GlossaryExportDialogRequest
 } from "./dialog/GlossaryExportDialog";
+import {
+  GlossaryExportWizardDialog,
+  GlossaryExportWizardErrorBoundary,
+  type OccurrenceCountValue
+} from "./dialog/GlossaryExportWizardDialog";
 import type { GlossaryExportPlan } from "./glossaryExport/glossaryExportModel";
 import { renderGlossaryDescriptionForExport } from "./glossaryExport/glossaryExportHtml";
 import { countGlossaryEntryOccurrences } from "./glossaryExport/glossaryExportOccurrences";
 import {
+  runCombinedGlossaryExport,
   runGlossaryExport,
+  type CombinedGlossaryExportPlan,
+  type CombinedGlossaryExportRunResult,
   type GlossaryExportRunResult
 } from "./glossaryExport/glossaryExportRunner";
 import { loadKatexExportCss } from "./glossaryExport/katexExportCss";
@@ -1410,6 +1418,13 @@ export function App(): JSX.Element {
   // #574 Slice 6: the Glossary Export Dialog's target (`null` = closed).
   const [glossaryExportRequest, setGlossaryExportRequest] =
     useState<GlossaryExportDialogRequest | null>(null);
+  // #581 Slice 1: the Glossary Export Wizard Dialog open state & occurrences map
+  const [isGlossaryExportWizardOpen, setIsGlossaryExportWizardOpen] = useState(false);
+  const [
+    glossaryExportWizardOccurrenceCounts,
+    setGlossaryExportWizardOccurrenceCounts
+  ] = useState<Map<string, OccurrenceCountValue> | undefined>(undefined);
+  const exportWizardRunIdRef = useRef(0);
   // #384: Command Palette `%` project-search request handed to the Search pane
   // (also #457: Ctrl+Shift+F / Ctrl+Shift+H, which additionally sets `tab`).
   // `token` is a session-monotonic counter so a repeat `%` re-applies.
@@ -4473,6 +4488,142 @@ export function App(): JSX.Element {
     entryLabel: string
   ): void {
     setGlossaryExportRequest({ entryId, entryLabel });
+  }
+
+  // #581 Slice 1: open the Glossary Export Wizard for multi-entry export
+  function handleOpenGlossaryExportWizard(): void {
+    const runId = ++exportWizardRunIdRef.current;
+    setIsGlossaryExportWizardOpen(true);
+
+    const initialMap = new Map<string, OccurrenceCountValue>();
+    for (const entry of glossaryEntries) {
+      initialMap.set(entry.id, { status: "loading" });
+    }
+    setGlossaryExportWizardOccurrenceCounts(initialMap);
+
+    setTimeout(() => {
+      void (async () => {
+        if (exportWizardRunIdRef.current !== runId) return;
+
+        const activeProject = project;
+        const activeContext = activeProjectContext;
+        const docs = activeProject?.documents ?? [];
+        if (docs.length === 0 || glossaryEntries.length === 0) {
+          const finishedMap = new Map<string, OccurrenceCountValue>();
+          for (const entry of glossaryEntries) {
+            finishedMap.set(entry.id, {
+              status: "ready",
+              count: 0,
+              occurrences: {
+                atoms: entry.atoms.map((a) => ({ atomId: a.id, value: a.value, count: 0 })),
+                total: 0,
+                documentCount: 0,
+                skippedFileCount: 0
+              }
+            });
+          }
+          if (exportWizardRunIdRef.current === runId) {
+            setGlossaryExportWizardOccurrenceCounts(finishedMap);
+          }
+          return;
+        }
+
+        const readText = activeContext
+          ? createProjectSearchReadText(activeContext)
+          : async (relPath: string) => {
+              try {
+                const file =
+                  await window.pergamum.projects.readProjectDocument(relPath);
+                return file.content;
+              } catch {
+                return null;
+              }
+            };
+
+        const currentMap = new Map<string, OccurrenceCountValue>(initialMap);
+
+        for (const entry of glossaryEntries) {
+          if (exportWizardRunIdRef.current !== runId) return;
+
+          try {
+            const res = await countGlossaryEntryOccurrences({
+              entry,
+              documents: docs,
+              readText
+            });
+            if (exportWizardRunIdRef.current !== runId) return;
+            currentMap.set(entry.id, { status: "ready", count: res.total, occurrences: res });
+          } catch {
+            if (exportWizardRunIdRef.current !== runId) return;
+            currentMap.set(entry.id, { status: "failed" });
+          }
+
+          if (exportWizardRunIdRef.current === runId) {
+            setGlossaryExportWizardOccurrenceCounts(new Map(currentMap));
+          }
+        }
+      })();
+    }, 50);
+  }
+
+  function handleCloseGlossaryExportWizard(): void {
+    exportWizardRunIdRef.current++;
+    setIsGlossaryExportWizardOpen(false);
+  }
+
+  async function exportCombinedGlossary(
+    plan: CombinedGlossaryExportPlan
+  ): Promise<CombinedGlossaryExportRunResult> {
+    const activeProject = project;
+    return runCombinedGlossaryExport(plan, {
+      renderDescription: (description, imageAssetFolderName) =>
+        renderGlossaryDescriptionForExport(description, {
+          imageAssetFolderName,
+          calloutLabels: markdownCalloutLabelsFor(translate),
+          mermaidMessages: {
+            emptyMessage: translate("preview.mermaid.emptyMessage"),
+            errorMessage: translate("preview.mermaid.errorMessage"),
+            errorHint: translate("preview.mermaid.errorHint"),
+            showDetailsLabel: translate("preview.mermaid.showDetails")
+          }
+        }),
+      loadKatexCss: loadKatexExportCss,
+      labels: (occurrences) => ({
+        infoHeading: translate("glossaryExport.document.infoHeading"),
+        representative: translate("glossaryExport.document.representative"),
+        atoms: translate("glossaryExport.document.atoms"),
+        tags: translate("glossaryExport.document.tags"),
+        noTags: translate("glossaryExport.document.noTags"),
+        createdAt: translate("glossaryExport.document.createdAt"),
+        updatedAt: translate("glossaryExport.document.updatedAt"),
+        occurrencesHeading: translate("glossaryExport.document.occurrencesHeading"),
+        atomColumn: translate("glossaryExport.document.atomColumn"),
+        countColumn: translate("glossaryExport.document.countColumn"),
+        total: translate("glossaryExport.document.total"),
+        occurrenceScope: translate("glossaryExport.document.occurrenceScope", {
+          count: occurrences?.documentCount ?? 0
+        }),
+        occurrenceSkipped:
+          occurrences && occurrences.skippedFileCount > 0
+            ? translate("glossaryExport.document.occurrenceSkipped", {
+                count: occurrences.skippedFileCount
+              })
+            : null,
+        descriptionHeading: translate("glossaryExport.document.descriptionHeading"),
+        emptyDescription: translate("glossaryExport.document.emptyDescription")
+      }),
+      lang: displayLanguage,
+      writeHtml: (request) =>
+        window.pergamum.files.exportHtmlCombined({
+          ...request,
+          projectRootPath: activeProject?.rootPath ?? null
+        }),
+      writePdf: (request) =>
+        window.pergamum.files.exportPdfCombined({
+          ...request,
+          projectRootPath: activeProject?.rootPath ?? null
+        })
+    });
   }
 
   async function confirmGlossaryExportOverwrite(): Promise<boolean> {
@@ -12459,6 +12610,7 @@ export function App(): JSX.Element {
                           handleDeleteGlossaryEntryFromManager(entryId)
                         }
                         onExportEntry={handleExportGlossaryEntryFromManager}
+                        onExportAll={handleOpenGlossaryExportWizard}
                         onReorderEntries={handleReorderGlossaryEntries}
                       />
                     </section>
@@ -12806,6 +12958,22 @@ export function App(): JSX.Element {
         onConfirmOverwrite={confirmGlossaryExportOverwrite}
         onExport={exportGlossaryEntry}
       />
+
+      <GlossaryExportWizardErrorBoundary>
+        <GlossaryExportWizardDialog
+          isOpen={isGlossaryExportWizardOpen}
+          entries={glossaryEntries}
+          occurrenceCountsByEntryId={glossaryExportWizardOccurrenceCounts}
+          translate={translate}
+          uiLanguage={displayLanguage}
+          opener={null}
+          onClose={handleCloseGlossaryExportWizard}
+          onSelectFolder={(req) => window.pergamum.files.selectExportFolder(req)}
+          onCheckFileExists={(req) => window.pergamum.files.checkFileExists(req)}
+          onConfirmOverwrite={confirmGlossaryExportOverwrite}
+          onExportCombined={exportCombinedGlossary}
+        />
+      </GlossaryExportWizardErrorBoundary>
 
       <DocumentMapPngExportDialog
         snapshot={documentMapPngExportSnapshot}

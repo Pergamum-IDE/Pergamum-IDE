@@ -1081,7 +1081,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
       try {
         request = parseExportHtmlCombinedRequest(rawRequest);
         if (request.targetPath) {
-          finalPath = ensureHtmlExtension(request.targetPath);
+          finalPath = path.normalize(ensureHtmlExtension(request.targetPath));
         } else {
           const owner = parentWindow(event);
           const options: SaveDialogOptions = {
@@ -1097,7 +1097,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
             return { ok: false, reason: "canceled" };
           }
 
-          finalPath = ensureHtmlExtension(selected.filePath);
+          finalPath = path.normalize(ensureHtmlExtension(selected.filePath));
         }
 
         const targetClassification =
@@ -1319,7 +1319,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
         return { ok: false, reason: "canceled" };
       }
 
-      return { ok: true, filePath: ensurePdfExtension(selected.filePath) };
+      return { ok: true, filePath: path.normalize(ensurePdfExtension(selected.filePath)) };
     }
   );
 
@@ -1338,7 +1338,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
       try {
         request = parseExportPdfCombinedRequest(rawRequest);
         if (request.targetPath) {
-          finalPath = ensurePdfExtension(request.targetPath);
+          finalPath = path.normalize(ensurePdfExtension(request.targetPath));
         } else {
           const owner = parentWindow(event);
           const options: SaveDialogOptions = {
@@ -1353,7 +1353,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           if (selected.canceled || !selected.filePath) {
             return { ok: false, reason: "canceled" };
           }
-          finalPath = ensurePdfExtension(selected.filePath);
+          finalPath = path.normalize(ensurePdfExtension(selected.filePath));
         }
 
         const targetClassification =

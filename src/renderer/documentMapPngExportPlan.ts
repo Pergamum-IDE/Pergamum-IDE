@@ -8,6 +8,7 @@
  */
 
 import { containsControlCharacter } from "../shared/fileExplorerCreate";
+import { joinExportPath } from "./exportPathHelper";
 import { sanitizeFileName } from "./exportTypes";
 
 /** Always 3-digit zero-padded page numbering, even for a single-page map. */
@@ -263,17 +264,13 @@ export function isDocumentMapPngExportButtonEnabled(
  * Joins an absolute output folder with a plain filename (no separators of
  * its own). Renderer code must not import Node's `path` module (Electron
  * security boundary), so the separator is inferred from the folder string
- * itself — same technique as `ExportConfirmationDialog.tsx`'s
- * `buildOutputPath`.
+ * itself — delegating to {@link joinExportPath}.
  */
 export function documentMapPngExportFilePath(
   outputFolder: string,
   fileName: string
 ): string {
-  const isWindowsStylePath = outputFolder.includes("\\");
-  const separator = isWindowsStylePath ? "\\" : "/";
-  const trimmedFolder = outputFolder.replace(/[\\/]+$/u, "");
-  return `${trimmedFolder}${separator}${fileName}`;
+  return joinExportPath(outputFolder, fileName);
 }
 
 export interface DocumentMapPngExportTarget {
