@@ -198,6 +198,8 @@ import {
   rewriteGlossaryDescriptionImageReferences
 } from "./glossaryImageReferenceMoveUpdate";
 import { DocumentTabBar } from "./DocumentTabBar";
+import { DEFAULT_ZOOM_FACTOR } from "../shared/zoom";
+import { StatusBarZoomControls } from "./components/StatusBarZoomControls";
 import { useTabSwitchShortcuts } from "./editorTabShortcuts";
 import { useGlobalKeyboardShortcuts } from "./globalKeyboardShortcuts";
 import { type WorkspaceTab } from "./workspaceTabs";
@@ -999,6 +1001,56 @@ export function App(): JSX.Element {
     readonly documentKey: string;
     readonly count: number;
   } | null>(null);
+  const [zoomFactor, setZoomFactor] = useState<number>(DEFAULT_ZOOM_FACTOR);
+
+  useEffect(() => {
+    let isMounted = true;
+    window.pergamum.window
+      .getZoomFactor()
+      .then((factor) => {
+        if (isMounted) {
+          setZoomFactor(factor);
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to fetch initial zoom factor:", error);
+      });
+
+    const unsubscribe = window.pergamum.window.onZoomFactorChanged((factor) => {
+      if (isMounted) {
+        setZoomFactor(factor);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    window.pergamum.window.zoomIn().catch((err) => {
+      console.warn("Failed to zoom in:", err);
+    });
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    window.pergamum.window.zoomOut().catch((err) => {
+      console.warn("Failed to zoom out:", err);
+    });
+  }, []);
+
+  const handleSetZoomFactor = useCallback((factor: number) => {
+    window.pergamum.window.setZoomFactor(factor).catch((err) => {
+      console.warn("Failed to set zoom factor:", err);
+    });
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    window.pergamum.window.resetZoom().catch((err) => {
+      console.warn("Failed to reset zoom:", err);
+    });
+  }, []);
   const soundPlaybackWarningReportedRef = useRef(false);
 
   function reportSoundPlaybackFailure(): void {
@@ -3722,7 +3774,16 @@ export function App(): JSX.Element {
         closeProject: () => closeProjectCommandRef.current(),
         openBulkTextImportDialog: () =>
           openBulkTextImportDialogCommandRef.current(),
-        toggleRecentProjects: () => toggleRecentProjectsCommandRef.current()
+        toggleRecentProjects: () => toggleRecentProjectsCommandRef.current(),
+        zoomIn: () => {
+          void window.pergamum.window.zoomIn();
+        },
+        zoomOut: () => {
+          void window.pergamum.window.zoomOut();
+        },
+        resetZoom: () => {
+          void window.pergamum.window.resetZoom();
+        }
       },
       createApplicationCommandTitles(translate)
     );
@@ -12904,6 +12965,14 @@ export function App(): JSX.Element {
               {statusBarCharacterCountText}
             </span>
           ) : null}
+          <StatusBarZoomControls
+            zoomFactor={zoomFactor}
+            zoomControlScale={zoomFactor > 0 ? 1 / zoomFactor : 1}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onResetZoom={handleResetZoom}
+            translate={translate}
+          />
         </footer>
       ) : null}
 

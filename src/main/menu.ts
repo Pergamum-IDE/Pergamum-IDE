@@ -347,12 +347,52 @@ function viewMenu(
         "CommandOrControl+Shift+D"
       ),
       { type: "separator" },
-      roleItem("resetZoom", language, "menu.actualSize"),
-      roleItem("zoomIn", language, "menu.zoomIn"),
-      roleItem("zoomOut", language, "menu.zoomOut"),
+      commandMenuItem(
+        applicationCommandIds.zoomIn,
+        language,
+        "menu.zoomIn",
+        options,
+        "CommandOrControl+="
+      ),
+      zoomInPlusAliasMenuItem(options),
+      commandMenuItem(
+        applicationCommandIds.zoomOut,
+        language,
+        "menu.zoomOut",
+        options,
+        "CommandOrControl+-"
+      ),
+      commandMenuItem(
+        applicationCommandIds.resetZoom,
+        language,
+        "menu.actualSize",
+        options,
+        "CommandOrControl+0"
+      ),
       { type: "separator" },
       roleItem("togglefullscreen", language, "menu.toggleFullScreen")
     ]
+  };
+}
+
+/**
+ * Hidden accelerator alias for Zoom In with CommandOrControl+Plus.
+ */
+function zoomInPlusAliasMenuItem(
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
+  return {
+    label: "Zoom In (+)",
+    accelerator: "CommandOrControl+Plus",
+    visible: false,
+    acceleratorWorksWhenHidden: true,
+    click: () => {
+      sendApplicationMenuCommand(
+        options.getMainWindow,
+        applicationCommandIds.zoomIn,
+        options.debugLogger
+      );
+    }
   };
 }
 

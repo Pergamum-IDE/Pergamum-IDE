@@ -24,6 +24,7 @@
  */
 
 import { isUuidv7 } from "./uuidv7";
+import { restoreZoomFactor } from "./zoom";
 
 export const SESSION_SCHEMA_VERSION = 1;
 export const SESSION_MANIFEST_SCHEMA_VERSION = 1;
@@ -67,6 +68,8 @@ export interface WindowSessionState {
    */
   readonly normalBounds: WindowSessionBounds;
   readonly mode: WindowSessionMode;
+  /** #589 Slice 3: Persisted zoom factor (0.5 to 2.0). Default is 1.0. */
+  readonly zoomFactor?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +325,8 @@ export function parseWindowSessionState(
     return null;
   }
 
+  const zoomFactor = restoreZoomFactor(value.zoomFactor);
+
   return {
     normalBounds: {
       x: normalBounds.x,
@@ -329,7 +334,8 @@ export function parseWindowSessionState(
       width: normalBounds.width,
       height: normalBounds.height
     },
-    mode: mode as WindowSessionMode
+    mode: mode as WindowSessionMode,
+    zoomFactor
   };
 }
 

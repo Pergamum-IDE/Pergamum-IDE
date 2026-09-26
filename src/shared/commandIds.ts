@@ -10,7 +10,10 @@ export const applicationCommandIds = {
   openBulkTextImportDialog: defineCommandId(
     "import.text.bulk.openDialog"
   ),
-  toggleRecentProjects: defineCommandId("workspace.recentProjects.toggle")
+  toggleRecentProjects: defineCommandId("workspace.recentProjects.toggle"),
+  zoomIn: defineCommandId("app.zoom.in"),
+  zoomOut: defineCommandId("app.zoom.out"),
+  resetZoom: defineCommandId("app.zoom.reset")
 } as const;
 
 export const commandPaletteCommandIds = {
@@ -113,7 +116,10 @@ export const applicationMenuCommandIds = [
   glossaryTabCommandIds.manageTags,
   glossaryTabCommandIds.manageEntries,
   searchSelectionShortcutCommandIds.openProjectSearchFromSelection,
-  searchSelectionShortcutCommandIds.openProjectReplaceFromSelection
+  searchSelectionShortcutCommandIds.openProjectReplaceFromSelection,
+  applicationCommandIds.zoomIn,
+  applicationCommandIds.zoomOut,
+  applicationCommandIds.resetZoom
 ] as const;
 
 export type ApplicationMenuCommandId =

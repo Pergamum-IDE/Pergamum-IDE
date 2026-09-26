@@ -40,6 +40,13 @@ import {
 import { registerSettingsIpc } from "./settingsIpc";
 import { registerFontCacheIpc } from "./fontCacheIpc";
 import { SESSION_CHANNELS, WINDOW_CHANNELS, type ColdStartRestorePayload } from "../shared/api";
+import {
+  DEFAULT_ZOOM_FACTOR,
+  getNextZoomInFactor,
+  getNextZoomOutFactor,
+  normalizeZoomFactor,
+  restoreZoomFactor
+} from "../shared/zoom";
 import type { AppPlatform } from "../shared/platform";
 import type { WindowSessionState } from "../shared/session";
 import { selectRestoreSession } from "../shared/sessionRestore";
@@ -159,10 +166,12 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
   const displays: DisplayWorkAreaLike[] = screen
     .getAllDisplays()
     .map((display) => ({ workArea: display.workArea }));
-  const placement = resolveWindowPlacement(
+  const coldStartSessionState =
     isColdStartWindow && coldStartPayload
       ? coldStartWindowSessionState(coldStartPayload)
-      : null,
+      : null;
+  const placement = resolveWindowPlacement(
+    coldStartSessionState,
     displays
   );
 
@@ -179,6 +188,12 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
       sandbox: true
     }
   });
+
+  const restoredZoomFactor =
+    coldStartSessionState?.zoomFactor !== undefined
+      ? restoreZoomFactor(coldStartSessionState.zoomFactor)
+      : DEFAULT_ZOOM_FACTOR;
+  mainWindow.webContents.setZoomFactor(restoredZoomFactor);
 
   if (isColdStartWindow) {
     coldStartWebContentsId = mainWindow.webContents.id;
@@ -398,6 +413,73 @@ app.whenReady().then(async () => {
       return false;
     }
     return window.isFullScreen();
+  });
+
+  function applyZoomFactorToWindow(
+    window: BrowserWindow,
+    factor: number
+  ): number {
+    const normalized = normalizeZoomFactor(factor);
+    window.webContents.setZoomFactor(normalized);
+    if (!window.isDestroyed()) {
+      window.webContents.send(WINDOW_CHANNELS.onZoomFactorChanged, normalized);
+    }
+    sessionStoreController?.scheduleWindowSave();
+    return normalized;
+  }
+
+  ipcMain.handle(WINDOW_CHANNELS.getZoomFactor, (event): number => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed()) {
+      return DEFAULT_ZOOM_FACTOR;
+    }
+    return normalizeZoomFactor(window.webContents.getZoomFactor());
+  });
+
+  ipcMain.handle(
+    WINDOW_CHANNELS.setZoomFactor,
+    (event, payload: unknown): number => {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      if (!window || window.isDestroyed()) {
+        return DEFAULT_ZOOM_FACTOR;
+      }
+      const rawFactor =
+        typeof payload === "object" &&
+        payload !== null &&
+        "factor" in payload &&
+        typeof (payload as { factor: unknown }).factor === "number"
+          ? (payload as { factor: number }).factor
+          : DEFAULT_ZOOM_FACTOR;
+      return applyZoomFactorToWindow(window, rawFactor);
+    }
+  );
+
+  ipcMain.handle(WINDOW_CHANNELS.zoomIn, (event): number => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed()) {
+      return DEFAULT_ZOOM_FACTOR;
+    }
+    const current = window.webContents.getZoomFactor();
+    const next = getNextZoomInFactor(current);
+    return applyZoomFactorToWindow(window, next);
+  });
+
+  ipcMain.handle(WINDOW_CHANNELS.zoomOut, (event): number => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed()) {
+      return DEFAULT_ZOOM_FACTOR;
+    }
+    const current = window.webContents.getZoomFactor();
+    const next = getNextZoomOutFactor(current);
+    return applyZoomFactorToWindow(window, next);
+  });
+
+  ipcMain.handle(WINDOW_CHANNELS.resetZoom, (event): number => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed()) {
+      return DEFAULT_ZOOM_FACTOR;
+    }
+    return applyZoomFactorToWindow(window, DEFAULT_ZOOM_FACTOR);
   });
 
   const sessionStore: SessionStore = createSessionStore({

@@ -21,6 +21,7 @@ import type {
   WindowSessionMode,
   WindowSessionState
 } from "../shared/session";
+import { DEFAULT_ZOOM_FACTOR, normalizeZoomFactor } from "../shared/zoom";
 
 /** The subset of Electron's `BrowserWindow` this needs — kept tiny so it
  *  is trivial to fake in tests. */
@@ -34,6 +35,9 @@ export interface WindowSessionSource {
     y: number;
     width: number;
     height: number;
+  };
+  webContents?: {
+    getZoomFactor(): number;
   };
 }
 
@@ -104,8 +108,18 @@ export function captureWindowSessionState(
     return null;
   }
 
+  let zoomFactor = DEFAULT_ZOOM_FACTOR;
+  if (source.webContents && typeof source.webContents.getZoomFactor === "function") {
+    try {
+      zoomFactor = normalizeZoomFactor(source.webContents.getZoomFactor());
+    } catch {
+      zoomFactor = DEFAULT_ZOOM_FACTOR;
+    }
+  }
+
   return {
     normalBounds,
-    mode: resolveMode(source)
+    mode: resolveMode(source),
+    zoomFactor
   };
 }

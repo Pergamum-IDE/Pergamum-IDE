@@ -511,6 +511,46 @@ describe("application menu", () => {
     );
   });
 
+  it("adds Zoom In, Zoom Out, and Reset Zoom to the View menu with standard accelerators", () => {
+    const viewItems = viewMenuItems("win32");
+
+    const zoomInItem = viewItems.find(
+      (candidate) => candidate.id === applicationCommandIds.zoomIn && candidate.visible !== false
+    );
+    const zoomOutItem = viewItems.find(
+      (candidate) => candidate.id === applicationCommandIds.zoomOut
+    );
+    const resetZoomItem = viewItems.find(
+      (candidate) => candidate.id === applicationCommandIds.resetZoom
+    );
+
+    expect(zoomInItem?.accelerator).toBe("CommandOrControl+=");
+    expect(zoomOutItem?.accelerator).toBe("CommandOrControl+-");
+    expect(resetZoomItem?.accelerator).toBe("CommandOrControl+0");
+  });
+
+  it("binds CommandOrControl+Plus to Zoom In as a hidden alias item in the View menu", () => {
+    const viewItems = viewMenuItems("win32");
+    const plusItem = viewItems.find(
+      (candidate) => candidate.accelerator === "CommandOrControl+Plus"
+    );
+
+    expect(plusItem).toBeTruthy();
+    expect(plusItem?.visible).toBe(false);
+    expect(plusItem?.acceleratorWorksWhenHidden).toBe(true);
+
+    const { window, send } = menuWindowMock();
+
+    viewMenuItems("win32", { getMainWindow: () => window })
+      .find((candidate) => candidate.accelerator === "CommandOrControl+Plus")
+      ?.click?.({} as never, null as never, {} as never);
+
+    expect(send).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.command,
+      applicationCommandIds.zoomIn
+    );
+  });
+
   it("binds F12 to the Save As command as a hidden item in the File menu", () => {
     const fileItems = fileMenuItems("win32");
     const f12Item = fileItems.find((candidate) => candidate.accelerator === "F12");

@@ -53,7 +53,10 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openProject: () => undefined,
       closeProject: () => undefined,
       openBulkTextImportDialog: () => undefined,
-      toggleRecentProjects: () => undefined
+      toggleRecentProjects: () => undefined,
+      zoomIn: () => undefined,
+      zoomOut: () => undefined,
+      resetZoom: () => undefined
     },
     {
       openAbout: "About Pergamum",
@@ -70,7 +73,13 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openBulkTextImportDialog: "Bulk Import Text Files",
       openBulkTextImportDialogDescription: "Bulk Import Text Files",
       toggleRecentProjects: "Toggle Recent Projects",
-      toggleRecentProjectsDescription: "Toggle Recent Projects"
+      toggleRecentProjectsDescription: "Toggle Recent Projects",
+      zoomIn: "Zoom In",
+      zoomInDescription: "Zoom In",
+      zoomOut: "Zoom Out",
+      zoomOutDescription: "Zoom Out",
+      resetZoom: "Reset Zoom",
+      resetZoomDescription: "Reset Zoom"
     }
   );
   registerEditorCommands(
@@ -345,6 +354,12 @@ describe("command domain taxonomy", () => {
       (commandId) => firstCommandIdSegment(commandId) === "app"
     );
 
-    expect(registeredAppCommandIds).toEqual(["app.about.open", "app.quit"]);
+    expect(registeredAppCommandIds).toEqual([
+      "app.about.open",
+      "app.quit",
+      "app.zoom.in",
+      "app.zoom.out",
+      "app.zoom.reset"
+    ]);
   });
 });
