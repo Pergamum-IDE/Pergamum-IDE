@@ -7,6 +7,7 @@ import {
   setGlossaryAtomBoundaryStartPolicy
 } from "../../src/shared/glossaryAtomFlags";
 import {
+  createGlossaryDescriptionEditorId,
   createUntitledEditorId,
   type EditorId
 } from "../../src/shared/editorId";
@@ -16,7 +17,10 @@ import {
 } from "../../src/renderer/currentDocument";
 import { analyzeLineEndings } from "../../src/renderer/lineEndingTracking";
 import { buildLineEndingBreakSet } from "../../src/renderer/editorLineEndingField";
-import { createMarkdownCurrentEditor } from "../../src/renderer/currentEditor";
+import {
+  createGlossaryDescriptionCurrentEditor,
+  createMarkdownCurrentEditor
+} from "../../src/renderer/currentEditor";
 import type { OpenDocumentsState } from "../../src/renderer/openDocuments";
 import {
   findGlossaryEntryOccurrences,
@@ -352,6 +356,41 @@ describe("resolveGlossaryOccurrenceTrackingSession", () => {
       kind: "resolved",
       session: activeSession,
       targetContent: "メイドが来た。"
+    });
+  });
+
+  it("resolves with the draft description content when targeting a glossaryDescription editor", async () => {
+    const descriptionEditorId = createGlossaryDescriptionEditorId(maidEntryId);
+    const descriptionSession: GlossaryOccurrenceTrackingActiveState = {
+      kind: "active",
+      entryId: maidEntryId,
+      entryLabel: "メイド",
+      entrySnapshot: maidEntry,
+      targetMarkdownEditorId: descriptionEditorId,
+      ranges: [{ start: 0, end: 3 }],
+      currentIndex: 0
+    };
+    const descriptionEditor = createGlossaryDescriptionCurrentEditor(maidEntry);
+    descriptionEditor.draft.description = "ここにはメイドが再登場する。";
+
+    const openState: OpenDocumentsState = {
+      documents: [{ id: descriptionEditorId, editor: descriptionEditor }],
+      activeDocumentId: descriptionEditorId,
+      nextUntitledId: 1
+    };
+
+    const result = await resolveGlossaryOccurrenceTrackingSession(
+      descriptionSession,
+      {
+        openDocumentsState: openState,
+        getGlossaryEntryById: async () => maidEntry
+      }
+    );
+
+    expect(result).toEqual({
+      kind: "resolved",
+      session: descriptionSession,
+      targetContent: "ここにはメイドが再登場する。"
     });
   });
 });
