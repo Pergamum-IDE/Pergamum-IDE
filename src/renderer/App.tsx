@@ -2947,6 +2947,8 @@ export function App(): JSX.Element {
       Boolean(activeMarkdownDocument)) ||
     // #573 Slice 4: Ctrl+S saves a glossary Description tab's draft.
     isGlossaryDescriptionEditorActive;
+  const canSaveCurrentDocumentToolbar =
+    canSave && isDirty && !isReadOnlyProjectOwnedEditor;
   const canSaveAs =
     !isEditorAreaSpecialTabActive &&
     currentEditor?.kind === "markdown" &&
@@ -12404,6 +12406,10 @@ export function App(): JSX.Element {
         }
         onOpenCommandPalette={openCommandPaletteWithPrefix}
         isGlossaryDescription={activeDocument?.editor.kind === "glossaryDescription"}
+        canSaveCurrentDocument={canSaveCurrentDocumentToolbar}
+        onSaveCurrentDocument={() => {
+          void saveFile();
+        }}
         isFullscreen={isFullscreen}
         onToggleFullscreen={handleToggleFullscreen}
         translate={translate}

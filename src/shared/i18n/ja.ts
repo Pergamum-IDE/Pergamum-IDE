@@ -1914,6 +1914,7 @@ export const jaTranslations = {
   "toolbar.ruby": "ルビ",
   "toolbar.settings": "設定",
   "toolbar.strikethrough": "取消線",
+  "toolbar.save": "保存",
   "toolbar.tableGridLabel": "{cols} x {rows}",
   "toolbar.togglePreview": "プレビューを切り替え",
   "toolbar.toggleFullscreen": "フルスクリーン切り替え",

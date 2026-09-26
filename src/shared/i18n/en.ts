@@ -1915,6 +1915,7 @@ export const enTranslations = {
   "toolbar.ruby": "Ruby",
   "toolbar.settings": "Settings",
   "toolbar.strikethrough": "Strikethrough",
+  "toolbar.save": "Save",
   "toolbar.tableGridLabel": "{cols} x {rows}",
   "toolbar.togglePreview": "Toggle preview",
   "toolbar.toggleFullscreen": "Toggle Full Screen",

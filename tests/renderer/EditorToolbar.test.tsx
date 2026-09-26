@@ -187,6 +187,8 @@ function defaultProps(
     isCommandPaletteOpen: false,
     commandPaletteLaunchAnimationDurationMs: 200,
     onOpenCommandPalette: vi.fn(),
+    canSaveCurrentDocument: true,
+    onSaveCurrentDocument: vi.fn(),
     isFullscreen: false,
     onToggleFullscreen: vi.fn(),
     translate: mockTranslate,
@@ -218,6 +220,7 @@ function previewRendererTrigger(): HTMLButtonElement {
 }
 
 const BUTTON_ORDER = [
+  "保存",
   "見出しを挿入",
   "太字",
   "斜体",
@@ -253,14 +256,14 @@ describe("EditorToolbar", () => {
     renderToolbar();
     expect(
       container.querySelectorAll(".editorToolbarSeparator")
-    ).toHaveLength(8);
+    ).toHaveLength(9);
   });
 
   it("renders the Preview renderer dropdown immediately to the right of the Preview toggle without an intervening separator", () => {
     renderToolbar();
 
     const toolbar = container.querySelector(".editorToolbar")!;
-    const previewButton = toolbarButtons()[16];
+    const previewButton = toolbarButtons()[17];
     const trigger = previewRendererTrigger();
     const previewGroup = previewButton.closest(".editorToolbarGroup")!;
     const groupItems = Array.from(previewGroup.children) as HTMLElement[];
@@ -367,7 +370,7 @@ describe("EditorToolbar", () => {
     expect(trigger.disabled).toBe(true);
     expect(trigger.textContent).toContain("Markdown");
 
-    const previewToggleBtn = toolbarButtons()[16];
+    const previewToggleBtn = toolbarButtons()[17];
     expect(previewToggleBtn.disabled).toBe(false);
     act(() => previewToggleBtn.click());
     expect(props.onTogglePreview).toHaveBeenCalledOnce();
@@ -447,7 +450,7 @@ describe("EditorToolbar", () => {
     expect(onSelectPreviewRenderer).toHaveBeenCalledWith("narouHorizontal");
   });
 
-  it("renders the Command Box before the Heading button in the centered toolbar flow", () => {
+  it("renders the Command Box before the Save button and Heading button in the centered toolbar flow", () => {
     renderToolbar();
     const toolbar = container.querySelector(".editorToolbar")!;
     const children = Array.from(toolbar.children) as HTMLElement[];
@@ -459,6 +462,12 @@ describe("EditorToolbar", () => {
     expect(children[1].classList.contains("editorToolbarSeparator")).toBe(true);
     expect(
       children[2]
+        .querySelector("button.editorToolbarButton")
+        ?.getAttribute("aria-label")
+    ).toBe("保存");
+    expect(children[3].classList.contains("editorToolbarSeparator")).toBe(true);
+    expect(
+      children[4]
         .querySelector("button.editorToolbarButton")
         ?.getAttribute("aria-label")
     ).toBe("見出しを挿入");
@@ -708,6 +717,7 @@ describe("EditorToolbar", () => {
     renderToolbar({ canUseMarkdownToolbarCommands: false });
     const buttons = toolbarButtons();
     const [
+      save,
       heading,
       bold,
       italic,
@@ -746,33 +756,33 @@ describe("EditorToolbar", () => {
   it("disables Outdent/Indent/Ruby/Emphasis when hasEditableTextLikeDocument is false, independent of the Markdown gate", () => {
     renderToolbar({ hasEditableTextLikeDocument: false });
     const buttons = toolbarButtons();
-    const outdent = buttons[7];
-    const indent = buttons[8];
-    const ruby = buttons[14];
-    const emphasis = buttons[15];
+    const outdent = buttons[8];
+    const indent = buttons[9];
+    const ruby = buttons[15];
+    const emphasis = buttons[16];
     expect(outdent.disabled).toBe(true);
     expect(indent.disabled).toBe(true);
     expect(ruby.disabled).toBe(true);
     expect(emphasis.disabled).toBe(true);
     // Markdown-specific commands stay enabled (still passed as true here).
-    expect(buttons[0].disabled).toBe(false);
-    expect(buttons[4].disabled).toBe(false);
+    expect(buttons[1].disabled).toBe(false);
+    expect(buttons[5].disabled).toBe(false);
   });
 
   it("disables Image when canInsertImage is false, independent of the other gates", () => {
     renderToolbar({ canInsertImage: false });
     const buttons = toolbarButtons();
-    const image = buttons[12];
+    const image = buttons[13];
     expect(image.disabled).toBe(true);
     // Markdown-specific commands and Table stay enabled (still passed as
     // true here).
-    expect(buttons[0].disabled).toBe(false);
-    expect(buttons[13].disabled).toBe(false);
+    expect(buttons[1].disabled).toBe(false);
+    expect(buttons[14].disabled).toBe(false);
   });
 
   it("Bold / Italic / Strikethrough buttons call their handlers when clicked", () => {
     const props = renderToolbar();
-    const [, bold, italic, strikethrough] = toolbarButtons();
+    const [, , bold, italic, strikethrough] = toolbarButtons();
 
     act(() => bold.click());
     expect(props.onApplyBold).toHaveBeenCalledOnce();
@@ -788,13 +798,13 @@ describe("EditorToolbar", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
 
-    act(() => buttons[4].click());
+    act(() => buttons[5].click());
     expect(props.onApplyList).toHaveBeenCalledWith("unordered");
 
-    act(() => buttons[5].click());
+    act(() => buttons[6].click());
     expect(props.onApplyList).toHaveBeenCalledWith("ordered");
 
-    act(() => buttons[6].click());
+    act(() => buttons[7].click());
     expect(props.onApplyList).toHaveBeenCalledWith("checklist");
   });
 
@@ -802,17 +812,17 @@ describe("EditorToolbar", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
 
-    act(() => buttons[7].click());
+    act(() => buttons[8].click());
     expect(props.onOutdent).toHaveBeenCalledOnce();
 
-    act(() => buttons[8].click());
+    act(() => buttons[9].click());
     expect(props.onIndent).toHaveBeenCalledOnce();
   });
 
   it("Link button calls onOpenLinkDialog with the button element", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const link = buttons[9];
+    const link = buttons[10];
 
     act(() => link.click());
     expect(props.onOpenLinkDialog).toHaveBeenCalledWith(link);
@@ -822,7 +832,7 @@ describe("EditorToolbar", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
 
-    act(() => buttons[10].click());
+    act(() => buttons[11].click());
     expect(props.onInsertHorizontalRule).toHaveBeenCalledOnce();
   });
 
@@ -830,14 +840,14 @@ describe("EditorToolbar", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
 
-    act(() => buttons[11].click());
+    act(() => buttons[12].click());
     expect(props.onInsertCodeBlock).toHaveBeenCalledOnce();
   });
 
   it("Image button calls onOpenImageInsertion with the button element", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const image = buttons[12];
+    const image = buttons[13];
 
     act(() => image.click());
     expect(props.onOpenImageInsertion).toHaveBeenCalledWith(image);
@@ -846,7 +856,7 @@ describe("EditorToolbar", () => {
   it("Ruby button calls onOpenRubyDialog with the button element", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const ruby = buttons[14];
+    const ruby = buttons[15];
 
     act(() => ruby.click());
     expect(props.onOpenRubyDialog).toHaveBeenCalledWith(ruby);
@@ -855,7 +865,7 @@ describe("EditorToolbar", () => {
   it("Emphasis button calls onOpenEmphasisDialog with the button element", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const emphasis = buttons[15];
+    const emphasis = buttons[16];
 
     act(() => emphasis.click());
     expect(props.onOpenEmphasisDialog).toHaveBeenCalledWith(emphasis);
@@ -864,7 +874,7 @@ describe("EditorToolbar", () => {
   it("Preview button calls onTogglePreview when clicked", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const preview = buttons[16];
+    const preview = buttons[17];
 
     act(() => preview.click());
     expect(props.onTogglePreview).toHaveBeenCalledOnce();
@@ -872,23 +882,23 @@ describe("EditorToolbar", () => {
 
   it("Preview button reflects isPreviewVisible via aria-pressed", () => {
     renderToolbar({ isPreviewVisible: true });
-    expect(toolbarButtons()[16].getAttribute("aria-pressed")).toBe("true");
+    expect(toolbarButtons()[17].getAttribute("aria-pressed")).toBe("true");
 
     renderToolbar({ isPreviewVisible: false });
-    expect(toolbarButtons()[16].getAttribute("aria-pressed")).toBe("false");
+    expect(toolbarButtons()[17].getAttribute("aria-pressed")).toBe("false");
   });
 
   it("Preview button is disabled when canTogglePreview is false, independent of other gates", () => {
     renderToolbar({ canTogglePreview: false });
     const buttons = toolbarButtons();
-    expect(buttons[16].disabled).toBe(true);
+    expect(buttons[17].disabled).toBe(true);
     // Other commands stay enabled (still passed as true here).
-    expect(buttons[0].disabled).toBe(false);
+    expect(buttons[1].disabled).toBe(false);
   });
 
   it("Heading button calls onToggleHeadingSelector when clicked", () => {
     const props = renderToolbar();
-    const [heading] = toolbarButtons();
+    const [, heading] = toolbarButtons();
 
     act(() => heading.click());
     expect(props.onToggleHeadingSelector).toHaveBeenCalledOnce();
@@ -923,7 +933,7 @@ describe("EditorToolbar", () => {
     renderToolbar({ canInsertTable: false });
 
     const buttons = toolbarButtons();
-    const table = buttons[13];
+    const table = buttons[14];
     expect(table.disabled).toBe(true);
     expect(table.getAttribute("aria-label")).toBe("表を挿入");
     expect(table.getAttribute("title")).toBe("表を挿入");
@@ -935,7 +945,7 @@ describe("EditorToolbar", () => {
     renderToolbar({ canInsertTable: true, onInsertTable });
 
     const buttons = toolbarButtons();
-    const table = buttons[13];
+    const table = buttons[14];
     expect(table.disabled).toBe(false);
 
     // Popover initially not present
@@ -1111,6 +1121,39 @@ describe("EditorToolbar callout dropdown (#570)", () => {
 
     renderToolbar({ canInsertCallout: false });
     expect(calloutOptions()).toHaveLength(0);
+  });
+
+  describe("Save toolbar button", () => {
+    it("renders as enabled when canSaveCurrentDocument is true, and calls onSaveCurrentDocument when clicked", () => {
+      const { onSaveCurrentDocument } = renderToolbar({
+        canSaveCurrentDocument: true
+      });
+      const button = container.querySelector(
+        'button[title="保存"]'
+      ) as HTMLButtonElement;
+
+      expect(button).not.toBeNull();
+      expect(button.disabled).toBe(false);
+      expect(button.getAttribute("aria-label")).toBe("保存");
+
+      act(() => clickWithPointer(button));
+      expect(onSaveCurrentDocument).toHaveBeenCalledTimes(1);
+    });
+
+    it("renders as disabled when canSaveCurrentDocument is false", () => {
+      const { onSaveCurrentDocument } = renderToolbar({
+        canSaveCurrentDocument: false
+      });
+      const button = container.querySelector(
+        'button[title="保存"]'
+      ) as HTMLButtonElement;
+
+      expect(button).not.toBeNull();
+      expect(button.disabled).toBe(true);
+
+      act(() => clickWithPointer(button));
+      expect(onSaveCurrentDocument).not.toHaveBeenCalled();
+    });
   });
 
   describe("fullscreen toggle button", () => {
