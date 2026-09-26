@@ -15,6 +15,9 @@ const translate: Translate = (key, params) => {
   if (key === "glossaryExportWizard.selectedCount" && params) {
     return `Export targets: ${params.selectedCount} / ${params.totalCount}`;
   }
+  if (params && typeof params.path === "string") {
+    return `${key}:${params.path}`;
+  }
   return key;
 };
 
@@ -426,7 +429,7 @@ describe("GlossaryExportWizardDialog (#581 Slice 1 blocker fix)", () => {
     });
 
     const tocCheckbox = container.querySelector(
-      "input.glossaryExportWizardCheckbox"
+      "input.glossaryExportWizardTocToggleInput"
     ) as HTMLInputElement;
     const selects = Array.from(container.querySelectorAll<HTMLSelectElement>("select.glossaryExportWizardSelect"));
     const tocSelect = selects.find((s) => s.id.endsWith("-toc-position")) ?? selects[0];
@@ -501,7 +504,7 @@ describe("GlossaryExportWizardDialog (#581 Slice 1 blocker fix)", () => {
 
     // Enable TOC
     const tocCheckbox = container.querySelector(
-      "input.glossaryExportWizardCheckbox"
+      "input.glossaryExportWizardTocToggleInput"
     ) as HTMLInputElement;
     act(() => {
       tocCheckbox.click();
@@ -593,6 +596,77 @@ describe("GlossaryExportWizardDialog (#581 Slice 1 blocker fix)", () => {
         fileName: "glossary-export.pdf"
       })
     );
+  });
+
+  it("normalizes Windows-style folder paths without creating mixed path separators in export path", async () => {
+    const onSelectFolder = vi.fn().mockResolvedValue({ ok: true, folderPath: "C:\\Users\\technerd\\Documents" });
+    const onCheckFileExists = vi.fn().mockResolvedValue({ exists: false });
+    const onExportCombined = vi.fn().mockResolvedValue({
+      ok: true,
+      outputPath: "C:\\Users\\technerd\\Documents\\迷子たちと千年領主.pdf",
+      warningCount: 0
+    });
+
+    renderDialog({
+      onSelectFolder,
+      onCheckFileExists,
+      onExportCombined
+    });
+
+    // Switch format to PDF in Step 1
+    const select = container.querySelector("select.glossaryExportWizardSelect") as HTMLSelectElement;
+    act(() => {
+      select.value = "pdf";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    // Navigate to Step 2
+    const nextBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "glossaryExportWizard.nextButton"
+    )!;
+    act(() => {
+      nextBtn.click();
+    });
+
+    // Set Windows output folder & base filename
+    const textInputs = Array.from(
+      container.querySelectorAll<HTMLInputElement>("input.glossaryExportWizardTextInput")
+    );
+    const folderInput = textInputs.find((input) => input.id.endsWith("-output-folder")) ?? textInputs[0];
+    const nameInput = textInputs.find((input) => input.id.endsWith("-base-file-name")) ?? textInputs[1];
+    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    )!.set!;
+
+    act(() => {
+      nativeInputValueSetter.call(folderInput, "C:\\Users\\technerd\\Documents");
+      folderInput.dispatchEvent(new Event("input", { bubbles: true }));
+      folderInput.dispatchEvent(new Event("change", { bubbles: true }));
+      nativeInputValueSetter.call(nameInput, "迷子たちと千年領主");
+      nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+      nameInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const exportBtn = Array.from(container.querySelectorAll("button")).find(
+      (b) => b.textContent === "export.wizard.executeExport"
+    )!;
+
+    await act(async () => {
+      exportBtn.click();
+    });
+
+    expect(onExportCombined).toHaveBeenCalledWith(
+      expect.objectContaining({
+        format: "pdf",
+        outputFilePath: "C:\\Users\\technerd\\Documents\\迷子たちと千年領主.pdf",
+        fileName: "迷子たちと千年領主.pdf"
+      })
+    );
+
+    // Verify completion status path displayed does not contain mixed slashes
+    expect(container.textContent).toContain("C:\\Users\\technerd\\Documents\\迷子たちと千年領主.pdf");
+    expect(container.textContent).not.toContain("C:\\Users\\technerd\\Documents/迷子たちと千年領主.pdf");
   });
 });
 

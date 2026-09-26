@@ -33,6 +33,7 @@ import {
   type PdfPageNumberSettings
 } from "../../shared/pdfPageNumbering";
 import { DEFAULT_IMAGE_ASSET_FOLDER_NAME } from "../exportTypes";
+import { joinExportPath } from "../exportPathHelper";
 import { validateDocumentMapPngBaseFileName } from "../documentMapPngExportPlan";
 import { GlossaryTagChip } from "../GlossaryTagChip";
 import {
@@ -310,8 +311,7 @@ export function GlossaryExportWizardDialog({
       const fileName = baseFileName.toLowerCase().endsWith(ext)
         ? baseFileName
         : `${baseFileName}${ext}`;
-      const normalizedFolder = outputFolder.trim().replace(/[/\\]+$/, "");
-      const outputFilePath = `${normalizedFolder}/${fileName}`;
+      const outputFilePath = joinExportPath(outputFolder, fileName);
 
       if (onCheckFileExists) {
         const check = await onCheckFileExists({ filePath: outputFilePath });
@@ -848,13 +848,18 @@ export function GlossaryExportWizardDialog({
                 {/* TOC Option Row (1-line) */}
                 <div className="glossaryExportWizardOptionRow glossaryExportWizardTocRow">
                   <label className="glossaryExportWizardTocToggleLabel">
-                    <input
-                      type="checkbox"
-                      className="glossaryExportWizardCheckbox"
-                      checked={includeToc}
-                      onChange={(e) => setIncludeToc(e.target.checked)}
-                    />
                     <span>{translate("glossaryExportWizard.includeToc")}</span>
+                    <span className="exportConfirmationDialogIncludeSwitch">
+                      <input
+                        type="checkbox"
+                        className="exportConfirmationDialogIncludeInput glossaryExportWizardTocToggleInput"
+                        checked={includeToc}
+                        onChange={(e) => setIncludeToc(e.target.checked)}
+                      />
+                      <span className="exportConfirmationDialogIncludeTrack">
+                        <span className="exportConfirmationDialogIncludeThumb" />
+                      </span>
+                    </span>
                   </label>
                   <div className="glossaryExportWizardTocPositionBlock">
                     <label

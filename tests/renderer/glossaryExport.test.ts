@@ -285,6 +285,8 @@ describe("assembling the HTML document (#574 Slice 6)", () => {
       '<tr><td>ジャン</td><td class="glossary-export__count">12</td></tr>'
     );
     expect(html).toContain('<td class="glossary-export__count">15</td>');
+    expect(html).not.toContain("文書 2 件");
+    expect(html).not.toContain("プロジェクト内の文書");
     expect(html).toContain('<section class="glossary-export__description">');
     expect(html).toContain("<p>本文</p>");
     expect(html).toContain(".markdown-callout");

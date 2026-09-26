@@ -170,7 +170,6 @@ function occurrencesSectionHtml(
     `</tbody>`,
     `<tfoot><tr><th scope="row">${escapeHtmlText(labels.total)}</th><td class="glossary-export__count">${occurrences.total}</td></tr></tfoot>`,
     `</table>`,
-    `<p class="glossary-export__muted">${escapeHtmlText(labels.occurrenceScope)}</p>`,
     labels.occurrenceSkipped
       ? `<p class="glossary-export__muted">${escapeHtmlText(labels.occurrenceSkipped)}</p>`
       : "",
