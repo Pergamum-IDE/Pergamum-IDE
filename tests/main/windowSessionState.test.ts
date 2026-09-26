@@ -11,6 +11,7 @@ function fakeWindow(
     maximized: boolean;
     fullScreen: boolean;
     normalBounds: { x: number; y: number; width: number; height: number };
+    zoomFactor: number;
   }> = {}
 ): WindowSessionSource {
   const state = {
@@ -19,6 +20,7 @@ function fakeWindow(
     maximized: false,
     fullScreen: false,
     normalBounds: { x: 100, y: 120, width: 1024, height: 768 },
+    zoomFactor: 1.0,
     ...overrides
   };
 
@@ -27,29 +29,35 @@ function fakeWindow(
     isMinimized: () => state.minimized,
     isMaximized: () => state.maximized,
     isFullScreen: () => state.fullScreen,
-    getNormalBounds: () => state.normalBounds
+    getNormalBounds: () => state.normalBounds,
+    webContents: {
+      getZoomFactor: () => state.zoomFactor
+    }
   };
 }
 
 describe("captureWindowSessionState (#272)", () => {
-  it("captures a normal window", () => {
+  it("captures a normal window and default zoomFactor", () => {
     expect(captureWindowSessionState(fakeWindow())).toEqual({
       normalBounds: { x: 100, y: 120, width: 1024, height: 768 },
-      mode: "normal"
+      mode: "normal",
+      zoomFactor: 1.0
     });
   });
 
-  it("captures maximized mode while keeping the normal (restore-down) bounds", () => {
+  it("captures maximized mode while keeping the normal (restore-down) bounds and zoomFactor", () => {
     expect(
       captureWindowSessionState(
         fakeWindow({
           maximized: true,
-          normalBounds: { x: 40, y: 50, width: 900, height: 640 }
+          normalBounds: { x: 40, y: 50, width: 900, height: 640 },
+          zoomFactor: 1.25
         })
       )
     ).toEqual({
       normalBounds: { x: 40, y: 50, width: 900, height: 640 },
-      mode: "maximized"
+      mode: "maximized",
+      zoomFactor: 1.25
     });
   });
 
@@ -58,7 +66,7 @@ describe("captureWindowSessionState (#272)", () => {
       captureWindowSessionState(
         fakeWindow({ maximized: true, fullScreen: true })
       )
-    ).toMatchObject({ mode: "fullscreen" });
+    ).toMatchObject({ mode: "fullscreen", zoomFactor: 1.0 });
   });
 
   it("never persists minimized as a mode — reports normal with the normal bounds", () => {
@@ -71,8 +79,19 @@ describe("captureWindowSessionState (#272)", () => {
       )
     ).toEqual({
       normalBounds: { x: 10, y: 10, width: 800, height: 600 },
-      mode: "normal"
+      mode: "normal",
+      zoomFactor: 1.0
     });
+  });
+
+  it("normalizes and clamps captured zoomFactor", () => {
+    expect(
+      captureWindowSessionState(fakeWindow({ zoomFactor: 1.23 }))
+    ).toMatchObject({ zoomFactor: 1.25 });
+
+    expect(
+      captureWindowSessionState(fakeWindow({ zoomFactor: 3.0 }))
+    ).toMatchObject({ zoomFactor: 2.0 });
   });
 
   it("returns null for a destroyed / missing window", () => {
@@ -98,7 +117,8 @@ describe("captureWindowSessionState (#272)", () => {
       )
     ).toEqual({
       normalBounds: { x: 11, y: 20, width: 801, height: 600 },
-      mode: "normal"
+      mode: "normal",
+      zoomFactor: 1.0
     });
   });
 });

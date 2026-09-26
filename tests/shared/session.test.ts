@@ -97,7 +97,7 @@ describe("sessionDataFileName path-traversal guard (#272 review Blocker 1)", () 
 });
 
 describe("parseWindowSessionState (#272)", () => {
-  it("accepts normal / maximized / fullscreen modes with normal bounds", () => {
+  it("accepts normal / maximized / fullscreen modes with normal bounds and zoomFactor", () => {
     for (const mode of ["normal", "maximized", "fullscreen"] as const) {
       expect(
         parseWindowSessionState({
@@ -106,9 +106,48 @@ describe("parseWindowSessionState (#272)", () => {
         })
       ).toEqual({
         normalBounds: { x: 10, y: 20, width: 800, height: 600 },
-        mode
+        mode,
+        zoomFactor: 1.0
       });
     }
+  });
+
+  it("parses and restores zoomFactor when valid, un-normalized, or corrupt", () => {
+    expect(
+      parseWindowSessionState({
+        normalBounds: { x: 10, y: 20, width: 800, height: 600 },
+        mode: "normal",
+        zoomFactor: 1.25
+      })
+    ).toEqual({
+      normalBounds: { x: 10, y: 20, width: 800, height: 600 },
+      mode: "normal",
+      zoomFactor: 1.25
+    });
+
+    expect(
+      parseWindowSessionState({
+        normalBounds: { x: 10, y: 20, width: 800, height: 600 },
+        mode: "normal",
+        zoomFactor: 1.23
+      })
+    ).toEqual({
+      normalBounds: { x: 10, y: 20, width: 800, height: 600 },
+      mode: "normal",
+      zoomFactor: 1.25
+    });
+
+    expect(
+      parseWindowSessionState({
+        normalBounds: { x: 10, y: 20, width: 800, height: 600 },
+        mode: "normal",
+        zoomFactor: "corrupt"
+      })
+    ).toEqual({
+      normalBounds: { x: 10, y: 20, width: 800, height: 600 },
+      mode: "normal",
+      zoomFactor: 1.0
+    });
   });
 
   it("rejects an unknown / minimized mode", () => {
@@ -417,7 +456,8 @@ describe("parseSessionRecord (#272)", () => {
       },
       window: {
         normalBounds: { x: 0, y: 0, width: 800, height: 600 },
-        mode: "normal"
+        mode: "normal",
+        zoomFactor: 1
       },
       editors: [
         {

@@ -44,7 +44,8 @@ import {
   DEFAULT_ZOOM_FACTOR,
   getNextZoomInFactor,
   getNextZoomOutFactor,
-  normalizeZoomFactor
+  normalizeZoomFactor,
+  restoreZoomFactor
 } from "../shared/zoom";
 import type { AppPlatform } from "../shared/platform";
 import type { WindowSessionState } from "../shared/session";
@@ -165,10 +166,12 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
   const displays: DisplayWorkAreaLike[] = screen
     .getAllDisplays()
     .map((display) => ({ workArea: display.workArea }));
-  const placement = resolveWindowPlacement(
+  const coldStartSessionState =
     isColdStartWindow && coldStartPayload
       ? coldStartWindowSessionState(coldStartPayload)
-      : null,
+      : null;
+  const placement = resolveWindowPlacement(
+    coldStartSessionState,
     displays
   );
 
@@ -185,6 +188,12 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
       sandbox: true
     }
   });
+
+  const restoredZoomFactor =
+    coldStartSessionState?.zoomFactor !== undefined
+      ? restoreZoomFactor(coldStartSessionState.zoomFactor)
+      : DEFAULT_ZOOM_FACTOR;
+  mainWindow.webContents.setZoomFactor(restoredZoomFactor);
 
   if (isColdStartWindow) {
     coldStartWebContentsId = mainWindow.webContents.id;
@@ -415,6 +424,7 @@ app.whenReady().then(async () => {
     if (!window.isDestroyed()) {
       window.webContents.send(WINDOW_CHANNELS.onZoomFactorChanged, normalized);
     }
+    sessionStoreController?.scheduleWindowSave();
     return normalized;
   }
 

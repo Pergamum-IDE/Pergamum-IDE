@@ -77,3 +77,15 @@ export function formatZoomFactorPercent(factor: number): string {
   const normalized = normalizeZoomFactor(factor);
   return `${Math.round(normalized * 100)}%`;
 }
+
+/**
+ * Safely parse and restore a zoom factor from an untrusted persisted value.
+ * Invalid, non-finite, missing, or corrupt inputs default to 1.0.
+ * Valid numbers are clamped to [0.5, 2.0] and normalized to the nearest candidate.
+ */
+export function restoreZoomFactor(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_ZOOM_FACTOR;
+  }
+  return normalizeZoomFactor(value);
+}

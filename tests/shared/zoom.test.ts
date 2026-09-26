@@ -8,7 +8,8 @@ import {
   formatZoomFactorPercent,
   getNextZoomInFactor,
   getNextZoomOutFactor,
-  normalizeZoomFactor
+  normalizeZoomFactor,
+  restoreZoomFactor
 } from "../../src/shared/zoom";
 
 describe("zoom helpers (#589)", () => {
@@ -76,5 +77,16 @@ describe("zoom helpers (#589)", () => {
     expect(formatZoomFactorPercent(1.0)).toBe("100%");
     expect(formatZoomFactorPercent(1.25)).toBe("125%");
     expect(formatZoomFactorPercent(2.0)).toBe("200%");
+  });
+
+  it("restoreZoomFactor safely handles invalid, non-finite, out-of-bounds, or un-normalized values", () => {
+    expect(restoreZoomFactor(undefined)).toBe(1.0);
+    expect(restoreZoomFactor(null)).toBe(1.0);
+    expect(restoreZoomFactor("125%")).toBe(1.0);
+    expect(restoreZoomFactor(NaN)).toBe(1.0);
+    expect(restoreZoomFactor(Infinity)).toBe(1.0);
+    expect(restoreZoomFactor(-1)).toBe(0.5);
+    expect(restoreZoomFactor(3)).toBe(2.0);
+    expect(restoreZoomFactor(1.23)).toBe(1.25);
   });
 });

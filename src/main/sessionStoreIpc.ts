@@ -122,6 +122,7 @@ export interface SessionStoreController {
   detachWindow(): void;
   /** Test seam: the last snapshot received from the renderer. */
   peekLastSnapshot(): RendererSessionSnapshot | null;
+  scheduleWindowSave(): void;
 }
 
 const DEFAULT_WINDOW_CHANGE_DEBOUNCE_MS = 500;
@@ -481,6 +482,7 @@ export function createSessionStoreController(
       });
     },
     detachWindow,
-    peekLastSnapshot: () => lastSnapshot
+    peekLastSnapshot: () => lastSnapshot,
+    scheduleWindowSave: handleWindowStateChange
   };
 }
