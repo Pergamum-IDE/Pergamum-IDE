@@ -243,7 +243,7 @@ describe("FileExplorer create context menu (#355)", () => {
 
     typeName("intro");
     await submitDialog();
-    expect(h.createFileExplorerMarkdownFile).toHaveBeenCalledWith(null, "intro");
+    expect(h.createFileExplorerMarkdownFile).toHaveBeenCalledWith(null, "intro.md");
   });
 
   it("folder-row New Folder creates under the clicked folder, not the prior selection", async () => {

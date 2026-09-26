@@ -59,6 +59,7 @@ export const searchSelectionShortcutCommandIds = {
 } as const;
 
 export const editorCommandIds = {
+  newFile: defineCommandId("editor.file.new"),
   openMarkdownDocument: defineCommandId("editor.document.markdown.open"),
   saveDocument: defineCommandId("editor.document.save"),
   saveAll: defineCommandId("editor.saveAll"),
@@ -98,6 +99,7 @@ export const applicationMenuCommandIds = [
   applicationCommandIds.openProject,
   applicationCommandIds.closeProject,
   applicationCommandIds.openBulkTextImportDialog,
+  editorCommandIds.newFile,
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
   editorCommandIds.saveAll,

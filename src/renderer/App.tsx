@@ -607,6 +607,7 @@ import {
 } from "./workspaceCommands";
 import {
   createFileExplorerCommandTitles,
+  fileExplorerCommandIds,
   registerFileExplorerCommands
 } from "./fileExplorerCommands";
 import type {
@@ -1519,6 +1520,7 @@ export function App(): JSX.Element {
   const openBulkTextImportDialogCommandRef = useRef<() => void>(
     () => undefined
   );
+  const newFileCommandRef = useRef<() => void>(() => undefined);
   const openMarkdownDocumentCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -3699,6 +3701,8 @@ export function App(): JSX.Element {
     registerEditorCommands(
       registry,
       {
+        newFile: () => newFileCommandRef.current(),
+        canNewFile: () => Boolean(isReadWriteProject),
         openMarkdownDocument: () => openMarkdownDocumentCommandRef.current(),
         saveCurrentDocument: () => saveCurrentDocumentCommandRef.current(),
         saveCurrentDocumentAs: () =>
@@ -9407,6 +9411,11 @@ export function App(): JSX.Element {
     applyParagraphIndentOperation("insert");
   removeParagraphIndentCommandRef.current = () =>
     applyParagraphIndentOperation("remove");
+  newFileCommandRef.current = () => {
+    executeUiCommand(fileExplorerCommandIds.createMarkdownFile, {
+      source: "applicationMenu"
+    });
+  };
   openMarkdownDocumentCommandRef.current = openFile;
   saveCurrentDocumentCommandRef.current = async () => {
     await saveFile();

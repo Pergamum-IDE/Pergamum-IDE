@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyMarkdownFileExtension,
+  combineNameAndExtension,
   fileExplorerCreateFailureReasonFromErrorCode,
   fileExplorerCreateFailureReasonFromValidationError,
   isFileExplorerCreateValidationReason,
@@ -11,8 +12,8 @@ import {
 } from "../../src/shared/fileExplorerCreate";
 
 describe("validateFileExplorerName", () => {
-  it("accepts an ordinary name and returns it NFC-normalized and trimmed", () => {
-    expect(validateFileExplorerName("  chapter-01  ")).toEqual({
+  it("accepts an ordinary name with leading space and returns it NFC-normalized and trimmed", () => {
+    expect(validateFileExplorerName("  chapter-01")).toEqual({
       ok: true,
       name: "chapter-01"
     });
@@ -23,6 +24,11 @@ describe("validateFileExplorerName", () => {
     ["   ", "empty"],
     [".", "dot"],
     ["..", "dotDot"],
+    ["CreateFile.", "trailingPeriodOrWhitespace"],
+    ["CreateFile..", "dotDot"],
+    ["CreateFile.txt.bin.", "trailingPeriodOrWhitespace"],
+    ["CreateFile.txt.bin. ", "trailingPeriodOrWhitespace"],
+    ["chapter-01 ", "trailingPeriodOrWhitespace"],
     ["a/b", "separator"],
     ["a\\b", "separator"],
     [`tab${String.fromCharCode(9)}name`, "controlCharacter"],
@@ -169,5 +175,31 @@ describe("failure reason mapping", () => {
       false
     );
     expect(isFileExplorerCreateValidationReason("unknown")).toBe(false);
+  });
+});
+
+describe("combineNameAndExtension", () => {
+  it("appends selected extension when raw name has no recognized extension", () => {
+    expect(combineNameAndExtension("chapter1", ".md")).toBe("chapter1.md");
+    expect(combineNameAndExtension("notes.v1", ".md")).toBe("notes.v1.md");
+    expect(combineNameAndExtension("document", ".txt")).toBe("document.txt");
+    expect(combineNameAndExtension("CreateFile.txt.bin", ".md")).toBe(
+      "CreateFile.txt.bin.md"
+    );
+  });
+
+  it("preserves recognized existing extensions without duplicating", () => {
+    expect(combineNameAndExtension("chapter1.md", ".md")).toBe("chapter1.md");
+    expect(combineNameAndExtension("chapter1.MARKDOWN", ".md")).toBe(
+      "chapter1.MARKDOWN"
+    );
+    expect(combineNameAndExtension("chapter1.txt", ".md")).toBe("chapter1.txt");
+  });
+
+  it("does not append extension over trailing dot or trailing whitespace", () => {
+    expect(combineNameAndExtension("CreateFile.", ".md")).toBe("CreateFile.");
+    expect(combineNameAndExtension("CreateFile.txt.bin.", ".md")).toBe(
+      "CreateFile.txt.bin."
+    );
   });
 });

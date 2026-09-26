@@ -55,6 +55,9 @@ export function fileExplorerRenameFailureMessageKey(
 function renameValidationMessageKey(
   error: FileExplorerNameValidationError
 ): TranslationKey {
+  if (error === "invalidCharacter") {
+    return "explorer.rename.error.invalidCharacter";
+  }
   return fileExplorerNameValidationMessageKey(error);
 }
 

@@ -214,6 +214,13 @@ function fileMenu(
     { type: "separator" },
     importMenu(language, options),
     { type: "separator" },
+    commandMenuItem(
+      editorCommandIds.newFile,
+      language,
+      "menu.newFile",
+      options,
+      "CommandOrControl+N"
+    ),
     // #556: CommandOrControl+O was freed up for the Command Palette's
     // project-file-open mode (a renderer-level global shortcut — see
     // App.tsx). Keeping it here as an Electron menu accelerator would

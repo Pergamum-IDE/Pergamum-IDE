@@ -2075,7 +2075,13 @@ async function createFileExplorerEntry(
   let finalName = validation.name;
 
   if (entryKind === "file") {
-    const withExtension = applyMarkdownFileExtension(validation.name);
+    const settings = await loadSettings();
+    const enablePlainTextDocuments =
+      settings.textFiles.enablePlainTextDocuments ?? false;
+
+    const withExtension = applyMarkdownFileExtension(validation.name, {
+      enablePlainTextDocuments
+    });
 
     if (!withExtension.ok) {
       return { ok: false, reason: "unsupportedExtension" };

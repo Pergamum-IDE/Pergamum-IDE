@@ -27,7 +27,9 @@ const NAME_VALIDATION_MESSAGE_KEY: Record<
   dotDot: "explorer.create.name.dotDot",
   separator: "explorer.create.name.separator",
   controlCharacter: "explorer.create.name.controlCharacter",
-  reserved: "explorer.create.name.reserved"
+  invalidCharacter: "explorer.create.name.invalidCharacter",
+  reserved: "explorer.create.name.reserved",
+  trailingPeriodOrWhitespace: "explorer.create.name.trailingPeriodOrWhitespace"
 };
 
 const CREATE_FAILURE_MESSAGE_KEY: Record<
@@ -69,7 +71,8 @@ export function fileExplorerCreateFailureMessageKey(
  */
 export function createFileExplorerNameValidator(
   kind: FileExplorerCreateKind,
-  translate: Translate
+  translate: Translate,
+  options?: { enablePlainTextDocuments?: boolean }
 ): (rawValue: string) => NameInputDialogValidation {
   return (rawValue: string): NameInputDialogValidation => {
     const validation = validateFileExplorerName(rawValue);
@@ -84,7 +87,7 @@ export function createFileExplorerNameValidator(
     }
 
     if (kind === "file") {
-      const withExtension = applyMarkdownFileExtension(validation.name);
+      const withExtension = applyMarkdownFileExtension(validation.name, options);
 
       if (!withExtension.ok) {
         return {

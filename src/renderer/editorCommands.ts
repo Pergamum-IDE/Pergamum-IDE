@@ -28,9 +28,15 @@ export const saveAsCommandWhen: CommandEnablementExpression = {
   allOf: [{ key: "editor.hasDocument" }, { key: "editor.kind.markdown" }]
 };
 
+export const newFileCommandWhen: CommandEnablementExpression = {
+  allOf: [{ key: "project.isOpen" }, { key: "project.access.readWrite" }]
+};
+
 export { editorCommandIds };
 
 export interface EditorCommandController {
+  newFile(): void | Promise<void>;
+  canNewFile(): boolean;
   openMarkdownDocument(): void | Promise<void>;
   saveCurrentDocument(): void | Promise<void>;
   saveCurrentDocumentAs(): void | Promise<void>;
@@ -45,6 +51,8 @@ export interface EditorCommandController {
 }
 
 export interface EditorCommandTitles {
+  newFile: string;
+  newFileDescription: string;
   openMarkdownDocument: string;
   openMarkdownDocumentDescription: string;
   saveDocument: string;
@@ -71,6 +79,8 @@ export function createEditorCommandTitles(
   translate: Translate
 ): EditorCommandTitles {
   return {
+    newFile: translate("command.editor.file.new"),
+    newFileDescription: translate("command.editor.file.new.description"),
     openMarkdownDocument: translate("command.editor.document.markdown.open"),
     openMarkdownDocumentDescription: translate(
       "command.editor.document.markdown.open.description"
@@ -124,6 +134,20 @@ export function createEditorCommands(
   titles: EditorCommandTitles
 ): readonly EditorCommand[] {
   return [
+    {
+      id: editorCommandIds.newFile,
+      title: titles.newFile,
+      description: titles.newFileDescription,
+      execute: () => {
+        if (!controller.canNewFile()) {
+          return;
+        }
+
+        return controller.newFile();
+      },
+      isEnabled: () => controller.canNewFile(),
+      when: newFileCommandWhen
+    },
     {
       id: editorCommandIds.openMarkdownDocument,
       title: titles.openMarkdownDocument,

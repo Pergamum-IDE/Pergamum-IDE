@@ -675,6 +675,7 @@ describe("FileExplorer create toolbar (#307)", () => {
       parent: string | null,
       name: string
     ) => Promise<CreateFileExplorerEntryResult>;
+    enablePlainTextDocuments?: boolean;
     writeText?: (text: string) => Promise<void>;
   }): {
     listFileExplorerChildren: ReturnType<typeof vi.fn>;
@@ -733,6 +734,7 @@ describe("FileExplorer create toolbar (#307)", () => {
             options.project === undefined ? project : options.project,
           highlightedRelativePath: null,
           translate,
+          enablePlainTextDocuments: options.enablePlainTextDocuments ?? false,
           readOnly: false,
           clipboardAdapter: {
             writeText: options.writeText ?? vi.fn(async () => undefined)
@@ -829,7 +831,7 @@ describe("FileExplorer create toolbar (#307)", () => {
     });
     await flushPromises();
 
-    expect(createMarkdownFile).toHaveBeenCalledWith("Drafts", "chapter-02");
+    expect(createMarkdownFile).toHaveBeenCalledWith("Drafts", "chapter-02.md");
     expect(onActivateDocument).toHaveBeenCalledWith("Drafts/chapter-02.md");
     // Dialog closed on success.
     expect(container!.querySelector(".nameInputDialogInput")).toBeNull();
@@ -853,6 +855,86 @@ describe("FileExplorer create toolbar (#307)", () => {
     expect(
       container!.querySelector(".nameInputDialogError")?.textContent
     ).toBe("explorer.create.error.unsupportedExtension");
+  });
+
+  it("uses extension-less placeholder for New File dialog", async () => {
+    mountWithCreate({ enablePlainTextDocuments: false });
+    await flushPromises();
+
+    act(() => toolbarButton("explorer.newFile").click());
+    expect(dialogInput().placeholder).toBe("explorer.newFile.placeholder");
+  });
+
+  it("rejects names ending with a period or whitespace", async () => {
+    const createMarkdownFile = vi.fn();
+    mountWithCreate({ createMarkdownFile });
+    await flushPromises();
+
+    act(() => toolbarButton("explorer.newFile").click());
+
+    for (const invalidName of ["CreateFile.txt.bin.", "CreateFile.txt.bin. "]) {
+      typeName(invalidName);
+      await act(async () => {
+        dialogPrimary().click();
+      });
+
+      expect(createMarkdownFile).not.toHaveBeenCalled();
+      expect(
+        container!.querySelector(".nameInputDialogError")?.textContent
+      ).toBe("explorer.create.name.trailingPeriodOrWhitespace");
+    }
+  });
+
+  it("renders extension dropdown options [.md] when enablePlainTextDocuments is false", async () => {
+    mountWithCreate({ enablePlainTextDocuments: false });
+    await flushPromises();
+
+    act(() => toolbarButton("explorer.newFile").click());
+    const select = container!.querySelector<HTMLSelectElement>(
+      ".nameInputDialogExtensionSelect"
+    );
+    expect(select).not.toBeNull();
+    const options = Array.from(select!.options).map((opt) => opt.value);
+    expect(options).toEqual([".md"]);
+  });
+
+  it("renders extension dropdown options [.md, .txt] when enablePlainTextDocuments is true and creates .txt document when selected", async () => {
+    const createMarkdownFile = vi.fn(
+      async (): Promise<CreateFileExplorerEntryResult> => ({
+        ok: true,
+        entry: { kind: "file", name: "notes.txt", relativePath: "notes.txt" }
+      })
+    );
+    const { onActivateDocument } = mountWithCreate({
+      enablePlainTextDocuments: true,
+      createMarkdownFile
+    });
+    await flushPromises();
+
+    act(() => toolbarButton("explorer.newFile").click());
+    const select = container!.querySelector<HTMLSelectElement>(
+      ".nameInputDialogExtensionSelect"
+    );
+    expect(select).not.toBeNull();
+    const options = Array.from(select!.options).map((opt) => opt.value);
+    expect(options).toEqual([".md", ".txt"]);
+
+    act(() => {
+      const nativeSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLSelectElement.prototype,
+        "value"
+      )?.set;
+      nativeSetter?.call(select, ".txt");
+      select!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    typeName("notes");
+    await act(async () => {
+      dialogPrimary().click();
+    });
+    await flushPromises();
+
+    expect(createMarkdownFile).toHaveBeenCalledWith(null, "notes.txt");
+    expect(onActivateDocument).toHaveBeenCalledWith("notes.txt");
   });
 
   it("surfaces an operation error with a technical-copy button and does not open a document", async () => {
@@ -1377,7 +1459,7 @@ describe("FileExplorer active project document reveal (#309)", () => {
 
     expect(createFileExplorerMarkdownFile).toHaveBeenCalledWith(
       "Drafts",
-      "chapter-02"
+      "chapter-02.md"
     );
   });
 
@@ -2045,7 +2127,7 @@ describe("FileExplorer Command Palette create request (#311)", () => {
     });
     await flushPromises();
 
-    expect(createMarkdownFile).toHaveBeenCalledWith(null, "chapter-09");
+    expect(createMarkdownFile).toHaveBeenCalledWith(null, "chapter-09.md");
     expect(harness.onActivateDocument).toHaveBeenCalledWith("chapter-09.md");
     expect(dialogInput()).toBeNull();
   });

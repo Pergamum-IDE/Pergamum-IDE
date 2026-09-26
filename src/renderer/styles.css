@@ -7462,6 +7462,25 @@ label.settingsItemHeader {
   color: inherit;
 }
 
+.nameInputDialogExtensionSelect {
+  flex-shrink: 0;
+  border: 0;
+  border-inline-start: 1px solid var(--app-dialog-border, #c7ced6);
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.85rem;
+  padding-inline: 8px 4px;
+  padding-block: 6px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.nameInputDialogExtensionSelect:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring, #2563a8);
+  outline-offset: 1px;
+}
+
 .nameInputDialogError {
   margin: 0;
   color: var(--app-dialog-copy-failure-foreground, #a01b2b);

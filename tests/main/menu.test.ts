@@ -101,6 +101,7 @@ describe("application menu", () => {
       applicationCommandIds.createProject,
       applicationCommandIds.openProject,
       applicationCommandIds.closeProject,
+      editorCommandIds.newFile,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
       editorCommandIds.saveAll,
@@ -113,6 +114,7 @@ describe("application menu", () => {
 
   it("keeps the application-menu-sendable allowlist a superset of the File menu", () => {
     for (const commandId of [
+      editorCommandIds.newFile,
       applicationCommandIds.openAbout,
       applicationCommandIds.quitApplication,
       applicationCommandIds.createProject,

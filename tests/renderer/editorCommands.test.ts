@@ -20,6 +20,8 @@ import {
 } from "../../src/shared/editorId";
 
 const titles = {
+  newFile: "New File",
+  newFileDescription: "Create a new file in the project.",
   openMarkdownDocument: "Open Markdown file",
   openMarkdownDocumentDescription:
     "Open a Markdown file outside the current project.",
@@ -52,6 +54,8 @@ const someEditorId: EditorId = createProjectDocumentEditorId("chapter-01.md", {
 function registerEditorCommandSet(
   registry: CommandRegistry,
   overrides: Partial<{
+    newFile: () => void | Promise<void>;
+    canNewFile: () => boolean;
     openMarkdownDocument: () => void | Promise<void>;
     saveCurrentDocument: () => void | Promise<void>;
     saveCurrentDocumentAs: () => void | Promise<void>;
@@ -72,6 +76,8 @@ function registerEditorCommandSet(
   registerEditorCommands(
     registry,
     {
+      newFile: () => undefined,
+      canNewFile: () => true,
       openMarkdownDocument: () => undefined,
       saveCurrentDocument: () => undefined,
       saveCurrentDocumentAs: () => undefined,
@@ -105,6 +111,7 @@ describe("editor commands", () => {
     registerEditorCommandSet(registry);
 
     expect(registry.list().map((command) => command.id)).toEqual([
+      "editor.file.new",
       "editor.document.markdown.open",
       "editor.document.save",
       "editor.saveAll",
@@ -423,6 +430,8 @@ describe("editor commands", () => {
     const translate = vi.fn((key: string) => `translated:${key}`);
 
     expect(createEditorCommandTitles(translate)).toEqual({
+      newFile: "translated:command.editor.file.new",
+      newFileDescription: "translated:command.editor.file.new.description",
       openMarkdownDocument: "translated:command.editor.document.markdown.open",
       openMarkdownDocumentDescription:
         "translated:command.editor.document.markdown.open.description",
