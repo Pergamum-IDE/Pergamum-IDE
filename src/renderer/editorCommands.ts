@@ -46,6 +46,8 @@ export interface EditorCommandController {
   canSaveAllDocuments(): boolean;
   closeEditor(editorId?: EditorId): void | Promise<void>;
   canCloseEditor(editorId?: EditorId): boolean;
+  insertImage(): void | Promise<void>;
+  canInsertImage(): boolean;
   delegateNativeEditCommand(commandId: EditCommandId): void | Promise<void>;
   canDelegateNativeEditCommand(commandId: EditCommandId): boolean;
 }
@@ -63,6 +65,8 @@ export interface EditorCommandTitles {
   saveAsDescription: string;
   closeEditor: string;
   closeEditorDescription: string;
+  insertImage: string;
+  insertImageDescription: string;
   cutSelection: string;
   cutSelectionDescription: string;
   copySelection: string;
@@ -95,6 +99,10 @@ export function createEditorCommandTitles(
     saveAsDescription: translate("command.editor.saveAs.description"),
     closeEditor: translate("command.editor.document.close"),
     closeEditorDescription: translate("command.editor.document.close.description"),
+    insertImage: translate("command.editor.image.insert"),
+    insertImageDescription: translate(
+      "command.editor.image.insert.description"
+    ),
     cutSelection: translate("command.editor.selection.cut"),
     cutSelectionDescription: translate(
       "command.editor.selection.cut.description"
@@ -210,6 +218,19 @@ export function createEditorCommands(
       // still infers the real arg type from `editorCommandIds.close`
       // itself, not from this array's element type, so this is safe.
     } as unknown as EditorCommand,
+    {
+      id: editorCommandIds.insertImage,
+      title: titles.insertImage,
+      description: titles.insertImageDescription,
+      execute: () => {
+        if (!controller.canInsertImage()) {
+          return;
+        }
+
+        return controller.insertImage();
+      },
+      isEnabled: () => controller.canInsertImage()
+    },
     editCommand(
       editCommandIds[0],
       titles.cutSelection,

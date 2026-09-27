@@ -78,6 +78,7 @@ export const editorCommandIds = {
   close: defineCommandId<readonly [{ editorId?: EditorId }?], void>(
     "editor.close"
   ),
+  insertImage: defineCommandId("editor.image.insert"),
   cutSelection: defineCommandId("editor.selection.cut"),
   copySelection: defineCommandId("editor.selection.copy"),
   pasteSelection: defineCommandId("editor.selection.paste"),

@@ -44,6 +44,8 @@ export const enTranslations = {
   "command.editor.saveAll.description": "Save all open documents.",
   "command.editor.saveAs": "Save As...",
   "command.editor.saveAs.description": "Save the current document with a different name and location.",
+  "command.editor.image.insert": "Insert Image...",
+  "command.editor.image.insert.description": "Inserts an image at the current cursor position.",
   "command.editor.line.goTo": "Go to Line",
   "command.editor.line.goTo.description": "Move the cursor to a line in the active editor",
   "command.assist.lineEndingDistribution.show": "Show Line Ending Distribution",
