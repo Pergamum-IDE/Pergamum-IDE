@@ -1620,6 +1620,10 @@ export function App(): JSX.Element {
   const canSaveCurrentDocumentAsCommandRef = useRef<() => boolean>(
     () => false
   );
+  const insertImageCommandRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
+  const canInsertImageCommandRef = useRef<() => boolean>(() => false);
   const saveAllDocumentsCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -3804,6 +3808,8 @@ export function App(): JSX.Element {
         closeEditor: (editorId) => closeEditorCommandRef.current(editorId),
         canCloseEditor: (editorId) =>
           canCloseEditorCommandRef.current(editorId),
+        insertImage: () => insertImageCommandRef.current(),
+        canInsertImage: () => canInsertImageCommandRef.current(),
         delegateNativeEditCommand: (commandId) =>
           delegateNativeEditCommand(commandId),
         canDelegateNativeEditCommand: () => true
@@ -5133,6 +5139,15 @@ export function App(): JSX.Element {
   // reads this array through a ref, so pane shortcuts see the same current
   // command state as Activity Bar clicks.
   useGlobalKeyboardShortcuts([
+    {
+      id: "insertImage",
+      match: { key: "i", ctrlOrCmd: true, shift: true },
+      handler: () => {
+        if (canInsertImage) {
+          void handleInsertImage(null);
+        }
+      }
+    },
     {
       id: "togglePreview",
       match: { key: "p", ctrlOrCmd: true, shift: true },
@@ -9515,6 +9530,10 @@ export function App(): JSX.Element {
   canCloseEditorCommandRef.current = canCloseEditorNow;
   canSaveCurrentDocumentCommandRef.current = () => canSave;
   canSaveCurrentDocumentAsCommandRef.current = () => canSaveAs;
+  canInsertImageCommandRef.current = () => Boolean(canInsertImage);
+  insertImageCommandRef.current = async () => {
+    await handleInsertImage(null);
+  };
   // #342: Save All — save every open document that currently has unsaved
   // changes, reusing the existing per-document `saveFile` spec (line endings,
   // Recovery retirement, atomic write, in-flight guarding). The dirty set is

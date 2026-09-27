@@ -93,6 +93,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
       canSaveAllDocuments: () => true,
       closeEditor: () => undefined,
       canCloseEditor: () => true,
+      insertImage: () => undefined,
+      canInsertImage: () => true,
       delegateNativeEditCommand: () => undefined,
       canDelegateNativeEditCommand: () => true
     },
@@ -109,6 +111,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
       saveAsDescription: "Save As",
       closeEditor: "Close Current Document",
       closeEditorDescription: "Close Current Document",
+      insertImage: "Insert Image",
+      insertImageDescription: "Insert Image",
       cutSelection: "Cut",
       cutSelectionDescription: "Cut",
       copySelection: "Copy",

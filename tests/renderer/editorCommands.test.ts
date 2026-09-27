@@ -36,6 +36,8 @@ const titles = {
   closeEditor: "Close Current Document",
   closeEditorDescription:
     "Close the current document. Check for unsaved changes before closing.",
+  insertImage: "Insert Image",
+  insertImageDescription: "Insert an image file into the current document.",
   cutSelection: "Cut",
   cutSelectionDescription: "Cut the selected text in the current editor.",
   copySelection: "Copy",
@@ -65,6 +67,8 @@ function registerEditorCommandSet(
     canSaveAllDocuments: () => boolean;
     closeEditor: (editorId?: EditorId) => void | Promise<void>;
     canCloseEditor: (editorId?: EditorId) => boolean;
+    insertImage: () => void | Promise<void>;
+    canInsertImage: () => boolean;
     delegateNativeEditCommand: (
       commandId: (typeof editCommandIds)[number]
     ) => void | Promise<void>;
@@ -87,6 +91,8 @@ function registerEditorCommandSet(
       canSaveAllDocuments: () => true,
       closeEditor: () => undefined,
       canCloseEditor: () => true,
+      insertImage: () => undefined,
+      canInsertImage: () => true,
       delegateNativeEditCommand: () => undefined,
       canDelegateNativeEditCommand: () => true,
       ...overrides
@@ -117,6 +123,7 @@ describe("editor commands", () => {
       "editor.saveAll",
       "editor.saveAs",
       "editor.close",
+      "editor.image.insert",
       "editor.selection.cut",
       "editor.selection.copy",
       "editor.selection.paste",
@@ -445,6 +452,9 @@ describe("editor commands", () => {
       closeEditor: "translated:command.editor.document.close",
       closeEditorDescription:
         "translated:command.editor.document.close.description",
+      insertImage: "translated:command.editor.image.insert",
+      insertImageDescription:
+        "translated:command.editor.image.insert.description",
       cutSelection: "translated:command.editor.selection.cut",
       cutSelectionDescription:
         "translated:command.editor.selection.cut.description",
@@ -513,6 +523,42 @@ describe("editor commands", () => {
       registry.execute(editorCommandIds.close, executionOptions)
     ).rejects.toBeInstanceOf(CommandDisabledError);
     expect(closeEditor).not.toHaveBeenCalled();
+  });
+
+  it("editor.image.insert invokes controller insertImage when enabled", async () => {
+    const registry = new CommandRegistry();
+    const insertImage = vi.fn();
+
+    registerEditorCommandSet(registry, { insertImage });
+
+    await registry.execute(editorCommandIds.insertImage, executionOptions);
+
+    expect(insertImage).toHaveBeenCalledTimes(1);
+  });
+
+  it("editor.image.insert reports enablement from controller's canInsertImage", () => {
+    const registry = new CommandRegistry();
+    const canInsertImage = vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+    registerEditorCommandSet(registry, { canInsertImage });
+
+    expect(registry.isEnabled(editorCommandIds.insertImage)).toBe(true);
+    expect(registry.isEnabled(editorCommandIds.insertImage)).toBe(false);
+  });
+
+  it("editor.image.insert execution is blocked when canInsertImage is false", async () => {
+    const registry = new CommandRegistry();
+    const insertImage = vi.fn();
+
+    registerEditorCommandSet(registry, {
+      insertImage,
+      canInsertImage: () => false
+    });
+
+    await expect(
+      registry.execute(editorCommandIds.insertImage, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
+    expect(insertImage).not.toHaveBeenCalled();
   });
 
   it("does not introduce toolbar-prefixed Command IDs", () => {

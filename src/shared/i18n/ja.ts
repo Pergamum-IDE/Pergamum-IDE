@@ -42,6 +42,8 @@ export const jaTranslations = {
   "command.editor.saveAll.description": "開いている文書をすべて保存します。",
   "command.editor.saveAs": "名前を付けて保存...",
   "command.editor.saveAs.description": "現在の文書を任意の場所に別名で保存します。",
+  "command.editor.image.insert": "画像を挿入...",
+  "command.editor.image.insert.description": "カーソル位置に画像を挿入します。",
   "command.editor.line.goTo": "指定行へ移動",
   "command.editor.line.goTo.description": "アクティブなエディタのカーソルを指定行へ移動します",
   "command.assist.lineEndingDistribution.show": "改行コード分布を表示",
