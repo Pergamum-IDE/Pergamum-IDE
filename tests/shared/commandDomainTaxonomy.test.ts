@@ -53,7 +53,6 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openProject: () => undefined,
       closeProject: () => undefined,
       openBulkTextImportDialog: () => undefined,
-      toggleRecentProjects: () => undefined,
       zoomIn: () => undefined,
       zoomOut: () => undefined,
       resetZoom: () => undefined
@@ -72,8 +71,6 @@ function buildCoreCommandRegistry(): CommandRegistry {
       closeProjectDescription: "Close Project",
       openBulkTextImportDialog: "Bulk Import Text Files",
       openBulkTextImportDialogDescription: "Bulk Import Text Files",
-      toggleRecentProjects: "Toggle Recent Projects",
-      toggleRecentProjectsDescription: "Toggle Recent Projects",
       zoomIn: "Zoom In",
       zoomInDescription: "Zoom In",
       zoomOut: "Zoom Out",

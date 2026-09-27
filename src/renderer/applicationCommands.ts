@@ -11,7 +11,6 @@ export interface ApplicationCommandController {
   openProject(): void | Promise<void>;
   closeProject(): void | Promise<void>;
   openBulkTextImportDialog(): void | Promise<void>;
-  toggleRecentProjects(): void;
   zoomIn(): void | Promise<void>;
   zoomOut(): void | Promise<void>;
   resetZoom(): void | Promise<void>;
@@ -30,8 +29,6 @@ export interface ApplicationCommandTitles {
   closeProjectDescription: string;
   openBulkTextImportDialog: string;
   openBulkTextImportDialogDescription: string;
-  toggleRecentProjects: string;
-  toggleRecentProjectsDescription: string;
   zoomIn: string;
   zoomInDescription: string;
   zoomOut: string;
@@ -67,10 +64,6 @@ export function createApplicationCommandTitles(
     ),
     openBulkTextImportDialogDescription: translate(
       "command.import.text.bulk.openDialog.description"
-    ),
-    toggleRecentProjects: translate("command.workspace.recentProjects.toggle"),
-    toggleRecentProjectsDescription: translate(
-      "command.workspace.recentProjects.toggle.description"
     ),
     zoomIn: translate("command.app.zoom.in"),
     zoomInDescription: translate("command.app.zoom.in.description"),
@@ -123,12 +116,6 @@ export function createApplicationCommands(
       description: titles.openBulkTextImportDialogDescription,
       palette: { visible: false },
       execute: () => controller.openBulkTextImportDialog()
-    },
-    {
-      id: applicationCommandIds.toggleRecentProjects,
-      title: titles.toggleRecentProjects,
-      description: titles.toggleRecentProjectsDescription,
-      execute: () => controller.toggleRecentProjects()
     },
     {
       id: applicationCommandIds.zoomIn,

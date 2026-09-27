@@ -1,5 +1,5 @@
+import { workspaceCommandIds } from "../shared/commandIds";
 import {
-  defineCommandId,
   type Command,
   type CommandRegistry
 } from "../shared/commandRegistry";
@@ -7,14 +7,7 @@ import type { Translate } from "../shared/i18n";
 import type { SidebarMode } from "./sidebarMode";
 import { selectSidebarMode } from "./sidebarMode";
 
-export const workspaceCommandIds = {
-  toggleFiles: defineCommandId("workspace.files.toggle"),
-  focusSearch: defineCommandId("workspace.search.focus"),
-  focusGlossary: defineCommandId("workspace.glossary.focus"),
-  focusDocumentMap: defineCommandId("workspace.documentMap.focus"),
-  focusDocumentMetrics: defineCommandId("workspace.documentMetrics.focus"),
-  openApplicationSettings: defineCommandId("workspace.applicationSettings.open")
-} as const;
+export { workspaceCommandIds };
 
 export type WorkspaceFocusCommandId =
   | typeof workspaceCommandIds.toggleFiles

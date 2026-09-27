@@ -26,9 +26,6 @@ const titles = {
   openBulkTextImportDialog: "Bulk Import Text Files",
   openBulkTextImportDialogDescription:
     "Open the dialog for importing external text files as Markdown documents with a selected character encoding.",
-  toggleRecentProjects: "Toggle Recent Projects",
-  toggleRecentProjectsDescription:
-    "Switch between recently opened projects. Check for unsaved changes before switching projects.",
   zoomIn: "Zoom In",
   zoomInDescription: "Zoom in",
   zoomOut: "Zoom Out",
@@ -39,7 +36,7 @@ const titles = {
 const executionOptions = { source: "toolbar" } as const;
 
 describe("application commands", () => {
-  it("registers app-level About, project, and Recent Projects commands", () => {
+  it("registers app-level About and project commands", () => {
     const registry = new CommandRegistry();
 
     registerApplicationCommands(
@@ -51,7 +48,6 @@ describe("application commands", () => {
         openProject: () => undefined,
         closeProject: () => undefined,
         openBulkTextImportDialog: () => undefined,
-        toggleRecentProjects: () => undefined,
         zoomIn: () => undefined,
         zoomOut: () => undefined,
         resetZoom: () => undefined
@@ -66,7 +62,6 @@ describe("application commands", () => {
       "workspace.project.open",
       "workspace.project.close",
       "import.text.bulk.openDialog",
-      "workspace.recentProjects.toggle",
       "app.zoom.in",
       "app.zoom.out",
       "app.zoom.reset"
@@ -81,7 +76,6 @@ describe("application commands", () => {
     const openProject = vi.fn();
     const closeProject = vi.fn();
     const openBulkTextImportDialog = vi.fn();
-    const toggleRecentProjects = vi.fn();
     const zoomIn = vi.fn();
     const zoomOut = vi.fn();
     const resetZoom = vi.fn();
@@ -96,7 +90,6 @@ describe("application commands", () => {
         openProject,
         closeProject,
         openBulkTextImportDialog,
-        toggleRecentProjects,
         zoomIn,
         zoomOut,
         resetZoom
@@ -119,10 +112,6 @@ describe("application commands", () => {
       applicationCommandIds.openBulkTextImportDialog,
       executionOptions
     );
-    await registry.execute(
-      applicationCommandIds.toggleRecentProjects,
-      executionOptions
-    );
     await registry.execute(applicationCommandIds.zoomIn, executionOptions);
     await registry.execute(applicationCommandIds.zoomOut, executionOptions);
     await registry.execute(applicationCommandIds.resetZoom, executionOptions);
@@ -133,7 +122,6 @@ describe("application commands", () => {
     expect(openProject).toHaveBeenCalledTimes(1);
     expect(closeProject).toHaveBeenCalledTimes(1);
     expect(openBulkTextImportDialog).toHaveBeenCalledTimes(1);
-    expect(toggleRecentProjects).toHaveBeenCalledTimes(1);
     expect(zoomIn).toHaveBeenCalledTimes(1);
     expect(zoomOut).toHaveBeenCalledTimes(1);
     expect(resetZoom).toHaveBeenCalledTimes(1);
@@ -151,7 +139,6 @@ describe("application commands", () => {
         openProject: () => undefined,
         closeProject: () => undefined,
         openBulkTextImportDialog: () => undefined,
-        toggleRecentProjects: () => undefined,
         zoomIn: () => undefined,
         zoomOut: () => undefined,
         resetZoom: () => undefined
@@ -180,7 +167,6 @@ describe("application commands", () => {
         openProject: () => undefined,
         closeProject: () => undefined,
         openBulkTextImportDialog: () => undefined,
-        toggleRecentProjects: () => undefined,
         zoomIn: () => undefined,
         zoomOut: () => undefined,
         resetZoom: () => undefined
@@ -216,9 +202,6 @@ describe("application commands", () => {
         "translated:command.import.text.bulk.openDialog",
       openBulkTextImportDialogDescription:
         "translated:command.import.text.bulk.openDialog.description",
-      toggleRecentProjects: "translated:command.workspace.recentProjects.toggle",
-      toggleRecentProjectsDescription:
-        "translated:command.workspace.recentProjects.toggle.description",
       zoomIn: "translated:command.app.zoom.in",
       zoomInDescription: "translated:command.app.zoom.in.description",
       zoomOut: "translated:command.app.zoom.out",

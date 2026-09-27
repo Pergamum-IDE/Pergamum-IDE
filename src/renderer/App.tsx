@@ -1616,7 +1616,6 @@ export function App(): JSX.Element {
   );
   const nativeEditCommandContextRef =
     useRef<NativeEditCommandContext | null>(null);
-  const toggleRecentProjectsCommandRef = useRef<() => void>(() => undefined);
   const canSaveCurrentDocumentCommandRef = useRef<() => boolean>(() => false);
   const canSaveCurrentDocumentAsCommandRef = useRef<() => boolean>(
     () => false
@@ -3774,7 +3773,6 @@ export function App(): JSX.Element {
         closeProject: () => closeProjectCommandRef.current(),
         openBulkTextImportDialog: () =>
           openBulkTextImportDialogCommandRef.current(),
-        toggleRecentProjects: () => toggleRecentProjectsCommandRef.current(),
         zoomIn: () => {
           void window.pergamum.window.zoomIn();
         },
@@ -9513,9 +9511,6 @@ export function App(): JSX.Element {
   };
   closeEditorCommandRef.current = closeEditorWithConfirmation;
   canCloseEditorCommandRef.current = canCloseEditorNow;
-  toggleRecentProjectsCommandRef.current = () => {
-    setIsRecentProjectsOpen((isOpen) => !isOpen);
-  };
   canSaveCurrentDocumentCommandRef.current = () => canSave;
   canSaveCurrentDocumentAsCommandRef.current = () => canSaveAs;
   // #342: Save All — save every open document that currently has unsaved

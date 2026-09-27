@@ -11,7 +11,6 @@ describe("shortcut command ID scope", () => {
     const commandIds = [
       applicationCommandIds.createProject,
       applicationCommandIds.openProject,
-      applicationCommandIds.toggleRecentProjects,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
       ...applicationMenuCommandIds,

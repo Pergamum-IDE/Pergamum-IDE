@@ -15,7 +15,9 @@ import {
   editorCommandIds,
   glossaryTabCommandIds,
   isApplicationMenuCommandId,
+  projectSettingsCommandIds,
   searchSelectionShortcutCommandIds,
+  workspaceCommandIds,
   type ApplicationMenuCommandId
 } from "../shared/commandIds";
 import { t, type Language, type TranslationKey } from "../shared/i18n";
@@ -143,32 +145,6 @@ function macApplicationMenu(
   };
 }
 
-/**
- * Hidden, non-mac-only accelerator for `editor.close` (#184). macOS already
- * binds `Cmd+W` to the native `role: "close"` item below (Electron assigns
- * that role's platform-default accelerator automatically), so binding
- * `CommandOrControl+W` there too would collide with it — Mac-specific
- * shortcut design for that collision is explicitly out of scope for #184,
- * so this item is Windows/Linux only for now.
- */
-function editorCloseWindowsLinuxMenuItem(
-  options: ApplicationMenuOptions
-): MenuItemConstructorOptions {
-  return {
-    label: "Close Tab (Ctrl+W)",
-    accelerator: "CommandOrControl+W",
-    visible: false,
-    acceleratorWorksWhenHidden: true,
-    click: () => {
-      sendApplicationMenuCommand(
-        options.getMainWindow,
-        editorCommandIds.close,
-        options.debugLogger
-      );
-    }
-  };
-}
-
 function importMenu(
   language: Language,
   options: ApplicationMenuOptions
@@ -234,6 +210,13 @@ function fileMenu(
       options
     ),
     commandMenuItem(
+      editorCommandIds.close,
+      language,
+      "menu.closeCurrentTab",
+      options,
+      "CommandOrControl+W"
+    ),
+    commandMenuItem(
       editorCommandIds.saveDocument,
       language,
       "menu.save",
@@ -255,12 +238,20 @@ function fileMenu(
       "CommandOrControl+Shift+S"
     ),
     saveAsF12MenuItem(options),
+    { type: "separator" },
     commandMenuItem(
-      applicationCommandIds.toggleRecentProjects,
+      projectSettingsCommandIds.open,
       language,
-      "menu.recentProjects",
+      "menu.projectSettings",
       options
-    )
+    ),
+    commandMenuItem(
+      workspaceCommandIds.openApplicationSettings,
+      language,
+      "menu.applicationSettings",
+      options
+    ),
+    applicationSettingsHiddenAcceleratorMenuItem(options)
   ];
 
   return {
@@ -274,7 +265,6 @@ function fileMenu(
           ]
         : [
             ...commandItems,
-            editorCloseWindowsLinuxMenuItem(options),
             { type: "separator" },
             quitApplicationMenuItem(language, options, "CommandOrControl+Q")
           ]
@@ -438,6 +428,29 @@ function saveAsF12MenuItem(
       sendApplicationMenuCommand(
         options.getMainWindow,
         editorCommandIds.saveAs,
+        options.debugLogger
+      );
+    }
+  };
+}
+
+/**
+ * #591 follow-up: Electron localizes the comma accelerator label on Japanese
+ * Windows as "Ctrl+カンマ". Keep the visible item without an accelerator label
+ * and register CommandOrControl+, on a hidden item.
+ */
+function applicationSettingsHiddenAcceleratorMenuItem(
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
+  return {
+    label: "Application Settings (Ctrl+,)",
+    accelerator: "CommandOrControl+,",
+    visible: false,
+    acceleratorWorksWhenHidden: true,
+    click: () => {
+      sendApplicationMenuCommand(
+        options.getMainWindow,
+        workspaceCommandIds.openApplicationSettings,
         options.debugLogger
       );
     }

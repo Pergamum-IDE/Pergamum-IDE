@@ -10,10 +10,18 @@ export const applicationCommandIds = {
   openBulkTextImportDialog: defineCommandId(
     "import.text.bulk.openDialog"
   ),
-  toggleRecentProjects: defineCommandId("workspace.recentProjects.toggle"),
   zoomIn: defineCommandId("app.zoom.in"),
   zoomOut: defineCommandId("app.zoom.out"),
   resetZoom: defineCommandId("app.zoom.reset")
+} as const;
+
+export const workspaceCommandIds = {
+  toggleFiles: defineCommandId("workspace.files.toggle"),
+  focusSearch: defineCommandId("workspace.search.focus"),
+  focusGlossary: defineCommandId("workspace.glossary.focus"),
+  focusDocumentMap: defineCommandId("workspace.documentMap.focus"),
+  focusDocumentMetrics: defineCommandId("workspace.documentMetrics.focus"),
+  openApplicationSettings: defineCommandId("workspace.applicationSettings.open")
 } as const;
 
 export const commandPaletteCommandIds = {
@@ -108,7 +116,6 @@ export const applicationMenuCommandIds = [
   editorCommandIds.saveAll,
   editorCommandIds.saveAs,
   editorCommandIds.close,
-  applicationCommandIds.toggleRecentProjects,
   commandPaletteCommandIds.open,
   assistCommandIds.showLineEndingDistribution,
   assistCommandIds.insertParagraphIndent,
@@ -119,7 +126,9 @@ export const applicationMenuCommandIds = [
   searchSelectionShortcutCommandIds.openProjectReplaceFromSelection,
   applicationCommandIds.zoomIn,
   applicationCommandIds.zoomOut,
-  applicationCommandIds.resetZoom
+  applicationCommandIds.resetZoom,
+  projectSettingsCommandIds.open,
+  workspaceCommandIds.openApplicationSettings
 ] as const;
 
 export type ApplicationMenuCommandId =

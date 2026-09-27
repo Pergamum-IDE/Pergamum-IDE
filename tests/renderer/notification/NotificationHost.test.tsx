@@ -270,7 +270,7 @@ describe("NotificationHost (#266)", () => {
         message: "action",
         action: {
           kind: "command",
-          commandId: applicationCommandIds.toggleRecentProjects,
+          commandId: applicationCommandIds.createProject,
           labelKey: "common.close"
         }
       });
