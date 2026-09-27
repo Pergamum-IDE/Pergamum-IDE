@@ -4,6 +4,8 @@ import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildLineChange,
+  canIndentEditorState,
+  canOutdentEditorState,
   editorIndentKeymap,
   fencedCodeIndentUnitFacet,
   indentCommand,
@@ -1060,3 +1062,98 @@ describe("indentCommand / outdentCommand routing by documentIsMarkdownFacet (#54
     }
   });
 });
+
+describe("canIndentEditorState / canOutdentEditorState availability helpers (#593)", () => {
+  it("null or undefined or readOnly state returns false for both helpers", () => {
+    expect(canIndentEditorState(null)).toBe(false);
+    expect(canOutdentEditorState(null)).toBe(false);
+    expect(canIndentEditorState(undefined)).toBe(false);
+    expect(canOutdentEditorState(undefined)).toBe(false);
+
+    const readOnlyState = EditorState.create({
+      doc: "- parent\n- child",
+      selection: EditorSelection.single(10),
+      extensions: [EditorState.readOnly.of(true)]
+    });
+    expect(canIndentEditorState(readOnlyState)).toBe(false);
+    expect(canOutdentEditorState(readOnlyState)).toBe(false);
+  });
+
+  it("top-level paragraph: both canIndent and canOutdent return false", () => {
+    const state = EditorState.create({
+      doc: "Top level paragraph",
+      selection: EditorSelection.single(5)
+    });
+    expect(canIndentEditorState(state)).toBe(false);
+    expect(canOutdentEditorState(state)).toBe(false);
+  });
+
+  it("outermost list item: canIndent returns true (when preceding sibling exists), canOutdent returns false", () => {
+    const doc = "- parent\n- child";
+    const state = EditorState.create({
+      doc,
+      selection: EditorSelection.single(10)
+    });
+    expect(canIndentEditorState(state)).toBe(true);
+    expect(canOutdentEditorState(state)).toBe(false);
+  });
+
+  it("first list item (no preceding sibling): canIndent returns false, canOutdent returns false", () => {
+    const state = EditorState.create({
+      doc: "- item 1",
+      selection: EditorSelection.single(3)
+    });
+    expect(canIndentEditorState(state)).toBe(false);
+    expect(canOutdentEditorState(state)).toBe(false);
+  });
+
+  it("nested list item: both canIndent (if preceding sibling exists) and canOutdent return true", () => {
+    const doc = "- parent\n  - nested 1\n  - nested 2";
+    const state = EditorState.create({
+      doc,
+      selection: EditorSelection.single(25) // line 3
+    });
+    expect(canIndentEditorState(state)).toBe(true);
+    expect(canOutdentEditorState(state)).toBe(true);
+  });
+
+  it("multi-line selection: returns true if at least 1 line can change, false if all lines are no-op", () => {
+    const doc = "paragraph 1\n- parent 1\n- parent 2\n  - nested 1\n  - nested 2";
+    // Selection spanning paragraph 1 and nested 2: parent 2 / nested 2 can indent, nested lines can outdent
+    const stateSpan = EditorState.create({
+      doc,
+      selection: EditorSelection.single(0, doc.length)
+    });
+    expect(canIndentEditorState(stateSpan)).toBe(true);
+    expect(canOutdentEditorState(stateSpan)).toBe(true);
+
+    // Selection spanning only paragraphs
+    const paragraphsDoc = "paragraph 1\nparagraph 2";
+    const stateParagraphs = EditorState.create({
+      doc: paragraphsDoc,
+      selection: EditorSelection.single(0, paragraphsDoc.length)
+    });
+    expect(canIndentEditorState(stateParagraphs)).toBe(false);
+    expect(canOutdentEditorState(stateParagraphs)).toBe(false);
+  });
+
+  it("plain text (.txt) document: canIndent returns true, canOutdent returns true only if line has leading whitespace", () => {
+    const doc = "no leading space\n  indented line";
+    const stateLine1 = EditorState.create({
+      doc,
+      selection: EditorSelection.single(5),
+      extensions: [documentIsMarkdownFacet.of(false)]
+    });
+    expect(canIndentEditorState(stateLine1)).toBe(true);
+    expect(canOutdentEditorState(stateLine1)).toBe(false);
+
+    const stateLine2 = EditorState.create({
+      doc,
+      selection: EditorSelection.single(20),
+      extensions: [documentIsMarkdownFacet.of(false)]
+    });
+    expect(canIndentEditorState(stateLine2)).toBe(true);
+    expect(canOutdentEditorState(stateLine2)).toBe(true);
+  });
+});
+

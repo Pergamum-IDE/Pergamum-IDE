@@ -1972,8 +1972,10 @@ export function App(): JSX.Element {
   // schedule a Session flush for it. This is the cheap "flush is owed"
   // signal — it does NOT capture, hash, serialize, or IPC; the actual
   // View State capture still happens once, at flush time.
+  const [, setEditorSelectionVersion] = useState(0);
   const handleMarkdownViewStateDirty = useCallback(() => {
     sessionPersistence.markViewStateDirty();
+    setEditorSelectionVersion((v) => v + 1);
   }, [sessionPersistence]);
   // #274: persisted #273 View States awaiting re-apply, keyed by
   // serializedEditorId. Populated by cold-start restore; each entry is
@@ -12431,6 +12433,14 @@ export function App(): JSX.Element {
         onCloseHeadingSelector={handleCloseHeadingSelector}
         onSelectHeadingLevel={handleSelectHeadingLevel}
         onApplyList={handleApplyList}
+        canIndent={
+          hasEditableTextLikeDocument &&
+          Boolean(paragraphIndentControllerRef.current?.canIndent?.())
+        }
+        canOutdent={
+          hasEditableTextLikeDocument &&
+          Boolean(paragraphIndentControllerRef.current?.canOutdent?.())
+        }
         onOutdent={handleOutdent}
         onIndent={handleIndent}
         onOpenLinkDialog={handleOpenLinkInsertDialog}
