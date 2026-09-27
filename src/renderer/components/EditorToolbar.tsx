@@ -44,6 +44,8 @@ export interface EditorToolbarProps {
   onCloseHeadingSelector: () => void;
   onSelectHeadingLevel: (level: HeadingLevel) => void;
   onApplyList: (kind: MarkdownListKind) => void;
+  canIndent?: boolean;
+  canOutdent?: boolean;
   onOutdent: () => void;
   onIndent: () => void;
   onOpenLinkDialog: (opener: Element) => void;
@@ -104,6 +106,8 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   onCloseHeadingSelector,
   onSelectHeadingLevel,
   onApplyList,
+  canIndent,
+  canOutdent,
   onOutdent,
   onIndent,
   onOpenLinkDialog,
@@ -327,7 +331,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
           <button
             type="button"
             className="editorToolbarButton"
-            disabled={!hasEditableTextLikeDocument}
+            disabled={!(canOutdent ?? hasEditableTextLikeDocument)}
             onClick={onOutdent}
             aria-label={translate("toolbar.outdent")}
             title={translate("toolbar.outdent")}
@@ -343,7 +347,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
           <button
             type="button"
             className="editorToolbarButton"
-            disabled={!hasEditableTextLikeDocument}
+            disabled={!(canIndent ?? hasEditableTextLikeDocument)}
             onClick={onIndent}
             aria-label={translate("toolbar.indent")}
             title={translate("toolbar.indent")}

@@ -808,6 +808,18 @@ describe("EditorToolbar", () => {
     expect(props.onApplyList).toHaveBeenCalledWith("checklist");
   });
 
+  it("Outdent / Indent buttons respect explicit canOutdent / canIndent props (#593)", () => {
+    renderToolbar({ canIndent: false, canOutdent: true });
+    let buttons = toolbarButtons();
+    expect(buttons[8].disabled).toBe(false); // Outdent
+    expect(buttons[9].disabled).toBe(true);  // Indent
+
+    renderToolbar({ canIndent: true, canOutdent: false });
+    buttons = toolbarButtons();
+    expect(buttons[8].disabled).toBe(true);  // Outdent
+    expect(buttons[9].disabled).toBe(false); // Indent
+  });
+
   it("Outdent / Indent buttons call onOutdent / onIndent when clicked", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();

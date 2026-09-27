@@ -37,6 +37,8 @@ import type {
   WorkbenchSoundSettings
 } from "../shared/settings";
 import {
+  canIndentEditorState,
+  canOutdentEditorState,
   fencedCodeIndentUnitFacet,
   indentCommand,
   outdentCommand
@@ -567,6 +569,9 @@ export interface MarkdownEditorParagraphIndentController {
    */
   indent(): boolean;
   outdent(): boolean;
+  /** #593: availability helpers for toolbar button enabled/disabled states. */
+  canIndent?: () => boolean;
+  canOutdent?: () => boolean;
 }
 
 export interface MarkdownEditorViewStateController {
@@ -1941,6 +1946,20 @@ export function MarkdownEditor({
           return false;
         }
         return outdentCommand(view);
+      },
+      canIndent: (): boolean => {
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        return canIndentEditorState(view.state);
+      },
+      canOutdent: (): boolean => {
+        const view = viewRef.current;
+        if (!view) {
+          return false;
+        }
+        return canOutdentEditorState(view.state);
       }
     };
 

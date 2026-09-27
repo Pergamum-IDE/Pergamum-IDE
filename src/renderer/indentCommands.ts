@@ -52,7 +52,8 @@ import {
 import {
   documentIsMarkdownFacet,
   plainTextIndentCommand,
-  plainTextOutdentCommand
+  plainTextOutdentCommand,
+  planPlainTextIndentTransaction
 } from "./plainTextIndentCommands";
 
 export type IndentDirection = "indent" | "outdent";
@@ -412,3 +413,38 @@ export const editorIndentKeymap: readonly KeyBinding[] = [
   { key: "Mod-]", run: indentCommand },
   { key: "Mod-[", run: outdentCommand }
 ];
+
+/**
+ * #593: Availability helpers for toolbar / commands. Returns true if indent
+ * will produce a document change for the current selection/cursor in `state`.
+ */
+export function canIndentEditorState(
+  state: EditorState | null | undefined
+): boolean {
+  if (!state || state.readOnly) {
+    return false;
+  }
+  const isMarkdown = state.facet(documentIsMarkdownFacet);
+  const plan = isMarkdown
+    ? planIndentTransaction(state, "indent")
+    : planPlainTextIndentTransaction(state, "indent");
+  return plan.changes.length > 0;
+}
+
+/**
+ * #593: Availability helpers for toolbar / commands. Returns true if outdent
+ * will produce a document change for the current selection/cursor in `state`.
+ */
+export function canOutdentEditorState(
+  state: EditorState | null | undefined
+): boolean {
+  if (!state || state.readOnly) {
+    return false;
+  }
+  const isMarkdown = state.facet(documentIsMarkdownFacet);
+  const plan = isMarkdown
+    ? planIndentTransaction(state, "outdent")
+    : planPlainTextIndentTransaction(state, "outdent");
+  return plan.changes.length > 0;
+}
+
