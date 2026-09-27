@@ -5,6 +5,10 @@ import { registerApplicationCommands } from "../../src/renderer/applicationComma
 import { registerAssistCommands } from "../../src/renderer/assistCommands";
 import { registerCommandPaletteCommands } from "../../src/renderer/commandPaletteCommands";
 import { registerEditorCommands } from "../../src/renderer/editorCommands";
+import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
+import { registerProjectSearchSelectionShortcutCommands } from "../../src/renderer/projectSearchSelectionShortcutCommands";
+import { registerProjectSettingsCommands } from "../../src/renderer/projectSettingsCommands";
+import { registerWorkspaceCommands } from "../../src/renderer/workspaceCommands";
 
 describe("application menu command registration", () => {
   it("registers every allowlisted application menu command in the renderer registry", () => {
@@ -19,7 +23,6 @@ describe("application menu command registration", () => {
         openProject: () => undefined,
         closeProject: () => undefined,
         openBulkTextImportDialog: () => undefined,
-        toggleRecentProjects: () => undefined,
         zoomIn: () => undefined,
         zoomOut: () => undefined,
         resetZoom: () => undefined
@@ -38,8 +41,6 @@ describe("application menu command registration", () => {
         closeProjectDescription: "Close Project",
         openBulkTextImportDialog: "Bulk Import Text Files",
         openBulkTextImportDialogDescription: "Bulk Import Text Files",
-        toggleRecentProjects: "Toggle Recent Projects",
-        toggleRecentProjectsDescription: "Toggle Recent Projects",
         zoomIn: "Zoom In",
         zoomInDescription: "Zoom In",
         zoomOut: "Zoom Out",
@@ -108,6 +109,60 @@ describe("application menu command registration", () => {
       registry,
       { openCommandPalette: () => undefined },
       { open: "Command Palette", openDescription: "Open the Command Palette" }
+    );
+    registerGlossaryCommands(
+      registry,
+      {
+        openGlossaryEntry: () => true,
+        openGlossaryTagManager: () => true,
+        openGlossaryEntryManager: () => true
+      },
+      {
+        openEntry: "Open Glossary Entry",
+        manageTags: "Manage Glossary Tags",
+        manageTagsDescription: "Manage Glossary Tags",
+        manageEntries: "Manage Glossary Entries",
+        manageEntriesDescription: "Manage Glossary Entries"
+      }
+    );
+    registerProjectSearchSelectionShortcutCommands(
+      registry,
+      {
+        openProjectSearchFromSelection: () => undefined,
+        openProjectReplaceFromSelection: () => undefined
+      },
+      {
+        openProjectSearchFromSelection: "Find in Project",
+        openProjectSearchFromSelectionDescription: "Find in Project",
+        openProjectReplaceFromSelection: "Replace in Project",
+        openProjectReplaceFromSelectionDescription: "Replace in Project"
+      }
+    );
+    registerProjectSettingsCommands(
+      registry,
+      { openProjectSettings: () => undefined },
+      { open: "Open Project Settings", openDescription: "Open Project Settings" }
+    );
+    registerWorkspaceCommands(
+      registry,
+      {
+        focusSidebarMode: () => undefined,
+        openApplicationSettings: () => undefined
+      },
+      {
+        toggleFiles: "Toggle Files",
+        toggleFilesDescription: "Toggle Files",
+        focusSearch: "Focus Search",
+        focusSearchDescription: "Focus Search",
+        focusGlossary: "Focus Glossary",
+        focusGlossaryDescription: "Focus Glossary",
+        focusDocumentMap: "Focus Document Map",
+        focusDocumentMapDescription: "Focus Document Map",
+        focusDocumentMetrics: "Focus Document Metrics",
+        focusDocumentMetricsDescription: "Focus Document Metrics",
+        openApplicationSettings: "Open Application Settings",
+        openApplicationSettingsDescription: "Open Application Settings"
+      }
     );
 
     expect(

@@ -913,7 +913,6 @@ export const knownDebugLogCommandIds = [
   editorCommandIds.saveDocument,
   editorCommandIds.saveAs,
   editorCommandIds.close,
-  applicationCommandIds.toggleRecentProjects,
   commandPaletteCommandIds.open,
   assistCommandIds.showLineEndingDistribution,
   assistCommandIds.insertParagraphIndent,

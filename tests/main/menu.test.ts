@@ -10,7 +10,9 @@ import {
   commandPaletteCommandIds,
   editorCommandIds,
   glossaryTabCommandIds,
-  searchSelectionShortcutCommandIds
+  projectSettingsCommandIds,
+  searchSelectionShortcutCommandIds,
+  workspaceCommandIds
 } from "../../src/shared/commandIds";
 
 const electronMock = vi.hoisted(() => ({
@@ -103,12 +105,14 @@ describe("application menu", () => {
       applicationCommandIds.closeProject,
       editorCommandIds.newFile,
       editorCommandIds.openMarkdownDocument,
+      editorCommandIds.close,
       editorCommandIds.saveDocument,
       editorCommandIds.saveAll,
       editorCommandIds.saveAs,
       editorCommandIds.saveAs,
-      applicationCommandIds.toggleRecentProjects,
-      editorCommandIds.close,
+      projectSettingsCommandIds.open,
+      workspaceCommandIds.openApplicationSettings,
+      workspaceCommandIds.openApplicationSettings,
       applicationCommandIds.quitApplication
     ]);
   });
@@ -125,8 +129,9 @@ describe("application menu", () => {
       editorCommandIds.saveDocument,
       editorCommandIds.saveAll,
       editorCommandIds.saveAs,
-      applicationCommandIds.toggleRecentProjects,
-      editorCommandIds.close
+      editorCommandIds.close,
+      projectSettingsCommandIds.open,
+      workspaceCommandIds.openApplicationSettings
     ]) {
       expect(applicationMenuCommandIds).toContain(commandId);
     }
@@ -358,12 +363,19 @@ describe("application menu", () => {
     );
   });
 
-  it("does not add an accelerator to Recent Projects", () => {
-    const fileItems = fileMenuItems("win32");
+  it("does not contain Recent Projects in the File menu", () => {
+    for (const platform of ["darwin", "win32", "linux"] as const) {
+      const fileItems = fileMenuItems(platform);
 
-    expect(fileItemByLabel(fileItems, "Recent Projects").accelerator).toBe(
-      undefined
-    );
+      expect(
+        fileItems.some(
+          (item) => item.id === "workspace.recentProjects.toggle"
+        )
+      ).toBe(false);
+      expect(
+        fileItems.some((item) => item.label === "Recent Projects")
+      ).toBe(false);
+    }
   });
 
   it("keeps File command accelerators in macOS and Windows/Linux templates", () => {
@@ -641,21 +653,20 @@ describe("application menu", () => {
     }
   });
 
-  it("binds Ctrl+W to editor.close as a hidden item on Windows and Linux (#184)", () => {
-    for (const platform of ["win32", "linux"] as const) {
+  it("binds CommandOrControl+W to Close Current Tab (editor.close) across platforms (#591)", () => {
+    for (const platform of ["darwin", "win32", "linux"] as const) {
       const fileItems = fileMenuItems(platform);
       const closeItem = fileItems.find(
-        (candidate) => candidate.accelerator === "CommandOrControl+W"
+        (candidate) => candidate.id === editorCommandIds.close
       );
 
       expect(closeItem).toBeTruthy();
-      expect(closeItem?.visible).toBe(false);
-      expect(closeItem?.acceleratorWorksWhenHidden).toBe(true);
+      expect(closeItem?.accelerator).toBe("CommandOrControl+W");
 
       const { window, send } = menuWindowMock();
 
       fileMenuItems(platform, { getMainWindow: () => window })
-        .find((candidate) => candidate.accelerator === "CommandOrControl+W")
+        .find((candidate) => candidate.id === editorCommandIds.close)
         ?.click?.({} as never, null as never, {} as never);
 
       expect(send).toHaveBeenCalledWith(
@@ -665,13 +676,59 @@ describe("application menu", () => {
     }
   });
 
-  it("does not bind CommandOrControl+W on macOS — it would collide with the native role:close accelerator (#184)", () => {
-    const fileItems = fileMenuItems("darwin");
+  it("includes Project Settings and Application Settings in the File menu (#591 follow-up)", () => {
+    for (const platform of ["darwin", "win32", "linux"] as const) {
+      const fileItems = fileMenuItems(platform);
 
-    expect(
-      fileItems.some((item) => item.accelerator === "CommandOrControl+W")
-    ).toBe(false);
-    expect(fileItems.some((item) => item.role === "close")).toBe(true);
+      const projectSettingsItem = fileItems.find(
+        (item) => item.id === projectSettingsCommandIds.open
+      );
+      expect(projectSettingsItem).toBeTruthy();
+
+      const appSettingsItem = fileItems.find(
+        (item) => item.id === workspaceCommandIds.openApplicationSettings
+      );
+      expect(appSettingsItem).toBeTruthy();
+      expect(appSettingsItem?.label).toBe("Application Settings...");
+      expect(appSettingsItem?.accelerator).toBeUndefined();
+
+      const hiddenAppSettingsItem = fileItems.find(
+        (item) => item.accelerator === "CommandOrControl+,"
+      );
+      expect(hiddenAppSettingsItem).toBeTruthy();
+      expect(hiddenAppSettingsItem?.visible).toBe(false);
+      expect(hiddenAppSettingsItem?.acceleratorWorksWhenHidden).toBe(true);
+
+      const { window, send } = menuWindowMock();
+      const clickItems = fileMenuItems(platform, { getMainWindow: () => window });
+
+      clickItems
+        .find((item) => item.id === projectSettingsCommandIds.open)
+        ?.click?.({} as never, null as never, {} as never);
+
+      expect(send).toHaveBeenCalledWith(
+        APPLICATION_MENU_CHANNELS.command,
+        projectSettingsCommandIds.open
+      );
+
+      clickItems
+        .find((item) => item.id === workspaceCommandIds.openApplicationSettings)
+        ?.click?.({} as never, null as never, {} as never);
+
+      expect(send).toHaveBeenCalledWith(
+        APPLICATION_MENU_CHANNELS.command,
+        workspaceCommandIds.openApplicationSettings
+      );
+
+      clickItems
+        .find((item) => item.accelerator === "CommandOrControl+,")
+        ?.click?.({} as never, null as never, {} as never);
+
+      expect(send).toHaveBeenCalledWith(
+        APPLICATION_MENU_CHANNELS.command,
+        workspaceCommandIds.openApplicationSettings
+      );
+    }
   });
 
   it("does not bind Ctrl+F4 anywhere in the menu", () => {
