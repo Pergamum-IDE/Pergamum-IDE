@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatLocalDateTime,
+  formatResumeHubDateTime,
   generateDocumentPreview
 } from "../../src/shared/resumeHubHelpers";
 
@@ -30,13 +31,29 @@ describe("generateDocumentPreview", () => {
   });
 });
 
-describe("formatLocalDateTime", () => {
-  it("formats date as yyyy-MM-dd HH:mm in local time", () => {
+describe("formatResumeHubDateTime", () => {
+  it("formats date as yyyy-MM-dd HH:mm in local time by default", () => {
     const date = new Date(2026, 8, 28, 7, 10, 0); // Sep 28, 2026 07:10 local time
+    expect(formatResumeHubDateTime(date)).toBe("2026-09-28 07:10");
     expect(formatLocalDateTime(date)).toBe("2026-09-28 07:10");
   });
 
+  it("formats date in UTC when timeZone option is UTC", () => {
+    const date = new Date("2026-09-28T05:00:00.000Z");
+    expect(formatResumeHubDateTime(date, { timeZone: "UTC" })).toBe(
+      "2026-09-28 05:00"
+    );
+  });
+
+  it("formats date in Asia/Tokyo when timeZone option is Asia/Tokyo", () => {
+    const date = new Date("2026-09-28T05:00:00.000Z");
+    expect(formatResumeHubDateTime(date, { timeZone: "Asia/Tokyo" })).toBe(
+      "2026-09-28 14:00"
+    );
+  });
+
   it("returns empty string for invalid date", () => {
+    expect(formatResumeHubDateTime("invalid-date")).toBe("");
     expect(formatLocalDateTime("invalid-date")).toBe("");
   });
 });

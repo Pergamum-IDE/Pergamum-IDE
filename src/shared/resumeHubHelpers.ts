@@ -27,13 +27,43 @@ export function generateDocumentPreview(content: string): string {
   return collapsedSpaces;
 }
 
+export interface FormatResumeHubDateTimeOptions {
+  /**
+   * Optional IANA time zone identifier (e.g. `"UTC"`, `"Asia/Tokyo"`).
+   * When omitted, local time is used.
+   */
+  readonly timeZone?: string;
+}
+
 /**
- * Formats a Date/timestamp into `yyyy-MM-dd HH:mm` in local time.
+ * Formats a Date/timestamp into `yyyy-MM-dd HH:mm` for Resume Hub display.
+ * Defaults to local time unless `options.timeZone` is specified.
  */
-export function formatLocalDateTime(dateInput: Date | number | string): string {
+export function formatResumeHubDateTime(
+  dateInput: Date | number | string,
+  options?: FormatResumeHubDateTimeOptions
+): string {
   const date = new Date(dateInput);
   if (Number.isNaN(date.getTime())) {
     return "";
+  }
+
+  if (options?.timeZone) {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: options.timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    });
+    const parts = formatter.formatToParts(date);
+    const partMap: Record<string, string> = {};
+    for (const part of parts) {
+      partMap[part.type] = part.value;
+    }
+    return `${partMap.year}-${partMap.month}-${partMap.day} ${partMap.hour}:${partMap.minute}`;
   }
 
   const year = date.getFullYear();
@@ -44,3 +74,5 @@ export function formatLocalDateTime(dateInput: Date | number | string): string {
 
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
+
+export const formatLocalDateTime = formatResumeHubDateTime;

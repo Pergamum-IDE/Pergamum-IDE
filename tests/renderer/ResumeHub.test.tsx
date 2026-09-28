@@ -6,6 +6,8 @@ import type { RecentProjectDocumentItem } from "../../src/shared/api";
 import type { GlossaryEntry } from "../../src/shared/glossary";
 import { jaTranslations } from "../../src/shared/i18n/ja";
 
+import { formatResumeHubDateTime } from "../../src/shared/resumeHubHelpers";
+
 function translate(key: string, values?: Record<string, string | number>): string {
   let template = (jaTranslations as Record<string, string>)[key] ?? key;
   if (values) {
@@ -71,7 +73,7 @@ describe("ResumeHub Component", () => {
 
     expect(html).toContain("千年領主");
     expect(html).toContain("Atom 2件 / Tag 1件");
-    expect(html).toContain("2026-09-28 15:42"); // formatted local date
+    expect(html).toContain(formatResumeHubDateTime(mockGlossaryEntries[0].updatedAt));
     expect(html).toContain("開く");
   });
 
