@@ -108,7 +108,7 @@ describe("markdown callouts (#568)", () => {
       expect(markdownCalloutIconPaths).toEqual({
         note: "assets/icons/feather/callout/alert-circle.svg",
         tip: "assets/icons/codicons/callout/lightbulb.svg",
-        important: "assets/icons/svgrepo/callout/info-message.svg",
+        important: "assets/icons/codicons/callout/report.svg",
         warning: "assets/icons/feather/callout/alert-triangle.svg",
         caution: "assets/icons/feather/callout/alert-octagon.svg"
       });
