@@ -19,6 +19,8 @@ export type WorkspaceFocusCommandId =
 export interface WorkspaceCommandController {
   focusSidebarMode(mode: SidebarMode): void;
   openApplicationSettings(): void;
+  showResumeHub(): void;
+  canShowResumeHub(): boolean;
 }
 
 export interface WorkspaceCommandTitles {
@@ -34,6 +36,8 @@ export interface WorkspaceCommandTitles {
   focusDocumentMetricsDescription: string;
   openApplicationSettings: string;
   openApplicationSettingsDescription: string;
+  showResumeHub: string;
+  showResumeHubDescription: string;
 }
 
 type WorkspaceCommand = Command<readonly [], void>;
@@ -67,6 +71,10 @@ export function createWorkspaceCommandTitles(
     ),
     openApplicationSettingsDescription: translate(
       "command.workspace.applicationSettings.open.description"
+    ),
+    showResumeHub: translate("command.workbench.showResumeHub"),
+    showResumeHubDescription: translate(
+      "command.workbench.showResumeHub.description"
     )
   };
 }
@@ -140,6 +148,19 @@ export function createWorkspaceCommands(
       execute: () => {
         controller.openApplicationSettings();
       }
+    },
+    {
+      id: workspaceCommandIds.showResumeHub,
+      title: titles.showResumeHub,
+      description: titles.showResumeHubDescription,
+      when: { key: "project.isOpen" },
+      execute: () => {
+        if (!controller.canShowResumeHub()) {
+          return;
+        }
+        controller.showResumeHub();
+      },
+      isEnabled: () => controller.canShowResumeHub()
     }
   ];
 }

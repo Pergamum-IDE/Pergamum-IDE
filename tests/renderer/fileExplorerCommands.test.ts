@@ -399,7 +399,9 @@ describe("Toggle File Explorer command wording (#311)", () => {
       registry,
       {
         focusSidebarMode: () => undefined,
-        openApplicationSettings: () => undefined
+        openApplicationSettings: () => undefined,
+        showResumeHub: () => undefined,
+        canShowResumeHub: () => true
       },
       createWorkspaceCommandTitles((key, values) => t(language, key, values))
     );

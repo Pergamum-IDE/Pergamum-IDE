@@ -311,6 +311,7 @@ export const debugLogCommandExecutionSources = [
   "toolbar",
   "utilityWindow",
   "workspaceSidebar",
+  "resumeHub",
   "unknown"
 ] as const;
 

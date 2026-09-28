@@ -25,7 +25,9 @@ describe("workspace commands", () => {
     focusDocumentMetricsDescription:
       "Show the Document Metrics panel in the left pane.",
     openApplicationSettings: "Open Application Settings",
-    openApplicationSettingsDescription: "Open application-wide settings."
+    openApplicationSettingsDescription: "Open application-wide settings.",
+    showResumeHub: "Show Resume Hub",
+    showResumeHubDescription: "Show Resume Hub"
   };
 
   it("registers Workspace focus and settings commands", () => {
@@ -35,7 +37,9 @@ describe("workspace commands", () => {
       registry,
       {
         focusSidebarMode: () => undefined,
-        openApplicationSettings: () => undefined
+        openApplicationSettings: () => undefined,
+        showResumeHub: () => undefined,
+        canShowResumeHub: () => true
       },
       titles
     );
@@ -46,7 +50,8 @@ describe("workspace commands", () => {
       workspaceCommandIds.focusGlossary,
       workspaceCommandIds.focusDocumentMap,
       workspaceCommandIds.focusDocumentMetrics,
-      workspaceCommandIds.openApplicationSettings
+      workspaceCommandIds.openApplicationSettings,
+      workspaceCommandIds.showResumeHub
     ]);
   });
 
@@ -60,7 +65,9 @@ describe("workspace commands", () => {
         focusSidebarMode: (mode) => {
           focusedModes.push(mode);
         },
-        openApplicationSettings: () => undefined
+        openApplicationSettings: () => undefined,
+        showResumeHub: () => undefined,
+        canShowResumeHub: () => true
       },
       titles
     );
@@ -91,7 +98,9 @@ describe("workspace commands", () => {
       registry,
       {
         focusSidebarMode: () => undefined,
-        openApplicationSettings
+        openApplicationSettings,
+        showResumeHub: () => undefined,
+        canShowResumeHub: () => true
       },
       titles
     );
@@ -102,6 +111,30 @@ describe("workspace commands", () => {
     );
 
     expect(openApplicationSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows Resume Hub through a command", async () => {
+    const registry = new CommandRegistry();
+    registry.setCommandContextProvider(() => ({ "project.isOpen": true }));
+    const showResumeHub = vi.fn();
+
+    registerWorkspaceCommands(
+      registry,
+      {
+        focusSidebarMode: () => undefined,
+        openApplicationSettings: () => undefined,
+        showResumeHub,
+        canShowResumeHub: () => true
+      },
+      titles
+    );
+
+    await registry.execute(
+      workspaceCommandIds.showResumeHub,
+      executionOptions
+    );
+
+    expect(showResumeHub).toHaveBeenCalledTimes(1);
   });
 
   it("maps Sidebar modes to stable Workspace Command IDs", () => {
@@ -145,7 +178,10 @@ describe("workspace commands", () => {
       openApplicationSettings:
         "translated:command.workspace.applicationSettings.open",
       openApplicationSettingsDescription:
-        "translated:command.workspace.applicationSettings.open.description"
+        "translated:command.workspace.applicationSettings.open.description",
+      showResumeHub: "translated:command.workbench.showResumeHub",
+      showResumeHubDescription:
+        "translated:command.workbench.showResumeHub.description"
     });
   });
 

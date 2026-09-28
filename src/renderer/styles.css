@@ -1514,6 +1514,133 @@ label.settingsItemHeader {
   padding: 28px 32px;
 }
 
+/* #538: Resume Hub special tab & zero-tab passive container */
+.resumeHubContainer {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: #ffffff;
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.resumeHubHeader {
+  border-bottom: 1px solid #e1e4e8;
+  padding-bottom: 12px;
+}
+
+.resumeHubTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #17212b;
+}
+
+.resumeHubBody {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 800px;
+}
+
+.resumeHubSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resumeHubSectionTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #17212b;
+}
+
+.resumeHubEmptyState {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7785;
+  font-style: italic;
+}
+
+.resumeHubList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resumeHubListItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  gap: 16px;
+}
+
+.resumeHubItemMain {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.resumeHubItemPath,
+.resumeHubItemTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #17212b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resumeHubItemPreview,
+.resumeHubItemAux {
+  font-size: 12px;
+  color: #52616f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resumeHubItemMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.resumeHubOpenButton {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #0366d6;
+  background-color: #ffffff;
+  border: 1px solid #c8e1ff;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.resumeHubOpenButton:hover {
+  background-color: #f1f8ff;
+  border-color: #0366d6;
+}
+
+.resumeHubItemDate {
+  font-size: 12px;
+  color: #6b7785;
+}
+
 .debugLogPanel {
   display: flex;
   min-height: 0;

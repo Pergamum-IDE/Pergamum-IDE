@@ -358,7 +358,9 @@ describe("workspace navigation", () => {
         },
         openApplicationSettings: () => {
           didOpenApplicationSettings = true;
-        }
+        },
+        showResumeHub: () => undefined,
+        canShowResumeHub: () => true
       },
       {
         toggleFiles: "Focus File Explorer",
@@ -372,7 +374,9 @@ describe("workspace navigation", () => {
         focusDocumentMetrics: "Focus Document Metrics",
         focusDocumentMetricsDescription: "Focus Document Metrics",
         openApplicationSettings: "Open Application Settings",
-        openApplicationSettingsDescription: "Open Application Settings"
+        openApplicationSettingsDescription: "Open Application Settings",
+        showResumeHub: "Show Resume Hub",
+        showResumeHubDescription: "Show Resume Hub"
       }
     );
 

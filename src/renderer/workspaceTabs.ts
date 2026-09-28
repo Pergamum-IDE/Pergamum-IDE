@@ -10,7 +10,8 @@ export type SpecialTabId =
   | "projectSettings"
   | "glossaryTagManager"
   | "glossaryEntryManager"
-  | "debugLog";
+  | "debugLog"
+  | "resumeHub";
 
 export interface SpecialWorkspaceTab {
   readonly kind: "special";

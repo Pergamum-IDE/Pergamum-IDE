@@ -36,6 +36,7 @@ import {
   type PergamumProjectConfig,
   type ProjectAccessMode,
   type ProjectDocument,
+  type RecentProjectDocumentItem,
   type ProjectDocumentContent,
   type ProjectOpenFinalizationResult,
   type ProjectOpenResult,
@@ -102,6 +103,10 @@ import type {
   ProjectDocumentPathRelocation,
   RecoveryPathRekeyResult
 } from "../shared/projectMove";
+import {
+  generateDocumentPreview,
+  formatLocalDateTime
+} from "../shared/resumeHubHelpers";
 import {
   applyMarkdownFileExtension,
   fileExplorerCreateFailureReasonFromErrorCode,
@@ -4774,6 +4779,69 @@ export function registerProjectIpc(
       }
 
       return documents;
+    }
+  );
+
+  // #538: list recently modified project documents (max 5) for Resume Hub
+  ipcMain.handle(
+    PROJECT_CHANNELS.listRecentProjectDocuments,
+    async (): Promise<RecentProjectDocumentItem[]> => {
+      if (!currentProjectState) {
+        return [];
+      }
+
+      const documents = await discoverMarkdownFiles(
+        currentProjectState.rootPath
+      );
+
+      const settings = await loadSettings();
+      const encoding = settings.textFiles.encoding;
+      const items: RecentProjectDocumentItem[] = [];
+
+      for (const document of documents) {
+        try {
+          const documentPath = resolveProjectDocumentPath(document.relativePath);
+          const stat = await fs.stat(documentPath);
+          let content = "";
+          try {
+            if (isProjectMarkdownDocumentPath(document.relativePath)) {
+              content = await fs.readFile(documentPath, "utf8");
+            } else {
+              const bytes = await fs.readFile(documentPath);
+              try {
+                const textDecoded = decodeTextFileBytes(bytes, encoding);
+                content = textDecoded.content;
+              } catch (err) {
+                if (encoding === "utf8" || encoding === "utf8Bom") {
+                  try {
+                    const textDecoded = decodeTextFileBytes(bytes, "shiftJis");
+                    content = textDecoded.content;
+                  } catch {
+                    content = "";
+                  }
+                } else {
+                  content = "";
+                }
+              }
+            }
+          } catch {
+            content = "";
+          }
+          const preview = generateDocumentPreview(content);
+          items.push({
+            relativePath: document.relativePath,
+            name: document.name,
+            preview,
+            updatedAt: formatLocalDateTime(stat.mtime),
+            mtimeMs: stat.mtimeMs
+          });
+        } catch {
+          // Ignore unstattable files
+        }
+      }
+
+      items.sort((a, b) => b.mtimeMs - a.mtimeMs);
+      return items.slice(0, 5);
     }
   );
 

@@ -314,6 +314,7 @@ export const PROJECT_CHANNELS = {
    * only adds — an already-open `.txt` document stays saveable regardless.
    */
   listProjectDocuments: "projects:listProjectDocuments",
+  listRecentProjectDocuments: "projects:listRecentProjectDocuments",
   readProjectDocument: "projects:readProjectDocument",
   readProjectDocumentAozora: "projects:readProjectDocumentAozora",
   /** #372: first non-empty Markdown line of a project-local document, for the
@@ -803,6 +804,15 @@ export type ExportPdfCombinedResult =
 export interface ProjectDocument {
   relativePath: string;
   name: string;
+}
+
+/** #538: Recently updated project document metadata and preview for Resume Hub */
+export interface RecentProjectDocumentItem {
+  relativePath: string;
+  name: string;
+  preview: string;
+  updatedAt: string;
+  mtimeMs: number;
 }
 
 export type FileExplorerEntryKind = "folder" | "file";
@@ -1423,6 +1433,8 @@ export interface PergamumApi {
      *  `textFiles.enablePlainTextDocuments` value. `[]` when no project is
      *  open. */
     listProjectDocuments: () => Promise<ProjectDocument[]>;
+    /** #538: list recently modified project documents (max 5) with previews for Resume Hub */
+    listRecentProjectDocuments: () => Promise<RecentProjectDocumentItem[]>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;
