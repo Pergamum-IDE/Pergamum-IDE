@@ -593,6 +593,8 @@ interface EditorSurfaceProps {
   notifyRubyMultiLine?: () => void;
   /** #529: see MarkdownEditor.tsx's `markdownToolbarShortcut` prop doc comment. */
   markdownToolbarShortcut?: MarkdownEditorToolbarShortcutConfig | null;
+  /** #606: Markdown syntax checker active toggle */
+  isMarkdownSyntaxCheckerActive?: boolean;
   hasProject?: boolean;
   projectAccessMode?: ProjectAccessMode | null;
   onRequestRenameActiveDocument?: () => void;
@@ -734,6 +736,7 @@ export function EditorSurface({
   notifyRubyReadOnly,
   notifyRubyMultiLine,
   markdownToolbarShortcut,
+  isMarkdownSyntaxCheckerActive,
   hasProject,
   projectAccessMode,
   onRequestRenameActiveDocument,
@@ -857,6 +860,7 @@ export function EditorSurface({
           notifyRubyReadOnly={notifyRubyReadOnly}
           notifyRubyMultiLine={notifyRubyMultiLine}
           markdownToolbarShortcut={markdownToolbarShortcut}
+          isMarkdownSyntaxCheckerActive={isMarkdownSyntaxCheckerActive}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}
@@ -959,6 +963,8 @@ interface MarkdownEditorSurfaceProps {
   notifyRubyMultiLine?: () => void;
   /** #529: see MarkdownEditor.tsx's `markdownToolbarShortcut` prop doc comment. */
   markdownToolbarShortcut?: MarkdownEditorToolbarShortcutConfig | null;
+  /** #606: Markdown syntax checker active toggle */
+  isMarkdownSyntaxCheckerActive?: boolean;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -1066,6 +1072,7 @@ function MarkdownEditorSurface({
   notifyRubyReadOnly,
   notifyRubyMultiLine,
   markdownToolbarShortcut,
+  isMarkdownSyntaxCheckerActive,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -3388,6 +3395,7 @@ function MarkdownEditorSurface({
           emphasisMarkShortcut={emphasisMarkShortcutConfig}
           rubyShortcut={rubyShortcutConfig}
           markdownToolbarShortcut={markdownToolbarShortcut}
+          isMarkdownSyntaxCheckerActive={isMarkdownSyntaxCheckerActive}
           renameShortcut={renameShortcutConfig}
           extraPendingSelection={findExtraSelection}
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}

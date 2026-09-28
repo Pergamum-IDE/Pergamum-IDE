@@ -1128,10 +1128,16 @@ export function App(): JSX.Element {
     useState<boolean>(false);
   const [isTablePopoverOpen, setIsTablePopoverOpen] =
     useState<boolean>(false);
+  const [isMarkdownSyntaxCheckerActive, setIsMarkdownSyntaxCheckerActive] =
+    useState<boolean>(false);
   const [linkInsertDialogState, setLinkInsertDialogState] = useState<{
     readonly selectedText: string;
     readonly opener: Element | null;
   } | null>(null);
+
+  useEffect(() => {
+    setIsMarkdownSyntaxCheckerActive(false);
+  }, [project]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -1579,6 +1585,8 @@ export function App(): JSX.Element {
   const openProjectReplaceFromSelectionCommandRef = useRef<() => void>(
     () => undefined
   );
+  const toggleSyntaxCheckerCommandRef = useRef<() => void>(() => undefined);
+  const canToggleSyntaxCheckerCommandRef = useRef<() => boolean>(() => false);
   // #274: cold-start Session restore + launch routing runs exactly once,
   // after settings are ready. Replaces the bare startup-project open.
   const coldStartRestoreAttemptedRef = useRef(false);
@@ -2989,6 +2997,8 @@ export function App(): JSX.Element {
     activeEditorIsMarkdown || isGlossaryDescriptionEditorActive;
   const canUseMarkdownToolbarCommands =
     activeEditorIsMarkdownEditingTarget && !isReadOnlyProjectOwnedEditor;
+  /** #606: Markdown syntax checker enable gate (active Markdown document only, excluding .txt / glossary description / special tabs) */
+  const canUseMarkdownSyntaxChecker = activeEditorIsMarkdown;
   // #531: shared enable gate for the Ruby / Emphasis Mark toolbar buttons —
   // deliberately looser than `canUseMarkdownToolbarCommands` above, since the
   // existing Ctrl+R / Ctrl+. shortcuts already work on `.txt` documents
@@ -3535,6 +3545,12 @@ export function App(): JSX.Element {
   const handleInsertBlockquote = useCallback(() => {
     paragraphIndentControllerRef.current?.insertBlockquote();
   }, []);
+  const handleToggleMarkdownSyntaxChecker = useCallback(() => {
+    if (!canUseMarkdownSyntaxChecker) {
+      return;
+    }
+    setIsMarkdownSyntaxCheckerActive((prev) => !prev);
+  }, [canUseMarkdownSyntaxChecker]);
 
   // #533: Unordered / Ordered / Checklist apply immediately, same shape as
   // the other Markdown-specific toolbar commands above.
@@ -3748,7 +3764,8 @@ export function App(): JSX.Element {
         requestInsertImage: () => {
           void handleInsertImage(null);
         },
-        requestOpenTablePicker: () => setIsTablePopoverOpen((prev) => !prev)
+        requestOpenTablePicker: () => setIsTablePopoverOpen((prev) => !prev),
+        toggleSyntaxChecker: handleToggleMarkdownSyntaxChecker
       }),
       [
         canUseMarkdownToolbarCommands,
@@ -3758,7 +3775,8 @@ export function App(): JSX.Element {
         handleInsertHorizontalRule,
         handleInsertCodeBlock,
         handleInsertBlockquote,
-        handleInsertImage
+        handleInsertImage,
+        handleToggleMarkdownSyntaxChecker
       ]
     );
 
@@ -3835,6 +3853,8 @@ export function App(): JSX.Element {
         canInsertImage: () => canInsertImageCommandRef.current(),
         insertBlockquote: () => insertBlockquoteCommandRef.current(),
         canInsertBlockquote: () => canInsertBlockquoteCommandRef.current(),
+        toggleSyntaxChecker: () => toggleSyntaxCheckerCommandRef.current(),
+        canToggleSyntaxChecker: () => canToggleSyntaxCheckerCommandRef.current(),
         delegateNativeEditCommand: (commandId) =>
           delegateNativeEditCommand(commandId),
         canDelegateNativeEditCommand: () => true
@@ -5192,6 +5212,15 @@ export function App(): JSX.Element {
   // reads this array through a ref, so pane shortcuts see the same current
   // command state as Activity Bar clicks.
   useGlobalKeyboardShortcuts([
+    {
+      id: "toggleMarkdownSyntaxChecker",
+      match: { key: "c", ctrlOrCmd: true, shift: true },
+      handler: () => {
+        if (canUseMarkdownSyntaxChecker) {
+          handleToggleMarkdownSyntaxChecker();
+        }
+      }
+    },
     {
       id: "insertImage",
       match: { key: "i", ctrlOrCmd: true, shift: true },
@@ -9655,6 +9684,10 @@ export function App(): JSX.Element {
   insertBlockquoteCommandRef.current = () => {
     handleInsertBlockquote();
   };
+  canToggleSyntaxCheckerCommandRef.current = () => canUseMarkdownSyntaxChecker;
+  toggleSyntaxCheckerCommandRef.current = () => {
+    handleToggleMarkdownSyntaxChecker();
+  };
   // #342: Save All — save every open document that currently has unsaved
   // changes, reusing the existing per-document `saveFile` spec (line endings,
   // Recovery retirement, atomic write, in-flight guarding). The dirty set is
@@ -12620,6 +12653,9 @@ export function App(): JSX.Element {
         onSaveCurrentDocument={() => {
           void saveFile();
         }}
+        canUseMarkdownSyntaxChecker={canUseMarkdownSyntaxChecker}
+        isMarkdownSyntaxCheckerActive={isMarkdownSyntaxCheckerActive}
+        onToggleMarkdownSyntaxChecker={handleToggleMarkdownSyntaxChecker}
         isFullscreen={isFullscreen}
         onToggleFullscreen={handleToggleFullscreen}
         translate={translate}
@@ -13024,6 +13060,9 @@ export function App(): JSX.Element {
                         notifyRubyReadOnly={notifyRubyReadOnly}
                         notifyRubyMultiLine={notifyRubyMultiLine}
                         markdownToolbarShortcut={markdownToolbarShortcutConfig}
+                        isMarkdownSyntaxCheckerActive={
+                          canUseMarkdownSyntaxChecker && isMarkdownSyntaxCheckerActive
+                        }
                         hasProject={Boolean(project)}
                         projectAccessMode={project?.accessMode}
                         onRequestRenameActiveDocument={

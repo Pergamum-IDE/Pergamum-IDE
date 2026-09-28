@@ -97,6 +97,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
       canInsertImage: () => true,
       insertBlockquote: () => undefined,
       canInsertBlockquote: () => true,
+      toggleSyntaxChecker: () => undefined,
+      canToggleSyntaxChecker: () => true,
       delegateNativeEditCommand: () => undefined,
       canDelegateNativeEditCommand: () => true
     },
@@ -117,6 +119,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
       insertImageDescription: "Insert Image",
       insertBlockquote: "Insert Blockquote",
       insertBlockquoteDescription: "Insert Blockquote",
+      toggleSyntaxChecker: "Toggle Markdown Syntax Checker",
+      toggleSyntaxCheckerDescription: "Toggle Markdown Syntax Checker",
       cutSelection: "Cut",
       cutSelectionDescription: "Cut",
       copySelection: "Copy",

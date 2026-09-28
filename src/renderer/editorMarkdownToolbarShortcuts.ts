@@ -40,6 +40,8 @@ export interface MarkdownEditorToolbarShortcutConfig {
   readonly requestInsertImage: () => void;
   /** #603 Ctrl+T / Mod+T */
   readonly requestOpenTablePicker?: () => void;
+  /** #606 Mod+Shift+C */
+  readonly toggleSyntaxChecker?: () => void;
 }
 
 let currentMarkdownToolbarShortcutConfig: MarkdownEditorToolbarShortcutConfig | null =
@@ -73,7 +75,8 @@ type MarkdownToolbarShortcutTrigger =
   | "codeBlock"
   | "insertBlockquote"
   | "insertImage"
-  | "insertTable";
+  | "insertTable"
+  | "toggleSyntaxChecker";
 
 function matchMarkdownToolbarShortcutTrigger(
   event: KeyboardEvent
@@ -96,6 +99,8 @@ function matchMarkdownToolbarShortcutTrigger(
         return "insertBlockquote";
       case "i":
         return "insertImage";
+      case "c":
+        return "toggleSyntaxChecker";
       default:
         return null;
     }
@@ -183,6 +188,9 @@ export function createMarkdownToolbarShortcutKeymapExtension(input?: {
             break;
           case "insertTable":
             config.requestOpenTablePicker?.();
+            break;
+          case "toggleSyntaxChecker":
+            config.toggleSyntaxChecker?.();
             break;
           case "link": {
             const selection = view.state.selection.main;
