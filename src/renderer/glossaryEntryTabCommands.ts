@@ -71,7 +71,7 @@ export const glossaryEntryTabCommandIds = {
    * (via `resolveGlossaryEntryTargetFromSelection`), not here.
    */
   openFromEditorSelection: defineCommandId<
-    readonly [selectedText: string],
+    readonly [selectedText?: string],
     void
   >("glossary.openFromEditorSelection")
 } as const;
@@ -84,8 +84,9 @@ export interface GlossaryEntryTabCommandController {
     options: OpenGlossaryEntryTabOptions
   ): void | Promise<void>;
   openGlossaryEntryTabFromSelection(
-    selectedText: string
+    selectedText?: string
   ): void | Promise<void>;
+  canOpenGlossaryEntryTabFromSelection?(): boolean;
 }
 
 export interface GlossaryEntryTabCommandTitles {
@@ -108,7 +109,7 @@ type OpenEntryTabCommand = Command<
 >;
 
 type OpenFromEditorSelectionCommand = Command<
-  readonly [selectedText: string],
+  readonly [selectedText?: string],
   void
 >;
 
@@ -160,12 +161,9 @@ export function createGlossaryEntryTabCommands(
       id: glossaryEntryTabCommandIds.openFromEditorSelection,
       title: titles.openFromEditorSelection,
       description: titles.openFromEditorSelectionDescription,
-      // #436 Slice 12: keybinding-only for now (Ctrl+G) — active Markdown
-      // editor context makes little sense from the Command Palette (spec:
-      // "まずは keybinding 用 command として実装するだけでもよい").
-      palette: { visible: false },
       execute: (selectedText) =>
-        controller.openGlossaryEntryTabFromSelection(selectedText)
+        controller.openGlossaryEntryTabFromSelection(selectedText),
+      isEnabled: () => controller.canOpenGlossaryEntryTabFromSelection?.() ?? true
     }
   ];
 }

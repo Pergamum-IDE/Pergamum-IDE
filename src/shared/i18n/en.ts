@@ -79,6 +79,12 @@ export const enTranslations = {
   "command.editor.markdown.insertCallout": "Insert Callout",
   "command.editor.markdown.insertCallout.description":
     "Insert a callout block at the cursor.",
+  "command.editor.markdown.insertRuby": "Insert Ruby...",
+  "command.editor.markdown.insertRuby.description":
+    "Insert ruby annotations on the selected text.",
+  "command.editor.markdown.insertEmphasisMark": "Insert Emphasis Mark...",
+  "command.editor.markdown.insertEmphasisMark.description":
+    "Insert emphasis marks (bouten) on the selected text.",
   "command.editor.preview.toggle": "Toggle Preview",
   "command.editor.preview.toggle.description":
     "Toggle preview pane visibility.",

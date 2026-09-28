@@ -68,15 +68,22 @@ describe("glossary entry tab commands — Slice 2 (#436, renamed #574 Slice 5)",
     );
   });
 
-  it("keeps the prepared commands out of the Command Palette for now", () => {
+  it("keeps internal create/edit tab commands out of the Command Palette, while exposing openFromEditorSelection (#613)", () => {
     const registry = new CommandRegistry();
     const { controller } = recordingController();
 
     registerGlossaryEntryTabCommands(registry, controller, titles);
 
-    for (const command of registry.list()) {
-      expect(command.palette).toEqual({ visible: false });
-    }
+    expect(
+      registry.get(glossaryEntryTabCommandIds.openNewEntryTab)?.palette
+    ).toEqual({ visible: false });
+    expect(
+      registry.get(glossaryEntryTabCommandIds.openEntryTab)?.palette
+    ).toEqual({ visible: false });
+    expect(
+      registry.get(glossaryEntryTabCommandIds.openFromEditorSelection)?.palette
+        ?.visible
+    ).not.toBe(false);
   });
 
   it("delegates each command to the controller with its arguments", async () => {
