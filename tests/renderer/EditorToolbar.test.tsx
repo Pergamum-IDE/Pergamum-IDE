@@ -239,6 +239,7 @@ const BUTTON_ORDER = [
   "表を挿入",
   "ルビ",
   "傍点",
+  "Markdown構文チェック",
   "プレビューを切り替え",
   "フルスクリーン切り替え"
 ];
@@ -258,14 +259,14 @@ describe("EditorToolbar", () => {
     renderToolbar();
     expect(
       container.querySelectorAll(".editorToolbarSeparator")
-    ).toHaveLength(9);
+    ).toHaveLength(10);
   });
 
   it("renders the Preview renderer dropdown immediately to the right of the Preview toggle without an intervening separator", () => {
     renderToolbar();
 
     const toolbar = container.querySelector(".editorToolbar")!;
-    const previewButton = toolbarButtons()[18];
+    const previewButton = toolbarButtons()[19];
     const trigger = previewRendererTrigger();
     const previewGroup = previewButton.closest(".editorToolbarGroup")!;
     const groupItems = Array.from(previewGroup.children) as HTMLElement[];
@@ -372,7 +373,7 @@ describe("EditorToolbar", () => {
     expect(trigger.disabled).toBe(true);
     expect(trigger.textContent).toContain("Markdown");
 
-    const previewToggleBtn = toolbarButtons()[18];
+    const previewToggleBtn = toolbarButtons()[19];
     expect(previewToggleBtn.disabled).toBe(false);
     act(() => previewToggleBtn.click());
     expect(props.onTogglePreview).toHaveBeenCalledOnce();
@@ -898,7 +899,7 @@ describe("EditorToolbar", () => {
   it("Preview button calls onTogglePreview when clicked", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const preview = buttons[18];
+    const preview = buttons[19];
 
     act(() => preview.click());
     expect(props.onTogglePreview).toHaveBeenCalledOnce();
@@ -906,16 +907,16 @@ describe("EditorToolbar", () => {
 
   it("Preview button reflects isPreviewVisible via aria-pressed", () => {
     renderToolbar({ isPreviewVisible: true });
-    expect(toolbarButtons()[18].getAttribute("aria-pressed")).toBe("true");
+    expect(toolbarButtons()[19].getAttribute("aria-pressed")).toBe("true");
 
     renderToolbar({ isPreviewVisible: false });
-    expect(toolbarButtons()[18].getAttribute("aria-pressed")).toBe("false");
+    expect(toolbarButtons()[19].getAttribute("aria-pressed")).toBe("false");
   });
 
   it("Preview button is disabled when canTogglePreview is false, independent of other gates", () => {
     renderToolbar({ canTogglePreview: false });
     const buttons = toolbarButtons();
-    expect(buttons[18].disabled).toBe(true);
+    expect(buttons[19].disabled).toBe(true);
     // Other commands stay enabled (still passed as true here).
     expect(buttons[1].disabled).toBe(false);
   });

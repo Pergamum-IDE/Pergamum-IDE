@@ -78,6 +78,10 @@ import {
   createMarkdownImageLinkDiagnosticsExtension,
   type MarkdownImageLinkDiagnosticsExtensionOptions
 } from "./markdownImageLinkDiagnosticsExtension";
+import {
+  createMarkdownSyntaxCheckerExtension,
+  type MarkdownSyntaxCheckerOptions
+} from "./markdownSyntaxChecker/markdownSyntaxCheckerExtension";
 import { createTabCaptureKeymapExtension } from "./tabCaptureKeymapExtension";
 
 /**
@@ -203,6 +207,8 @@ export interface MarkdownEditorDocumentStateOptions {
    * (no lint gutter reserved).
    */
   readonly imageLinkDiagnosticsOptions?: MarkdownImageLinkDiagnosticsExtensionOptions;
+  /** #606: Markdown syntax checker extension options. */
+  readonly syntaxCheckerOptions?: MarkdownSyntaxCheckerOptions;
   /** Built last, over the document's OWN `lineEndingField` — the caller
    *  owns the actual listener body (sound feedback, onChange, Document Map
    *  push, ...), all of which is editor-instance-level, not per-document. */
@@ -344,6 +350,12 @@ export function createMarkdownEditorDocumentState(
       activeFindHighlightField,
       createMarkdownImageAttachmentPositionTrackingExtension(),
       createMarkdownImageAttachmentPasteExtension(imageAttachmentPasteOptions),
+      createMarkdownSyntaxCheckerExtension(
+        options.syntaxCheckerOptions ?? {
+          getIsActive: () => false,
+          getIsMarkdownDocument: () => options.isMarkdownDocument ?? true
+        }
+      ),
       ...(options.imageLinkDiagnosticsOptions
         ? [
             createMarkdownImageLinkDiagnosticsExtension(

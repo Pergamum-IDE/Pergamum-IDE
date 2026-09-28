@@ -50,6 +50,8 @@ export interface EditorCommandController {
   canInsertImage(): boolean;
   insertBlockquote(): void | Promise<void>;
   canInsertBlockquote(): boolean;
+  toggleSyntaxChecker(): void | Promise<void>;
+  canToggleSyntaxChecker(): boolean;
   delegateNativeEditCommand(commandId: EditCommandId): void | Promise<void>;
   canDelegateNativeEditCommand(commandId: EditCommandId): boolean;
 }
@@ -71,6 +73,8 @@ export interface EditorCommandTitles {
   insertImageDescription: string;
   insertBlockquote: string;
   insertBlockquoteDescription: string;
+  toggleSyntaxChecker: string;
+  toggleSyntaxCheckerDescription: string;
   cutSelection: string;
   cutSelectionDescription: string;
   copySelection: string;
@@ -110,6 +114,12 @@ export function createEditorCommandTitles(
     insertBlockquote: translate("command.editor.markdown.insertBlockquote"),
     insertBlockquoteDescription: translate(
       "command.editor.markdown.insertBlockquote.description"
+    ),
+    toggleSyntaxChecker: translate(
+      "command.editor.markdown.toggleSyntaxChecker"
+    ),
+    toggleSyntaxCheckerDescription: translate(
+      "command.editor.markdown.toggleSyntaxChecker.description"
     ),
     cutSelection: translate("command.editor.selection.cut"),
     cutSelectionDescription: translate(
@@ -251,6 +261,19 @@ export function createEditorCommands(
         return controller.insertBlockquote();
       },
       isEnabled: () => controller.canInsertBlockquote()
+    },
+    {
+      id: editorCommandIds.toggleSyntaxChecker,
+      title: titles.toggleSyntaxChecker,
+      description: titles.toggleSyntaxCheckerDescription,
+      execute: () => {
+        if (!controller.canToggleSyntaxChecker()) {
+          return;
+        }
+
+        return controller.toggleSyntaxChecker();
+      },
+      isEnabled: () => controller.canToggleSyntaxChecker()
     },
     editCommand(
       editCommandIds[0],

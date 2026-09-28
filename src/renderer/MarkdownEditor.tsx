@@ -151,6 +151,13 @@ import {
   unregisterEditorViewImageLinkDiagnosticsOptions,
   type MarkdownImageLinkDiagnosticsExtensionOptions
 } from "./markdownImageLinkDiagnosticsExtension";
+import {
+  registerEditorViewSyntaxCheckerOptions,
+  triggerMarkdownSyntaxCheckNow,
+  unregisterEditorViewSyntaxCheckerOptions,
+  type MarkdownSyntaxCheckerOptions
+} from "./markdownSyntaxChecker/markdownSyntaxCheckerExtension";
+import { forceLinting } from "@codemirror/lint";
 import { createTabCaptureKeymapExtension } from "./tabCaptureKeymapExtension";
 import type {
   MarkdownImageLinkDiagnosticReason,
@@ -252,6 +259,8 @@ interface MarkdownEditorProps {
    * Markdown-aware indent/outdent behavior unchanged.
    */
   isMarkdownDocument?: boolean;
+  /** #606: Markdown syntax checker active toggle. */
+  isMarkdownSyntaxCheckerActive?: boolean;
   /**
    * #546 follow-up: `textFiles.indentUnit` — the configured indent unit for
    * plain text (`.txt`) documents. Live, like `fencedCodeIndentUnit` above
@@ -806,6 +815,7 @@ export function MarkdownEditor({
   captureTabInEditor = false,
   fencedCodeIndentUnit = "spaces4",
   isMarkdownDocument = true,
+  isMarkdownSyntaxCheckerActive = false,
   textFileIndentUnit = "tab",
   whitespaceSettings,
   pendingSelection,
@@ -953,6 +963,16 @@ export function MarkdownEditor({
         formatImageLinkDiagnosticMessageRef.current?.(reason, src) ??
         `${reason}: ${src}`
     });
+  const isMarkdownSyntaxCheckerActiveRef = useRef<boolean>(
+    isMarkdownSyntaxCheckerActive ?? false
+  );
+  isMarkdownSyntaxCheckerActiveRef.current =
+    isMarkdownSyntaxCheckerActive ?? false;
+
+  const currentSyntaxCheckerOptionsRef = useRef<MarkdownSyntaxCheckerOptions>({
+    getIsActive: () => isMarkdownSyntaxCheckerActiveRef.current,
+    getIsMarkdownDocument: () => isMarkdownDocument ?? true
+  });
   // #253: read fresh by the tracking field's `update()` on every
   // transaction (see createLineEndingTrackingField), so a runtime change
   // to the effective Markdown/Text file line-ending setting takes effect for
@@ -1212,6 +1232,7 @@ export function MarkdownEditor({
         imageLinkDiagnosticsResolutionContext.kind !== "none"
           ? currentImageLinkDiagnosticsOptionsRef.current
           : undefined,
+      syntaxCheckerOptions: currentSyntaxCheckerOptionsRef.current,
       createUpdateListenerExtension
     });
   }
@@ -1483,6 +1504,22 @@ export function MarkdownEditor({
   ]);
 
   useEffect(() => {
+    isMarkdownSyntaxCheckerActiveRef.current =
+      isMarkdownSyntaxCheckerActive ?? false;
+    if (viewRef.current) {
+      registerEditorViewSyntaxCheckerOptions(
+        viewRef.current,
+        currentSyntaxCheckerOptionsRef.current
+      );
+      triggerMarkdownSyntaxCheckNow(
+        viewRef.current,
+        currentSyntaxCheckerOptionsRef.current
+      );
+      forceLinting(viewRef.current);
+    }
+  }, [isMarkdownSyntaxCheckerActive]);
+
+  useEffect(() => {
     newFileLineEndingFallbackRef.current = newFileLineEndingFallback;
   }, [newFileLineEndingFallback]);
 
@@ -1527,6 +1564,16 @@ export function MarkdownEditor({
       view,
       currentImageLinkDiagnosticsOptionsRef.current
     );
+    registerEditorViewSyntaxCheckerOptions(
+      view,
+      currentSyntaxCheckerOptionsRef.current
+    );
+    if (isMarkdownSyntaxCheckerActiveRef.current) {
+      triggerMarkdownSyntaxCheckNow(
+        view,
+        currentSyntaxCheckerOptionsRef.current
+      );
+    }
 
     if (resolved.wasRestoredFromCache) {
       view.dispatch({
@@ -1591,6 +1638,7 @@ export function MarkdownEditor({
       onScrollerMountRef.current?.(null);
       unregisterEditorViewImageAttachmentPasteOptions(view);
       unregisterEditorViewImageLinkDiagnosticsOptions(view);
+      unregisterEditorViewSyntaxCheckerOptions(view);
       // #272: report this editor's final View State (keyed by whatever
       // document it is currently showing) before the view is torn down, so
       // an unmount that races the persistence debounce still preserves it.
@@ -2298,6 +2346,12 @@ export function MarkdownEditor({
       view.setState(resolved.documentState.state);
       lineEndingFieldRef.current = resolved.documentState.lineEndingField;
       activeDocumentStateRef.current = resolved.documentState;
+      if (isMarkdownSyntaxCheckerActiveRef.current) {
+        triggerMarkdownSyntaxCheckNow(
+          view,
+          currentSyntaxCheckerOptionsRef.current
+        );
+      }
 
       if (resolved.wasRestoredFromCache) {
         view.dispatch({

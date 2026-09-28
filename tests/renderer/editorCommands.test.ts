@@ -40,6 +40,8 @@ const titles = {
   insertImageDescription: "Insert an image file into the current document.",
   insertBlockquote: "Insert Blockquote",
   insertBlockquoteDescription: "Insert a blockquote in the current document.",
+  toggleSyntaxChecker: "Toggle Markdown Syntax Checker",
+  toggleSyntaxCheckerDescription: "Toggle syntax checker diagnostics for the active Markdown document.",
   cutSelection: "Cut",
   cutSelectionDescription: "Cut the selected text in the current editor.",
   copySelection: "Copy",
@@ -97,6 +99,8 @@ function registerEditorCommandSet(
       canInsertImage: () => true,
       insertBlockquote: () => undefined,
       canInsertBlockquote: () => true,
+      toggleSyntaxChecker: () => undefined,
+      canToggleSyntaxChecker: () => true,
       delegateNativeEditCommand: () => undefined,
       canDelegateNativeEditCommand: () => true,
       ...overrides
@@ -129,6 +133,7 @@ describe("editor commands", () => {
       "editor.close",
       "editor.image.insert",
       "editor.markdown.insertBlockquote",
+      "editor.markdown.toggleSyntaxChecker",
       "editor.selection.cut",
       "editor.selection.copy",
       "editor.selection.paste",
@@ -463,6 +468,10 @@ describe("editor commands", () => {
       insertBlockquote: "translated:command.editor.markdown.insertBlockquote",
       insertBlockquoteDescription:
         "translated:command.editor.markdown.insertBlockquote.description",
+      toggleSyntaxChecker:
+        "translated:command.editor.markdown.toggleSyntaxChecker",
+      toggleSyntaxCheckerDescription:
+        "translated:command.editor.markdown.toggleSyntaxChecker.description",
       cutSelection: "translated:command.editor.selection.cut",
       cutSelectionDescription:
         "translated:command.editor.selection.cut.description",

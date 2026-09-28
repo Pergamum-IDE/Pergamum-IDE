@@ -123,6 +123,8 @@ describe("editor.markdown.insertBlockquote command registry & guards", () => {
       canInsertImage: () => true,
       insertBlockquote: vi.fn(),
       canInsertBlockquote: () => canInsertBlockquote,
+      toggleSyntaxChecker: vi.fn(),
+      canToggleSyntaxChecker: () => true,
       delegateNativeEditCommand: vi.fn(),
       canDelegateNativeEditCommand: () => true
     };

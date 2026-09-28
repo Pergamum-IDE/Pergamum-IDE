@@ -47,6 +47,9 @@ export const jaTranslations = {
   "command.editor.markdown.insertBlockquote": "引用を挿入",
   "command.editor.markdown.insertBlockquote.description":
     "カーソル位置または選択範囲の各行に引用記法（> ）を挿入します。",
+  "command.editor.markdown.toggleSyntaxChecker": "Markdown構文チェックを切り替え",
+  "command.editor.markdown.toggleSyntaxChecker.description":
+    "アクティブなMarkdown文書の構文チェック表示を切り替えます。",
   "command.editor.line.goTo": "指定行へ移動",
   "command.editor.line.goTo.description": "アクティブなエディタのカーソルを指定行へ移動します",
   "command.assist.lineEndingDistribution.show": "改行コード分布を表示",
@@ -1927,6 +1930,7 @@ export const jaTranslations = {
   "toolbar.insertHeading": "見出しを挿入",
   "toolbar.insertImage": "画像を挿入",
   "toolbar.insertBlockquote": "引用を挿入",
+  "toolbar.markdownSyntaxChecker": "Markdown構文チェック",
   "toolbar.insertLink": "リンクを挿入",
   "toolbar.insertTable": "表を挿入",
   "toolbar.callout": "コールアウト",

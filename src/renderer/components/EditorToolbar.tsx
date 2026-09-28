@@ -22,6 +22,7 @@ import imageIconRaw from "../../../assets/icons/feather/toolbar/image.svg?raw";
 import tableIconRaw from "../../../assets/icons/codicons/toolbar/table.svg?raw";
 import rubyIconRaw from "../../../assets/icons/pergamum/toolbar/ruby.svg?raw";
 import emphasisIconRaw from "../../../assets/icons/pergamum/toolbar/emphasis.svg?raw";
+import markdownCheckIconRaw from "../../../assets/icons/pergamum/toolbar/markdown-check.svg?raw";
 import listUnorderedIconRaw from "../../../assets/icons/codicons/toolbar/list-unordered.svg?raw";
 import listOrderedIconRaw from "../../../assets/icons/codicons/toolbar/list-ordered.svg?raw";
 import checklistIconRaw from "../../../assets/icons/codicons/toolbar/checklist.svg?raw";
@@ -71,6 +72,10 @@ export interface EditorToolbarProps {
   hasEditableTextLikeDocument: boolean;
   onOpenRubyDialog: (opener: Element) => void;
   onOpenEmphasisDialog: (opener: Element) => void;
+  /** #606: Markdown syntax checker state & toggle */
+  canUseMarkdownSyntaxChecker?: boolean;
+  isMarkdownSyntaxCheckerActive?: boolean;
+  onToggleMarkdownSyntaxChecker?: () => void;
   /** #541: whether Preview is applicable at all for the current
    *  document/renderer — independent of `isPreviewVisible`, since the
    *  button must stay clickable while Preview is currently hidden. */
@@ -130,6 +135,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   hasEditableTextLikeDocument,
   onOpenRubyDialog,
   onOpenEmphasisDialog,
+  canUseMarkdownSyntaxChecker = false,
+  isMarkdownSyntaxCheckerActive = false,
+  onToggleMarkdownSyntaxChecker,
   canTogglePreview,
   isPreviewVisible,
   onTogglePreview,
@@ -537,6 +545,27 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             <span
               className="editorToolbarButtonIcon"
               dangerouslySetInnerHTML={{ __html: emphasisIconRaw }}
+            />
+          </button>
+        </div>
+      </div>
+
+      <div className="editorToolbarSeparator" role="separator" aria-orientation="vertical" />
+
+      <div className="editorToolbarGroup">
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            disabled={!canUseMarkdownSyntaxChecker}
+            aria-pressed={isMarkdownSyntaxCheckerActive}
+            onClick={onToggleMarkdownSyntaxChecker}
+            aria-label={translate("toolbar.markdownSyntaxChecker")}
+            title={translate("toolbar.markdownSyntaxChecker")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{ __html: markdownCheckIconRaw }}
             />
           </button>
         </div>
