@@ -56,6 +56,7 @@ function createConfig(
     insertCodeBlock: vi.fn(),
     insertBlockquote: vi.fn(),
     requestInsertImage: vi.fn(),
+    requestOpenTablePicker: vi.fn(),
     ...overrides
   };
 }
@@ -236,6 +237,15 @@ describe("createMarkdownToolbarShortcutKeymapExtension", () => {
     v.contentDOM.dispatchEvent(event);
     expect(config.applyBold).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("Ctrl+T calls requestOpenTablePicker (#603)", () => {
+    const config = createConfig();
+    const v = createView({ config });
+    const event = keydown({ key: "t" });
+    v.contentDOM.dispatchEvent(event);
+    expect(config.requestOpenTablePicker).toHaveBeenCalledTimes(1);
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it("ignores unrelated Ctrl+<key> combinations", () => {

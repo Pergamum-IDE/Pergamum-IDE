@@ -59,6 +59,9 @@ export interface EditorToolbarProps {
   canInsertImage: boolean;
   onOpenImageInsertion: (opener: Element) => void;
   onInsertTable: (columns: number, rows: number) => void;
+  isTablePopoverOpen?: boolean;
+  onToggleTablePopover?: () => void;
+  onCloseTablePopover?: () => void;
   /** #570: same Markdown-only gate as the table command. */
   canInsertCallout: boolean;
   onInsertCallout: (type: MarkdownCalloutType) => void;
@@ -119,6 +122,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   canInsertImage,
   onOpenImageInsertion,
   onInsertTable,
+  isTablePopoverOpen: externalIsTablePopoverOpen,
+  onToggleTablePopover,
+  onCloseTablePopover,
   canInsertCallout,
   onInsertCallout,
   hasEditableTextLikeDocument,
@@ -140,10 +146,27 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   onToggleFullscreen,
   translate
 }) => {
-  const [isTablePopoverOpen, setIsTablePopoverOpen] = useState<boolean>(false);
+  const [internalIsTablePopoverOpen, setInternalIsTablePopoverOpen] = useState<boolean>(false);
+  const isTablePopoverOpen = externalIsTablePopoverOpen ?? internalIsTablePopoverOpen;
+
+  const handleCloseTablePopover = () => {
+    if (onCloseTablePopover) {
+      onCloseTablePopover();
+    } else {
+      setInternalIsTablePopoverOpen(false);
+    }
+  };
+
+  const handleToggleTablePopover = () => {
+    if (onToggleTablePopover) {
+      onToggleTablePopover();
+    } else {
+      setInternalIsTablePopoverOpen((prev) => !prev);
+    }
+  };
 
   const handleSelectTableSize = (columns: number, rows: number) => {
-    setIsTablePopoverOpen(false);
+    handleCloseTablePopover();
     onInsertTable(columns, rows);
   };
 
@@ -455,7 +478,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             type="button"
             className="editorToolbarButton"
             disabled={!canInsertTable}
-            onClick={() => setIsTablePopoverOpen((prev) => !prev)}
+            onClick={handleToggleTablePopover}
             aria-label={translate("toolbar.insertTable")}
             title={translate("toolbar.insertTable")}
           >
@@ -468,7 +491,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
           {isTablePopoverOpen && canInsertTable && (
             <TableSizePopover
               onSelectTableSize={handleSelectTableSize}
-              onClose={() => setIsTablePopoverOpen(false)}
+              onClose={handleCloseTablePopover}
               translate={translate}
             />
           )}

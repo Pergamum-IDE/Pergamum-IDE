@@ -1,10 +1,22 @@
-import { useEffect, useRef, useState, type FC, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useState, type FC, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { Translate } from "../../shared/i18n";
 
 export interface TableSizePopoverProps {
   onSelectTableSize: (columns: number, rows: number) => void;
   onClose: () => void;
   translate: Translate;
+}
+
+function parseDimension(val: string): number | null {
+  const trimmed = val.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+  const num = Number(trimmed);
+  if (!Number.isInteger(num) || num < 1 || num > 99) {
+    return null;
+  }
+  return num;
 }
 
 export const TableSizePopover: FC<TableSizePopoverProps> = ({
@@ -14,6 +26,8 @@ export const TableSizePopover: FC<TableSizePopoverProps> = ({
 }) => {
   const [hoveredCols, setHoveredCols] = useState<number>(1);
   const [hoveredRows, setHoveredRows] = useState<number>(1);
+  const [rowsInput, setRowsInput] = useState<string>("1");
+  const [colsInput, setColsInput] = useState<string>("1");
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -42,8 +56,49 @@ export const TableSizePopover: FC<TableSizePopoverProps> = ({
     }
   };
 
+  const validRows = parseDimension(rowsInput);
+  const validCols = parseDimension(colsInput);
+  const isValid = validRows !== null && validCols !== null;
+
+  const handleRowsChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setRowsInput(val);
+    const parsed = parseDimension(val);
+    if (parsed !== null) {
+      setHoveredRows(parsed);
+    }
+  };
+
+  const handleColsChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setColsInput(val);
+    const parsed = parseDimension(val);
+    if (parsed !== null) {
+      setHoveredCols(parsed);
+    }
+  };
+
+  const handleApply = () => {
+    if (isValid) {
+      onSelectTableSize(validCols, validRows);
+    }
+  };
+
+  const handleInputKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isValid) {
+        onSelectTableSize(validCols, validRows);
+      }
+    }
+  };
+
   const rows = [1, 2, 3, 4, 5, 6];
   const cols = [1, 2, 3, 4, 5, 6];
+
+  const displayCols = validCols !== null ? String(validCols) : colsInput || "?";
+  const displayRows = validRows !== null ? String(validRows) : rowsInput || "?";
 
   return (
     <div
@@ -56,8 +111,8 @@ export const TableSizePopover: FC<TableSizePopoverProps> = ({
     >
       <div className="tableSizePopoverLabel">
         {translate("toolbar.tableGridLabel", {
-          cols: String(hoveredCols),
-          rows: String(hoveredRows)
+          cols: displayCols,
+          rows: displayRows
         })}
       </div>
       <div className="tableSizePopoverGrid" role="grid">
@@ -75,6 +130,8 @@ export const TableSizePopover: FC<TableSizePopoverProps> = ({
                   onMouseEnter={() => {
                     setHoveredCols(c);
                     setHoveredRows(r);
+                    setColsInput(String(c));
+                    setRowsInput(String(r));
                   }}
                   onClick={() => onSelectTableSize(c, r)}
                   aria-label={`${c} x ${r}`}
@@ -83,6 +140,47 @@ export const TableSizePopover: FC<TableSizePopoverProps> = ({
             })}
           </div>
         ))}
+      </div>
+      <div className="tableSizePopoverInputs">
+        <div className="tableSizePopoverFields">
+          <label className="tableSizePopoverField">
+            <span className="tableSizePopoverFieldLabel">
+              {translate("toolbar.tableRows")}
+            </span>
+            <input
+              type="text"
+              className="tableSizePopoverInput"
+              aria-label={translate("toolbar.tableRows")}
+              value={rowsInput}
+              onChange={handleRowsChange}
+              onKeyDown={handleInputKeyDown}
+            />
+          </label>
+          <label className="tableSizePopoverField">
+            <span className="tableSizePopoverFieldLabel">
+              {translate("toolbar.tableCols")}
+            </span>
+            <input
+              type="text"
+              className="tableSizePopoverInput"
+              aria-label={translate("toolbar.tableCols")}
+              value={colsInput}
+              onChange={handleColsChange}
+              onKeyDown={handleInputKeyDown}
+            />
+          </label>
+        </div>
+        <div className="tableSizePopoverHint">
+          {translate("toolbar.tableRowsHint")}
+        </div>
+        <button
+          type="button"
+          className="tableSizePopoverApplyButton"
+          disabled={!isValid}
+          onClick={handleApply}
+        >
+          {translate("toolbar.tableApply")}
+        </button>
       </div>
     </div>
   );

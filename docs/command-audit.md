@@ -6,13 +6,13 @@
 
 ## 1. 概要・統計 (Summary & Statistics)
 
-- **総確認項目数**: 58 件
+- **総確認項目数**: 59 件
 - **Command Registry 登録コマンド数**: 39 件
   - **コマンドパレット表示 (Registered in Palette)**: 19 件
   - **コマンドパレット非表示 (`palette: { visible: false }`)**: 10 件
   - **内部/デバッグ専用コマンド**: 10 件
 - **Electron メニューアイテム数**: 25 件（うち隠しアクセラレータ 4 件）
-- **キーボードショートカット割り当て項目数**: 32 件
+- **キーボードショートカット割り当て項目数**: 33 件
 
 ---
 
@@ -53,6 +53,7 @@
 | **Edit / Formatting** | - | リンク挿入 | Insert Link | `Mod+K` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate | ダイアログ起動 |
 | **Edit / Formatting** | - | 水平線挿入 | Insert Horizontal Rule | `Mod+Shift+L` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate |  |
 | **Edit / Formatting** | - | コードブロック挿入 | Insert Code Block | `Mod+Shift+B` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate |  |
+| **Edit / Formatting** | - | 表を挿入 | Insert Table | `Mod+T` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate | ポップアップダイアログ表示 |
 | **Edit / Formatting** | - | ルビ挿入ダイアログ | Insert Ruby... | `Mod+R` | CodeMirror Keymap / Toolbar | Markdown, PlainText Document | Read-Write & Selection active | No | Missing Candidate | 選択文字列必須 |
 | **Edit / Formatting** | - | 圏点挿入ダイアログ | Insert Emphasis Mark... | `Mod+.` | CodeMirror Keymap / Toolbar | Markdown, PlainText Document | Read-Write & Selection active | No | Missing Candidate | 選択文字列必須 |
 | **Edit / Indent** | - | インデント | Indent | `Mod+]`, `Tab` | CodeMirror Keymap / Toolbar | Markdown, PlainText Document | `canIndentEditorState` | No | Missing Candidate | #593 にて toolbar enablement 共通化 |
