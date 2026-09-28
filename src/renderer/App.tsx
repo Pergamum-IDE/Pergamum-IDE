@@ -1126,6 +1126,8 @@ export function App(): JSX.Element {
   } | null>(null);
   const [isHeadingSelectorOpen, setIsHeadingSelectorOpen] =
     useState<boolean>(false);
+  const [isTablePopoverOpen, setIsTablePopoverOpen] =
+    useState<boolean>(false);
   const [linkInsertDialogState, setLinkInsertDialogState] = useState<{
     readonly selectedText: string;
     readonly opener: Element | null;
@@ -3745,7 +3747,8 @@ export function App(): JSX.Element {
         insertBlockquote: handleInsertBlockquote,
         requestInsertImage: () => {
           void handleInsertImage(null);
-        }
+        },
+        requestOpenTablePicker: () => setIsTablePopoverOpen((prev) => !prev)
       }),
       [
         canUseMarkdownToolbarCommands,
@@ -12591,6 +12594,9 @@ export function App(): JSX.Element {
         onInsertTable={(columns, rows) => {
           paragraphIndentControllerRef.current?.insertTable?.(columns, rows);
         }}
+        isTablePopoverOpen={isTablePopoverOpen}
+        onToggleTablePopover={() => setIsTablePopoverOpen((prev) => !prev)}
+        onCloseTablePopover={() => setIsTablePopoverOpen(false)}
         canInsertCallout={canUseMarkdownToolbarCommands}
         onInsertCallout={(type) => {
           paragraphIndentControllerRef.current?.insertCallout(type);

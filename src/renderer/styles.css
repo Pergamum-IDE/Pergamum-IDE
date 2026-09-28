@@ -11861,6 +11861,84 @@ label.settingsItemHeader {
   border-color: #0366d6;
 }
 
+.tableSizePopoverInputs {
+  margin-block-start: 8px;
+  padding-block-start: 8px;
+  border-block-start: 1px solid #e1e4e8;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tableSizePopoverFields {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tableSizePopoverField {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #444d56;
+}
+
+.tableSizePopoverFieldLabel {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tableSizePopoverInput {
+  inline-size: 38px;
+  block-size: 22px;
+  padding-inline: 4px;
+  padding-block: 2px;
+  font-size: 12px;
+  border: 1px solid #d1d5da;
+  border-radius: 4px;
+  background-color: #ffffff;
+  color: #24292e;
+  text-align: center;
+}
+
+.tableSizePopoverInput:focus {
+  outline: none;
+  border-color: #0366d6;
+  box-shadow: 0 0 0 2px rgba(3, 102, 214, 0.2);
+}
+
+.tableSizePopoverHint {
+  font-size: 10px;
+  color: #586069;
+  line-height: 1.3;
+  margin-block-start: 2px;
+  margin-block-end: 2px;
+  max-inline-size: 210px;
+}
+
+.tableSizePopoverApplyButton {
+  align-self: flex-end;
+  padding-inline: 10px;
+  padding-block: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid #0366d6;
+  border-radius: 4px;
+  background-color: #0366d6;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.tableSizePopoverApplyButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #d1d5da;
+  background-color: #f6f8fa;
+  color: #959da5;
+}
+
 /* #529 Editor Toolbar command groups */
 .editorToolbarSeparator {
   inline-size: 1px;
