@@ -6,6 +6,7 @@ import {
   markdownCalloutExportCss,
   type MarkdownCalloutLabels
 } from "../preview/markdownCallout";
+import { markdownTableExportCss } from "../preview/markdownTableCss";
 import {
   renderMermaidDiagramsToStaticHtml,
   type MermaidPreviewMessages,
@@ -105,6 +106,7 @@ export async function renderMarkdownStaticExport(
   const katexCss = usesMath ? await loadKatexExportCss() : null;
 
   const exportCss = [
+    markdownTableExportCss,
     markdownCalloutExportCss,
     codeHighlightExportCss,
     usesMath && katexCss ? katexCss : ""

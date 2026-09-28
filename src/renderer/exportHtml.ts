@@ -28,6 +28,7 @@ import {
   markdownItCallout,
   type MarkdownCalloutLabels
 } from "./preview/markdownCallout";
+import { markdownTableExportCss } from "./preview/markdownTableCss";
 import { renderMarkdownStaticExport } from "./export/markdownStaticExportRenderer";
 import { codeHighlightExportCss } from "./preview/codeHighlight";
 import type {
@@ -734,6 +735,7 @@ export async function generateCombinedHtml(
         `      max-width: 100%;`,
         `      height: auto;`,
         `    }`,
+        markdownTableExportCss,
         markdownCalloutExportCss,
         ...(assembly.bodyNotation === "markdown" ? [codeHighlightExportCss] : []),
         ...(assembly.bodyNotation === "markdown" && combinedUsesMath && aggregatedKatexCss
@@ -757,6 +759,7 @@ export async function generateCombinedHtml(
         `      text-emphasis-style: sesame;`,
         `      -webkit-text-emphasis-style: sesame;`,
         `    }`,
+        markdownTableExportCss,
         markdownCalloutExportCss,
         ...(assembly.bodyNotation === "markdown" ? [codeHighlightExportCss] : []),
         ...(assembly.bodyNotation === "markdown" && combinedUsesMath && aggregatedKatexCss
