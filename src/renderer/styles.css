@@ -5142,6 +5142,24 @@ label.settingsItemHeader {
   padding-left: 12px;
 }
 
+/* #605: Markdown Preview Table Styles */
+.preview table {
+  border-collapse: collapse;
+  margin-block: 1em;
+  max-inline-size: 100%;
+}
+
+.preview th,
+.preview td {
+  border: 1px solid #d0d7de;
+  padding: 6px 10px;
+}
+
+.preview th {
+  font-weight: 600;
+  background-color: #f6f8fa;
+}
+
 /* #568: GitHub Alert-style callouts — Markdown horizontal preview only (the
    same structure/classes are styled for HTML/PDF export by
    `markdownCalloutExportCss` in preview/markdownCallout.ts). Color is an

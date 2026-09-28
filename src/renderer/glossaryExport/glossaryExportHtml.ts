@@ -12,6 +12,7 @@ import {
   markdownCalloutExportCss,
   type MarkdownCalloutLabels
 } from "../preview/markdownCallout";
+import { markdownTableExportCss } from "../preview/markdownTableCss";
 import type {
   MermaidPreviewMessages,
   MermaidRenderFn
@@ -320,6 +321,7 @@ export function buildGlossaryEntryExportHtml(
 
   const styles = [
     baseCss,
+    markdownTableExportCss,
     markdownCalloutExportCss,
     codeHighlightExportCss,
     input.description?.usesMath && input.katexCss ? input.katexCss : ""
@@ -447,6 +449,7 @@ export function buildCombinedGlossaryExportHtml(
   const styles = [
     baseCss,
     pdfFontStyle,
+    markdownTableExportCss,
     markdownCalloutExportCss,
     codeHighlightExportCss,
     usesMath && input.katexCss ? input.katexCss : ""
