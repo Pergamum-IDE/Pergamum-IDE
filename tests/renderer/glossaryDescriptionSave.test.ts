@@ -399,7 +399,6 @@ describe("glossaryDescription command enablement (#573 Slice 4)", () => {
       editorDocumentProjectOwned: true,
       editorDocumentProjectFile: false,
       activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
-      occurrenceTrackingActive: false,
       recoveryOwner: false,
       recoveryHasRecoverableCandidates: false
     });

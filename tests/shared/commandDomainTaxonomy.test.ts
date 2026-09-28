@@ -14,13 +14,10 @@ import { registerFileExplorerCommands } from "../../src/renderer/fileExplorerCom
 import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
 import { registerGlossaryEntryTabCommands } from "../../src/renderer/glossaryEntryTabCommands";
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
-import { registerGlossaryOccurrencesCommands } from "../../src/renderer/glossaryOccurrencesCommands";
 import { registerProjectSearchSelectionShortcutCommands } from "../../src/renderer/projectSearchSelectionShortcutCommands";
 import { registerProjectSettingsCommands } from "../../src/renderer/projectSettingsCommands";
 import { registerRecoveryCommands } from "../../src/renderer/recovery/recoveryCommands";
-import { registerUtilityWindowCommands } from "../../src/renderer/utilityWindowCommands";
 import { registerWorkspaceCommands } from "../../src/renderer/workspaceCommands";
-import { registerSessionDebugCommands } from "../../src/renderer/sessionDebugCommands";
 
 // This guard matches `register*Commands` by name. A registration function
 // named outside that convention will not be detected, so new command
@@ -184,22 +181,6 @@ function buildCoreCommandRegistry(): CommandRegistry {
         "Rename the selected File Explorer file or empty folder."
     }
   );
-  registerUtilityWindowCommands(
-    registry,
-    {
-      openUtilityWindow: () => undefined,
-      closeUtilityWindow: () => undefined,
-      toggleUtilityWindow: () => undefined
-    },
-    {
-      open: "Open Utility Window",
-      openDescription: "Open Utility Window",
-      close: "Close Utility Window",
-      closeDescription: "Close Utility Window",
-      toggle: "Toggle Utility Window",
-      toggleDescription: "Toggle Utility Window"
-    }
-  );
   // #377: the Debug Log command is registered only in `--pergamum-debug`
   // mode, but the taxonomy guard still checks it lives under a core domain.
   registerDebugLogCommands(
@@ -241,25 +222,6 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openEntryTabDescription: "Open entry tab",
       openFromEditorSelection: "Open from editor selection",
       openFromEditorSelectionDescription: "Open from editor selection"
-    }
-  );
-  registerGlossaryOccurrencesCommands(
-    registry,
-    {
-      navigateToPreviousOccurrence: () => true,
-      navigateToNextOccurrence: () => true,
-      openTrackedGlossaryEntry: () => true,
-      closeGlossaryOccurrenceTracking: () => true
-    },
-    {
-      previous: "Previous occurrence",
-      previousDescription: "Previous occurrence",
-      next: "Next occurrence",
-      nextDescription: "Next occurrence",
-      openEntry: "Open entry",
-      openEntryDescription: "Open entry",
-      closeTracking: "Close tracking",
-      closeTrackingDescription: "Close tracking"
     }
   );
   registerCommandPaletteCommands(
@@ -315,10 +277,6 @@ function buildCoreCommandRegistry(): CommandRegistry {
         "Open Project Replace from Selection"
     }
   );
-  registerSessionDebugCommands(registry, {
-    injectFailure: () => undefined,
-    clearInjection: () => undefined
-  });
 
   return registry;
 }

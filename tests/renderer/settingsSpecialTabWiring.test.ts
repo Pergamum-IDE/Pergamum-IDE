@@ -7,14 +7,16 @@ describe("Settings special tab wiring (#181)", () => {
   it("opens or focuses Settings through the Application Settings command", () => {
     const source = appSource();
     const workspaceCommandIndex = source.indexOf("registerWorkspaceCommands(");
-    const utilityCommandIndex = source.indexOf("registerUtilityWindowCommands(");
+    const fileExplorerCommandIndex = source.indexOf(
+      "registerFileExplorerCommands("
+    );
 
     expect(workspaceCommandIndex).toBeGreaterThan(-1);
-    expect(utilityCommandIndex).toBeGreaterThan(workspaceCommandIndex);
+    expect(fileExplorerCommandIndex).toBeGreaterThan(workspaceCommandIndex);
 
     const workspaceCommandBlock = source.slice(
       workspaceCommandIndex,
-      utilityCommandIndex
+      fileExplorerCommandIndex
     );
 
     expect(workspaceCommandBlock).toContain(

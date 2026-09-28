@@ -464,11 +464,6 @@ import {
   planGlossaryOccurrenceNavigation,
   type GlossaryOccurrenceCursor
 } from "./glossaryOccurrenceNavigation";
-import {
-  createGlossaryOccurrencesCommandTitles,
-  glossaryOccurrencesCommandIds,
-  registerGlossaryOccurrencesCommands
-} from "./glossaryOccurrencesCommands";
 import { createImeCompositionSaveGuard } from "./imeCompositionSaveGuard";
 import {
   canMutateWorkingCopy,
@@ -575,15 +570,10 @@ import { useApplicationSettings } from "./useApplicationSettings";
 import { createSettingsFieldRestartTracker } from "./settingsFieldRestartTracker";
 import { useHorizontalDrag } from "./useHorizontalDrag";
 import {
-  createUtilityWindowCommandTitles,
-  registerUtilityWindowCommands
-} from "./utilityWindowCommands";
-import {
   createDebugLogCommandTitles,
   debugLogCommandIds,
   registerDebugLogCommands
 } from "./debugLogCommands";
-import { registerSessionDebugCommands } from "./sessionDebugCommands";
 import {
   createProjectSettingsCommandTitles,
   projectSettingsCommandIds,
@@ -3362,8 +3352,6 @@ export function App(): JSX.Element {
         editorDocumentProjectFile:
           renameActiveEditorTargetRelativePath !== null,
         activeEditorSaveBlockedByReadOnlyProjectRootForUi,
-        occurrenceTrackingActive:
-          glossaryOccurrenceTrackingState.kind === "active",
         recoveryOwner: recoveryStoreStatusKind === "owner",
         recoveryHasRecoverableCandidates
       }),
@@ -3378,7 +3366,6 @@ export function App(): JSX.Element {
       renameActiveEditorTargetRelativePath,
       activeEditorSaveBlockedByReadOnlyProjectRootForUi,
       isDirty,
-      glossaryOccurrenceTrackingState.kind,
       recoveryStoreStatusKind,
       recoveryHasRecoverableCandidates
     ]
@@ -3950,47 +3937,6 @@ export function App(): JSX.Element {
         renameActiveEditorTargetName
       )
     );
-    // #436 Phase 8-0 PoC (Slice 1): these commands still flip
-    // `layout.utilityWindow.open`, but the Utility Window is no longer
-    // rendered, so they are dormant (the Command Palette still lists them).
-    // TODO(#436 later slice): remove these commands, `utilityWindowCommands`,
-    // `UtilityWindow.tsx`, `GlossaryOccurrencesPanel.tsx` and the
-    // `layout.utilityWindow` state once occurrence navigation has a new home.
-    registerUtilityWindowCommands(
-      registry,
-      {
-        openUtilityWindow: () => {
-          setLayout((current) => ({
-            ...current,
-            utilityWindow: resolveUtilityWindowOpenState(
-              current.utilityWindow,
-              true,
-              editorAreaBodyRef.current?.clientHeight
-            )
-          }));
-        },
-        closeUtilityWindow: () => {
-          setLayout((current) => ({
-            ...current,
-            utilityWindow: resolveUtilityWindowOpenState(
-              current.utilityWindow,
-              false
-            )
-          }));
-        },
-        toggleUtilityWindow: () => {
-          setLayout((current) => ({
-            ...current,
-            utilityWindow: resolveUtilityWindowOpenState(
-              current.utilityWindow,
-              !current.utilityWindow.open,
-              editorAreaBodyRef.current?.clientHeight
-            )
-          }));
-        }
-      },
-      createUtilityWindowCommandTitles(translate)
-    );
     // #377: the Debug Log command exists ONLY in `--pergamum-debug` mode.
     // Leaving it unregistered on normal startup keeps it out of the Command
     // Palette and makes execution impossible (the bug icon is hidden too).
@@ -4004,11 +3950,6 @@ export function App(): JSX.Element {
         },
         createDebugLogCommandTitles(translate)
       );
-      registerSessionDebugCommands(registry, {
-        injectFailure: (reason, count) =>
-          window.pergamum.session.injectFailure(reason, count),
-        clearInjection: () => window.pergamum.session.clearInjection()
-      });
     }
     registerProjectSettingsCommands(
       registry,
@@ -4068,19 +4009,6 @@ export function App(): JSX.Element {
           openProjectReplaceFromSelectionCommandRef.current()
       },
       createProjectSearchSelectionShortcutCommandTitles(translate)
-    );
-    registerGlossaryOccurrencesCommands(
-      registry,
-      {
-        navigateToPreviousOccurrence: () =>
-          navigateGlossaryOccurrenceTrackingSessionRef.current("previous"),
-        navigateToNextOccurrence: () =>
-          navigateGlossaryOccurrenceTrackingSessionRef.current("next"),
-        openTrackedGlossaryEntry: () => openTrackedGlossaryEntryRef.current(),
-        closeGlossaryOccurrenceTracking: () =>
-          closeGlossaryOccurrenceTrackingRef.current()
-      },
-      createGlossaryOccurrencesCommandTitles(translate)
     );
     registerCommandPaletteCommands(
       registry,
@@ -7923,7 +7851,7 @@ export function App(): JSX.Element {
     try {
       const didOpen = await commandRegistry.execute(
         glossaryCommandIds.openEntry,
-        { source: "utilityWindow" },
+        { source: "workspaceSidebar" },
         entryId
       );
 

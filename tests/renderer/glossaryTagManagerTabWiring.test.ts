@@ -52,7 +52,7 @@ describe("Glossary Tag Manager special tab wiring (#375)", () => {
     const source = appSource();
     const registerIndex = source.indexOf("registerGlossaryCommands(");
     const nextRegister = source.indexOf(
-      "registerGlossaryOccurrencesCommands(",
+      "registerGlossaryEntryTabCommands(",
       registerIndex
     );
     const block = source.slice(registerIndex, nextRegister);

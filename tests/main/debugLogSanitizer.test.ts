@@ -85,16 +85,16 @@ describe("debug log details sanitizer", () => {
   it("accepts known command execution sources", () => {
     const details = sanitizeDebugLogDetails(
       {
-        commandId: "glossary.occurrences.next",
-        source: "utilityWindow",
+        commandId: "workspace.files.toggle",
+        source: "commandPalette",
         reason: "disabled_command"
       },
       context()
     );
 
     expect(details).toEqual({
-      commandId: "glossary.occurrences.next",
-      source: "utilityWindow",
+      commandId: "workspace.files.toggle",
+      source: "commandPalette",
       reason: "disabled_command"
     });
   });
