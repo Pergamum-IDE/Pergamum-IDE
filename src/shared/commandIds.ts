@@ -21,7 +21,8 @@ export const workspaceCommandIds = {
   focusGlossary: defineCommandId("workspace.glossary.focus"),
   focusDocumentMap: defineCommandId("workspace.documentMap.focus"),
   focusDocumentMetrics: defineCommandId("workspace.documentMetrics.focus"),
-  openApplicationSettings: defineCommandId("workspace.applicationSettings.open")
+  openApplicationSettings: defineCommandId("workspace.applicationSettings.open"),
+  showResumeHub: defineCommandId("workbench.showResumeHub")
 } as const;
 
 export const commandPaletteCommandIds = {
@@ -129,7 +130,8 @@ export const applicationMenuCommandIds = [
   applicationCommandIds.zoomOut,
   applicationCommandIds.resetZoom,
   projectSettingsCommandIds.open,
-  workspaceCommandIds.openApplicationSettings
+  workspaceCommandIds.openApplicationSettings,
+  workspaceCommandIds.showResumeHub
 ] as const;
 
 export type ApplicationMenuCommandId =

@@ -137,7 +137,9 @@ function buildCoreCommandRegistry(): CommandRegistry {
     registry,
     {
       focusSidebarMode: () => undefined,
-      openApplicationSettings: () => undefined
+      openApplicationSettings: () => undefined,
+      showResumeHub: () => undefined,
+      canShowResumeHub: () => true
     },
     {
       toggleFiles: "Toggle File Explorer",
@@ -151,7 +153,9 @@ function buildCoreCommandRegistry(): CommandRegistry {
       focusDocumentMetrics: "Focus Document Metrics",
       focusDocumentMetricsDescription: "Focus Document Metrics",
       openApplicationSettings: "Open Application Settings",
-      openApplicationSettingsDescription: "Open Application Settings"
+      openApplicationSettingsDescription: "Open Application Settings",
+      showResumeHub: "Show Resume Hub",
+      showResumeHubDescription: "Show Resume Hub"
     }
   );
   registerFileExplorerCommands(

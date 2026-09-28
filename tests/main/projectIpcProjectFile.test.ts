@@ -5415,6 +5415,50 @@ describe("project file IPC foundation", () => {
       expect(paletteSource).not.toContain(forbidden);
     }
   });
+
+  it("#538: decodes .txt files in listRecentProjectDocuments using textFiles.encoding", async () => {
+    const projectFilePath = path.join(
+      projectRootPath,
+      "RecentTxtEncoding.pergamum"
+    );
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Recent Txt Encoding"
+    });
+    await created.close();
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectFilePath]
+    });
+
+    await writeTextFilesSettings(userDataPath, {
+      enablePlainTextDocuments: true,
+      encoding: "shiftJis"
+    });
+
+    const shiftJisBytes = encodeTextFileContent(
+      "日本語テキスト本文",
+      "shiftJis"
+    ).bytes;
+    await fs.writeFile(path.join(projectRootPath, "note.txt"), shiftJisBytes);
+
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    await openProjectHandler({ sender: {} });
+
+    const listRecentHandler = registeredHandler(
+      PROJECT_CHANNELS.listRecentProjectDocuments
+    );
+
+    const items = (await listRecentHandler()) as Array<{
+      relativePath: string;
+      name: string;
+      preview: string;
+    }>;
+
+    const txtItem = items.find((item) => item.relativePath === "note.txt");
+    expect(txtItem).toBeDefined();
+    expect(txtItem?.preview).toContain("日本語テキスト本文");
+  });
 });
 
 function createLoggerMock(): DebugLogger & {

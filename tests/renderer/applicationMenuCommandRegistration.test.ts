@@ -151,7 +151,9 @@ describe("application menu command registration", () => {
       registry,
       {
         focusSidebarMode: () => undefined,
-        openApplicationSettings: () => undefined
+        openApplicationSettings: () => undefined,
+        showResumeHub: () => undefined,
+        canShowResumeHub: () => true
       },
       {
         toggleFiles: "Toggle Files",
@@ -165,7 +167,9 @@ describe("application menu command registration", () => {
         focusDocumentMetrics: "Focus Document Metrics",
         focusDocumentMetricsDescription: "Focus Document Metrics",
         openApplicationSettings: "Open Application Settings",
-        openApplicationSettingsDescription: "Open Application Settings"
+        openApplicationSettingsDescription: "Open Application Settings",
+        showResumeHub: "Show Resume Hub",
+        showResumeHubDescription: "Show Resume Hub"
       }
     );
 

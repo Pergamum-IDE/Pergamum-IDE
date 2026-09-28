@@ -94,6 +94,7 @@ describe("debug log catalog", () => {
       "toolbar",
       "utilityWindow",
       "workspaceSidebar",
+      "resumeHub",
       "unknown"
     ]);
   });

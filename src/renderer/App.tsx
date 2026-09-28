@@ -28,7 +28,8 @@ import type {
   ExportPdfCombinedResult,
   SelectPdfSavePathRequest,
   SelectPdfSavePathResult,
-  ExportTxtUtf8Result
+  ExportTxtUtf8Result,
+  RecentProjectDocumentItem
 } from "../shared/api";
 import type { ProjectDocumentPathRelocation } from "../shared/projectMove";
 import { normalizeMarkdownTextForStorage } from "../shared/markdownTextNormalization";
@@ -589,6 +590,7 @@ import {
   registerProjectSettingsCommands
 } from "./projectSettingsCommands";
 import { WelcomeScreen } from "./WelcomeScreen";
+import { ResumeHub } from "./ResumeHub";
 import {
   shouldShowFullScreenWelcomeSurface,
   shouldShowWelcomeSurface
@@ -1416,6 +1418,10 @@ export function App(): JSX.Element {
   // never creates an unsaved draft.
   const [isProjectSettingsTabOpen, setIsProjectSettingsTabOpen] =
     useState(false);
+  const [isResumeHubTabOpen, setIsResumeHubTabOpen] = useState(false);
+  const [recentProjectDocuments, setRecentProjectDocuments] = useState<
+    RecentProjectDocumentItem[]
+  >([]);
   const [activeSpecialTabId, setActiveSpecialTabId] =
     useState<SpecialTabId | null>(null);
   // #398: the full mixed document/special Document Tab Bar order — the
@@ -1629,6 +1635,8 @@ export function App(): JSX.Element {
   );
   const canSaveAllDocumentsCommandRef = useRef<() => boolean>(() => false);
   const goToLineCommandRef = useRef<(line: number) => void>(() => undefined);
+  const showResumeHubCommandRef = useRef<() => void>(() => undefined);
+  const canShowResumeHubCommandRef = useRef<() => boolean>(() => false);
   const showLineEndingDistributionCommandRef = useRef<() => void>(
     () => undefined
   );
@@ -2206,19 +2214,23 @@ export function App(): JSX.Element {
   // Glossary management tabs (no "default to it" fallback).
   const isProjectSettingsTabActive =
     isProjectSettingsTabOpen && activeSpecialTabId === "projectSettings";
+  // #538: the Resume Hub special tab — active when opened as a special tab
+  const isResumeHubTabActive =
+    isResumeHubTabOpen && activeSpecialTabId === "resumeHub";
   // When the Settings tab is the only open tab (zero document tabs), it is the
   // active surface even though `activeSpecialTabId` may not have been set —
-  // but never while a Glossary management tab, the Project Settings tab, or the
-  // Debug Log tab is the selected special tab.
+  // but never while a Glossary management tab, the Project Settings tab, the
+  // Debug Log tab, or the Resume Hub tab is the selected special tab.
   const isSettingsTabActive =
     isSettingsTabOpen &&
     !isGlossaryTagManagerTabActive &&
     !isGlossaryEntryManagerTabActive &&
     !isDebugLogTabActive &&
     !isProjectSettingsTabActive &&
+    !isResumeHubTabActive &&
     (activeSpecialTabId === "settings" || !hasOpenDocumentTab);
   // A full-editor-area special tab (Settings, Project Settings, a Glossary
-  // management tab, or the Debug Log tab) is showing instead of an editor.
+  // management tab, the Debug Log tab, or the Resume Hub tab) is showing instead of an editor.
   // Command gates that mean "an editor is active" check this rather than
   // isSettingsTabActive alone.
   const isEditorAreaSpecialTabActive =
@@ -2226,7 +2238,8 @@ export function App(): JSX.Element {
     isProjectSettingsTabActive ||
     isGlossaryTagManagerTabActive ||
     isGlossaryEntryManagerTabActive ||
-    isDebugLogTabActive;
+    isDebugLogTabActive ||
+    isResumeHubTabActive;
 
   const activeEditableSurfaceContent = useMemo(() => {
     if (isEditorAreaSpecialTabActive || !currentEditor) {
@@ -3875,7 +3888,11 @@ export function App(): JSX.Element {
         },
         openApplicationSettings: () => {
           openSettingsTab();
-        }
+        },
+        showResumeHub: () => {
+          showResumeHubCommandRef.current();
+        },
+        canShowResumeHub: () => canShowResumeHubCommandRef.current()
       },
       createWorkspaceCommandTitles(translate)
     );
@@ -4218,6 +4235,14 @@ export function App(): JSX.Element {
       });
     }
 
+    if (isResumeHubTabOpen) {
+      list.push({
+        kind: "special",
+        id: "resumeHub",
+        title: translate("resumeHub.title")
+      });
+    }
+
     return list;
   }, [
     isSettingsTabOpen,
@@ -4225,6 +4250,7 @@ export function App(): JSX.Element {
     isGlossaryTagManagerTabOpen,
     isGlossaryEntryManagerTabOpen,
     isDebugLogTabOpen,
+    isResumeHubTabOpen,
     translate
   ]);
   // #398: derives `workspaceTabOrder` from which tabs actually exist —
@@ -5078,6 +5104,16 @@ export function App(): JSX.Element {
     setActiveSpecialTabId("debugLog");
   }
 
+  function openResumeHubTab(): void {
+    if (!project) {
+      return;
+    }
+
+    setIsResumeHubTabOpen(true);
+    setActiveSpecialTabId("resumeHub");
+    void loadRecentProjectDocuments();
+  }
+
   function activateSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings" && isSettingsTabOpen) {
       setActiveSpecialTabId(tabId);
@@ -5097,6 +5133,11 @@ export function App(): JSX.Element {
 
     if (tabId === "debugLog" && isDebugLogTabOpen) {
       setActiveSpecialTabId(tabId);
+    }
+
+    if (tabId === "resumeHub" && isResumeHubTabOpen) {
+      setActiveSpecialTabId(tabId);
+      void loadRecentProjectDocuments();
     }
   }
 
@@ -5245,6 +5286,14 @@ export function App(): JSX.Element {
 
     if (tabId === "debugLog") {
       setIsDebugLogTabOpen(false);
+      setActiveSpecialTabId((current) =>
+        current === tabId ? null : current
+      );
+      return;
+    }
+
+    if (tabId === "resumeHub") {
+      setIsResumeHubTabOpen(false);
       setActiveSpecialTabId((current) =>
         current === tabId ? null : current
       );
@@ -9497,6 +9546,55 @@ export function App(): JSX.Element {
     deferredRestoreErrorDialogVersion
   ]);
 
+  const loadRecentProjectDocuments = useCallback(async () => {
+    if (!project) {
+      setRecentProjectDocuments([]);
+      return;
+    }
+    try {
+      const docs = await window.pergamum.projects.listRecentProjectDocuments();
+      setRecentProjectDocuments(docs);
+    } catch {
+      setRecentProjectDocuments([]);
+    }
+  }, [project]);
+
+  useEffect(() => {
+    if (project && (!hasOpenDocumentTab || isResumeHubTabOpen)) {
+      void loadRecentProjectDocuments();
+    }
+  }, [
+    project,
+    hasOpenDocumentTab,
+    isResumeHubTabOpen,
+    loadRecentProjectDocuments
+  ]);
+
+  const handleOpenResumeHubDocument = useCallback(
+    (relativePath: string) => {
+      if (!activeProjectContext) {
+        return;
+      }
+      const editorId = createProjectDocumentEditorId(
+        relativePath,
+        activeProjectContext
+      );
+      openEditorFromUi(editorId);
+    },
+    [activeProjectContext]
+  );
+
+  const handleOpenResumeHubGlossaryEntry = useCallback(
+    (entryId: GlossaryEntryId) => {
+      executeUiCommand(
+        glossaryCommandIds.openEntry,
+        { source: "resumeHub" },
+        entryId
+      );
+    },
+    []
+  );
+
   createProjectCommandRef.current = createProject;
   openProjectCommandRef.current = openProject;
   closeProjectCommandRef.current = closeProject;
@@ -9509,6 +9607,13 @@ export function App(): JSX.Element {
     openLineEndingDistributionDialog;
   showRecoveryDocumentsCommandRef.current = () => {
     void openRecoveryCandidateDialog();
+  };
+  canShowResumeHubCommandRef.current = () => Boolean(project);
+  showResumeHubCommandRef.current = () => {
+    if (!project) {
+      return;
+    }
+    openResumeHubTab();
   };
   insertParagraphIndentCommandRef.current = () =>
     applyParagraphIndentOperation("insert");
@@ -12791,6 +12896,14 @@ export function App(): JSX.Element {
                     <section className="debugLogTab">
                       <DebugLogPanel translate={translate} />
                     </section>
+                  ) : isResumeHubTabActive ? (
+                    <ResumeHub
+                      recentDocuments={recentProjectDocuments}
+                      recentGlossaryEntries={glossaryEntries}
+                      translate={translate}
+                      onOpenDocument={handleOpenResumeHubDocument}
+                      onOpenGlossaryEntry={handleOpenResumeHubGlossaryEntry}
+                    />
                   ) : activeDocument ? (
                     <EditorSurface
                         editor={activeDocument.editor}
@@ -12963,6 +13076,14 @@ export function App(): JSX.Element {
                         onViewportChanged={handleViewportChanged}
                         onPreviewScrollSyncEvent={logRendererDebugEvent}
                       />
+                  ) : project !== null ? (
+                    <ResumeHub
+                      recentDocuments={recentProjectDocuments}
+                      recentGlossaryEntries={glossaryEntries}
+                      translate={translate}
+                      onOpenDocument={handleOpenResumeHubDocument}
+                      onOpenGlossaryEntry={handleOpenResumeHubGlossaryEntry}
+                    />
                   ) : shouldShowWelcome ? (
                     /* #262 / #311 dogfood blocker: with a project open the
                        zero-tab Welcome is scoped to the editor body — the

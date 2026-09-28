@@ -524,6 +524,13 @@ function helpMenu(
     label: label(language, "menu.help"),
     submenu: [
       commandMenuItem(
+        workspaceCommandIds.showResumeHub,
+        language,
+        "menu.showResumeHub",
+        options
+      ),
+      { type: "separator" },
+      commandMenuItem(
         applicationCommandIds.openAbout,
         language,
         "menu.aboutPergamum",
