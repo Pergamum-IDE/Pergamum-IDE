@@ -52,6 +52,36 @@ export const enTranslations = {
   "command.editor.markdown.toggleSyntaxChecker": "Toggle Markdown Syntax Checker",
   "command.editor.markdown.toggleSyntaxChecker.description":
     "Toggle syntax checker diagnostics for the active Markdown document.",
+  "command.editor.markdown.bold": "Bold",
+  "command.editor.markdown.bold.description":
+    "Apply bold formatting to selected text or at cursor.",
+  "command.editor.markdown.italic": "Italic",
+  "command.editor.markdown.italic.description":
+    "Apply italic formatting to selected text or at cursor.",
+  "command.editor.markdown.strikethrough": "Strikethrough",
+  "command.editor.markdown.strikethrough.description":
+    "Apply strikethrough formatting to selected text or at cursor.",
+  "command.editor.markdown.heading": "Insert Heading...",
+  "command.editor.markdown.heading.description":
+    "Select and insert a heading level.",
+  "command.editor.markdown.link": "Insert Link...",
+  "command.editor.markdown.link.description":
+    "Open the insert link dialog.",
+  "command.editor.markdown.insertHorizontalRule": "Insert Horizontal Rule",
+  "command.editor.markdown.insertHorizontalRule.description":
+    "Insert a horizontal rule at the cursor.",
+  "command.editor.markdown.insertCodeBlock": "Insert Code Block",
+  "command.editor.markdown.insertCodeBlock.description":
+    "Insert a code block at the cursor.",
+  "command.editor.markdown.insertTable": "Insert Table...",
+  "command.editor.markdown.insertTable.description":
+    "Select dimensions and insert a table.",
+  "command.editor.markdown.insertCallout": "Insert Callout",
+  "command.editor.markdown.insertCallout.description":
+    "Insert a callout block at the cursor.",
+  "command.editor.preview.toggle": "Toggle Preview",
+  "command.editor.preview.toggle.description":
+    "Toggle preview pane visibility.",
   "command.editor.line.goTo": "Go to Line",
   "command.editor.line.goTo.description": "Move the cursor to a line in the active editor",
   "command.assist.lineEndingDistribution.show": "Show Line Ending Distribution",
@@ -70,6 +100,10 @@ export const enTranslations = {
   "command.editor.selection.paste.description": "Paste text at the current cursor position in the editor.",
   "command.editor.selection.selectAll": "Select All",
   "command.editor.selection.selectAll.description": "Select all text in the current editor.",
+  "command.editor.undo": "Undo",
+  "command.editor.undo.description": "Undo the last action in the editor.",
+  "command.editor.redo": "Redo",
+  "command.editor.redo.description": "Redo the undone action in the editor.",
   "command.disabled.readOnlyProject": "Unavailable in read-only mode",
   "command.glossary.entry.open": "Open glossary entry",
   "command.glossary.openCreateEntryPane": "Open New Glossary Entry in Tab",

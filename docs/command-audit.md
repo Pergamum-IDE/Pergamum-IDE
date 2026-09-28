@@ -6,9 +6,9 @@
 
 ## 1. 概要・統計 (Summary & Statistics)
 
-- **総確認項目数**: 69 件
-- **Command Registry 登録コマンド数**: 41 件
-  - **コマンドパレット表示 (Registered in Palette)**: 34 件
+- **総確認項目数**: 70 件
+- **Command Registry 登録コマンド数**: 51 件
+  - **コマンドパレット表示 (Registered in Palette)**: 44 件
   - **コマンドパレット非表示 / 内部コマンド**: 7 件
 - **Electron メニューアイテム数**: 25 件（うち隠しアクセラレータ 4 件）
 - **キーボードショートカット割り当て項目数**: 33 件
@@ -45,14 +45,15 @@
 | **Edit** | `editor.image.insert` | 画像を挿入... | Insert Image... | `Mod+Shift+I` | Command Registry / Global Keydown / Toolbar | Markdown, Glossary Description | `canInsertImage` (Project-owned Read-Write) | Yes | Registered | #595 にてショートカット配線完了 |
 | **Edit** | - | アクティブ文書検索 | Active Document Search | `Mod+F` | CodeMirror Keymap Extension | Active Editor Surface | Active document mounted | No | Excluded by Design | Pergamum カスタム検索パネル起動 |
 | **Edit** | - | アクティブ文書置換 | Active Document Replace | `Mod+H` | CodeMirror Keymap Extension | Active Editor Surface | Active document mounted | No | Excluded by Design | Pergamum カスタム置換パネル起動 |
-| **Edit / Formatting** | - | 太字 | Bold | `Mod+B` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate | ツールバーおよびショートカット |
-| **Edit / Formatting** | - | 斜体 | Italic | `Mod+I` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate | ツールバーおよびショートカット |
-| **Edit / Formatting** | - | 打ち消し線 | Strikethrough | `Mod+Shift+X` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate | ツールバーおよびショートカット |
-| **Edit / Formatting** | - | 見出し挿入ポップアップ | Insert Heading | `Mod+L` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate | ポップアップ選択 |
-| **Edit / Formatting** | - | リンク挿入 | Insert Link | `Mod+K` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate | ダイアログ起動 |
-| **Edit / Formatting** | - | 水平線挿入 | Insert Horizontal Rule | `Mod+Shift+L` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate |  |
-| **Edit / Formatting** | - | コードブロック挿入 | Insert Code Block | `Mod+Shift+B` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate |  |
-| **Edit / Formatting** | - | 表を挿入 | Insert Table | `Mod+T` | CodeMirror Keymap / Toolbar | Markdown Document | Markdown & Read-Write | No | Missing Candidate | ポップアップダイアログ表示 |
+| **Edit / Formatting** | `editor.markdown.bold` | 太字 | Bold | `Mod+B` | CodeMirror Keymap / Toolbar / Command Registry | Markdown Document | Markdown & Read-Write | Yes | Registered | #611 にてコマンドパレット対応 |
+| **Edit / Formatting** | `editor.markdown.italic` | 斜体 | Italic | `Mod+I` | CodeMirror Keymap / Toolbar / Command Registry | Markdown Document | Markdown & Read-Write | Yes | Registered | #611 にてコマンドパレット対応 |
+| **Edit / Formatting** | `editor.markdown.strikethrough` | 打ち消し線 | Strikethrough | `Mod+Shift+X` | CodeMirror Keymap / Toolbar / Command Registry | Markdown Document | Markdown & Read-Write | Yes | Registered | #611 にてコマンドパレット対応 |
+| **Edit / Formatting** | `editor.markdown.heading` | 見出し挿入ポップアップ | Insert Heading | `Mod+L` | CodeMirror Keymap / Toolbar / Command Registry | Markdown Document | Markdown & Read-Write | Yes | Registered | ポップアップ選択 (#611) |
+| **Edit / Formatting** | `editor.markdown.link` | リンク挿入 | Insert Link | `Mod+K` | CodeMirror Keymap / Toolbar / Command Registry | Markdown Document | Markdown & Read-Write | Yes | Registered | ダイアログ起動 (#611) |
+| **Edit / Formatting** | `editor.markdown.insertHorizontalRule` | 水平線挿入 | Insert Horizontal Rule | `Mod+Shift+L` | CodeMirror Keymap / Toolbar / Command Registry | Markdown Document | Markdown & Read-Write | Yes | Registered | #611 にてコマンドパレット対応 |
+| **Edit / Formatting** | `editor.markdown.insertCodeBlock` | コードブロック挿入 | Insert Code Block | `Mod+Shift+B` | CodeMirror Keymap / Toolbar / Command Registry | Markdown Document | Markdown & Read-Write | Yes | Registered | #611 にてコマンドパレット対応 |
+| **Edit / Formatting** | `editor.markdown.insertTable` | 表を挿入 | Insert Table | `Mod+T` | CodeMirror Keymap / Toolbar / Command Registry | Markdown Document | Markdown & Read-Write | Yes | Registered | ポップアップダイアログ表示 (#611) |
+| **Edit / Formatting** | `editor.markdown.insertCallout` | コールアウト挿入 | Insert Callout | - | Toolbar / Command Registry | Markdown Document | Markdown & Read-Write | Yes | Registered | #611 にてコマンドパレット対応 |
 | **Edit / Formatting** | - | ルビ挿入ダイアログ | Insert Ruby... | `Mod+R` | CodeMirror Keymap / Toolbar | Markdown, PlainText Document | Read-Write & Selection active | No | Missing Candidate | 選択文字列必須 |
 | **Edit / Formatting** | - | 圏点挿入ダイアログ | Insert Emphasis Mark... | `Mod+.` | CodeMirror Keymap / Toolbar | Markdown, PlainText Document | Read-Write & Selection active | No | Missing Candidate | 選択文字列必須 |
 | **Edit / Indent** | - | インデント | Indent | `Mod+]`, `Tab` | CodeMirror Keymap / Toolbar | Markdown, PlainText Document | `canIndentEditorState` | No | Missing Candidate | #593 にて toolbar enablement 共通化 |
@@ -75,7 +76,7 @@
 | **View** | `app.zoom.reset` | ズームのリセット | Actual Size | `Mod+0` | Main Menu / Command Registry | All | Always | Yes | Registered |  |
 | **View** | - | 開発者ツールの切り替え | Toggle Developer Tools | `Mod+Shift+D` | Main Menu (Role) | All | Always | No | Excluded by Design | Electron Role `toggleDevTools` |
 | **View** | - | 全画面表示の切り替え | Toggle Full Screen | `F11` | Main Menu / Toolbar | All | Always | No | Excluded by Design | Electron Role `togglefullscreen` |
-| **View** | - | プレビュー表示の切り替え | Toggle Preview | `Mod+Shift+P` | Global Keydown / Toolbar | Markdown Document | `canTogglePreview` | No | Missing Candidate | プレビュー開閉 |
+| **View** | `editor.preview.toggle` | プレビュー表示の切り替え | Toggle Preview | `Mod+Shift+P` | Global Keydown / Toolbar / Command Registry | Markdown Document | `canTogglePreview` | Yes | Registered | プレビュー開閉 (#611 にてコマンドパレット対応) |
 | **Assist** | `assist.lineEndingDistribution.show` | 改行コード分布を表示 | Show Line Ending Distribution | - | Main Menu / Command Registry | Markdown Document | `editor.kind.markdown` | Yes | Registered |  |
 | **Assist** | `assist.paragraphIndent.insert` | 段落字下げ一括挿入 | Insert Paragraph Indent | - | Main Menu / Command Registry | Markdown Document | `editor.kind.markdown` && Read-Write | Yes | Registered |  |
 | **Assist** | `assist.paragraphIndent.remove` | 段落字下げ一括削除 | Remove Paragraph Indent | - | Main Menu / Command Registry | Markdown Document | `editor.kind.markdown` && Read-Write | Yes | Registered |  |
@@ -105,10 +106,10 @@
    - 選択領域の文字列をシードにしてプロジェクト検索/置換を開くコマンド。ショートカット経由のみで実行可能であり、パレットには収録されていません。
 2. **`glossary.openFromEditorSelection` (`Mod+G`)**
    - 選択範囲から語彙を作成/編集するコマンド。キーバインド専用として実装されているため、パレット非表示となっています。
-3. **エディタ整形・挿入コマンド (`Mod+B`, `Mod+I`, `Mod+Shift+X`, `Mod+L`, `Mod+K`, `Mod+Shift+L`, `Mod+Shift+B`, `Mod+R`, `Mod+.`, `Mod+]`, `Mod+[`)**
-   - 太字・斜体・打消線・見出し・リンク・水平線・コードブロック・ルビ・圏点・インデント・アウトデントなどの各種フォーマット操作は CodeMirror keymap およびツールバー直接操作のみで完結しており、コマンドパレットから検索して呼び出すことができません。
-4. **`togglePreview` (`Mod+Shift+P`)**
-   - プレビュー画面の開閉表示切り替え操作。ツールバーボタンおよびグローバルショートカットで提供されていますが、コマンドパレットには収録されていません。
+3. **エディタ整形・挿入コマンド (#611 にて主要項目をコマンドパレット登録完了)**
+   - 太字 (`editor.markdown.bold`), 斜体 (`editor.markdown.italic`), 打消線 (`editor.markdown.strikethrough`), 見出し (`editor.markdown.heading`), リンク (`editor.markdown.link`), 水平線 (`editor.markdown.insertHorizontalRule`), コードブロック (`editor.markdown.insertCodeBlock`), 表 (`editor.markdown.insertTable`), コールアウト (`editor.markdown.insertCallout`) などの主要フォーマット・挿入操作は #611 にて Command Registry / Command Palette へ登録されました。ルビ (`Mod+R`)・圏点 (`Mod+.`) やインデント操作 (`Mod+]`, `Mod+[`) は未登録候補として残っています。
+4. **`editor.preview.toggle` (`Mod+Shift+P`)**
+   - プレビュー画面の開閉表示切り替え操作。#611 にて Command Registry および Command Palette へ登録されました。
 
 ### 3.2 コマンドパレット非表示推奨 (Should Not Show in Command Palette)
 

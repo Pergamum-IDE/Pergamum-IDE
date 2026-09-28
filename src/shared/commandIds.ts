@@ -79,9 +79,21 @@ export const editorCommandIds = {
   close: defineCommandId<readonly [{ editorId?: EditorId }?], void>(
     "editor.close"
   ),
+  undo: defineCommandId("editor.undo"),
+  redo: defineCommandId("editor.redo"),
   insertImage: defineCommandId("editor.image.insert"),
   insertBlockquote: defineCommandId("editor.markdown.insertBlockquote"),
   toggleSyntaxChecker: defineCommandId("editor.markdown.toggleSyntaxChecker"),
+  bold: defineCommandId("editor.markdown.bold"),
+  italic: defineCommandId("editor.markdown.italic"),
+  strikethrough: defineCommandId("editor.markdown.strikethrough"),
+  heading: defineCommandId("editor.markdown.heading"),
+  link: defineCommandId("editor.markdown.link"),
+  insertHorizontalRule: defineCommandId("editor.markdown.insertHorizontalRule"),
+  insertCodeBlock: defineCommandId("editor.markdown.insertCodeBlock"),
+  insertTable: defineCommandId("editor.markdown.insertTable"),
+  insertCallout: defineCommandId("editor.markdown.insertCallout"),
+  togglePreview: defineCommandId("editor.preview.toggle"),
   cutSelection: defineCommandId("editor.selection.cut"),
   copySelection: defineCommandId("editor.selection.copy"),
   pasteSelection: defineCommandId("editor.selection.paste"),
@@ -133,7 +145,13 @@ export const applicationMenuCommandIds = [
   applicationCommandIds.resetZoom,
   projectSettingsCommandIds.open,
   workspaceCommandIds.openApplicationSettings,
-  workspaceCommandIds.showResumeHub
+  workspaceCommandIds.showResumeHub,
+  editorCommandIds.undo,
+  editorCommandIds.redo,
+  editorCommandIds.cutSelection,
+  editorCommandIds.copySelection,
+  editorCommandIds.pasteSelection,
+  editorCommandIds.selectAllSelection
 ] as const;
 
 export type ApplicationMenuCommandId =
