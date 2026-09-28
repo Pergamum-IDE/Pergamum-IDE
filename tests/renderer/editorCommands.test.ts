@@ -38,6 +38,8 @@ const titles = {
     "Close the current document. Check for unsaved changes before closing.",
   insertImage: "Insert Image",
   insertImageDescription: "Insert an image file into the current document.",
+  insertBlockquote: "Insert Blockquote",
+  insertBlockquoteDescription: "Insert a blockquote in the current document.",
   cutSelection: "Cut",
   cutSelectionDescription: "Cut the selected text in the current editor.",
   copySelection: "Copy",
@@ -93,6 +95,8 @@ function registerEditorCommandSet(
       canCloseEditor: () => true,
       insertImage: () => undefined,
       canInsertImage: () => true,
+      insertBlockquote: () => undefined,
+      canInsertBlockquote: () => true,
       delegateNativeEditCommand: () => undefined,
       canDelegateNativeEditCommand: () => true,
       ...overrides
@@ -124,6 +128,7 @@ describe("editor commands", () => {
       "editor.saveAs",
       "editor.close",
       "editor.image.insert",
+      "editor.markdown.insertBlockquote",
       "editor.selection.cut",
       "editor.selection.copy",
       "editor.selection.paste",
@@ -455,6 +460,9 @@ describe("editor commands", () => {
       insertImage: "translated:command.editor.image.insert",
       insertImageDescription:
         "translated:command.editor.image.insert.description",
+      insertBlockquote: "translated:command.editor.markdown.insertBlockquote",
+      insertBlockquoteDescription:
+        "translated:command.editor.markdown.insertBlockquote.description",
       cutSelection: "translated:command.editor.selection.cut",
       cutSelectionDescription:
         "translated:command.editor.selection.cut.description",

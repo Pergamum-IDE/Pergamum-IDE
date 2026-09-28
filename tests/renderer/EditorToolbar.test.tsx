@@ -170,6 +170,7 @@ function defaultProps(
     onOpenLinkDialog: vi.fn(),
     onInsertHorizontalRule: vi.fn(),
     onInsertCodeBlock: vi.fn(),
+    onInsertBlockquote: vi.fn(),
     canInsertImage: true,
     onOpenImageInsertion: vi.fn(),
     onInsertTable: vi.fn(),
@@ -233,6 +234,7 @@ const BUTTON_ORDER = [
   "リンクを挿入",
   "水平線",
   "コードブロック",
+  "引用を挿入",
   "画像を挿入",
   "表を挿入",
   "ルビ",
@@ -263,7 +265,7 @@ describe("EditorToolbar", () => {
     renderToolbar();
 
     const toolbar = container.querySelector(".editorToolbar")!;
-    const previewButton = toolbarButtons()[17];
+    const previewButton = toolbarButtons()[18];
     const trigger = previewRendererTrigger();
     const previewGroup = previewButton.closest(".editorToolbarGroup")!;
     const groupItems = Array.from(previewGroup.children) as HTMLElement[];
@@ -370,7 +372,7 @@ describe("EditorToolbar", () => {
     expect(trigger.disabled).toBe(true);
     expect(trigger.textContent).toContain("Markdown");
 
-    const previewToggleBtn = toolbarButtons()[17];
+    const previewToggleBtn = toolbarButtons()[18];
     expect(previewToggleBtn.disabled).toBe(false);
     act(() => previewToggleBtn.click());
     expect(props.onTogglePreview).toHaveBeenCalledOnce();
@@ -730,6 +732,7 @@ describe("EditorToolbar", () => {
       link,
       horizontalRule,
       codeBlock,
+      blockquote,
       image,
       table,
       ruby,
@@ -745,6 +748,7 @@ describe("EditorToolbar", () => {
     expect(link.disabled).toBe(true);
     expect(horizontalRule.disabled).toBe(true);
     expect(codeBlock.disabled).toBe(true);
+    expect(blockquote.disabled).toBe(true);
     // Image / Table / Outdent / Indent / Ruby / Emphasis use their own,
     // independent gates (still passed as true/enabled here).
     expect(image.disabled).toBe(false);
@@ -758,8 +762,8 @@ describe("EditorToolbar", () => {
     const buttons = toolbarButtons();
     const outdent = buttons[8];
     const indent = buttons[9];
-    const ruby = buttons[15];
-    const emphasis = buttons[16];
+    const ruby = buttons[16];
+    const emphasis = buttons[17];
     expect(outdent.disabled).toBe(true);
     expect(indent.disabled).toBe(true);
     expect(ruby.disabled).toBe(true);
@@ -772,12 +776,12 @@ describe("EditorToolbar", () => {
   it("disables Image when canInsertImage is false, independent of the other gates", () => {
     renderToolbar({ canInsertImage: false });
     const buttons = toolbarButtons();
-    const image = buttons[13];
+    const image = buttons[14];
     expect(image.disabled).toBe(true);
     // Markdown-specific commands and Table stay enabled (still passed as
     // true here).
     expect(buttons[1].disabled).toBe(false);
-    expect(buttons[14].disabled).toBe(false);
+    expect(buttons[15].disabled).toBe(false);
   });
 
   it("Bold / Italic / Strikethrough buttons call their handlers when clicked", () => {
@@ -856,10 +860,18 @@ describe("EditorToolbar", () => {
     expect(props.onInsertCodeBlock).toHaveBeenCalledOnce();
   });
 
+  it("Blockquote button calls onInsertBlockquote when clicked (#601)", () => {
+    const props = renderToolbar();
+    const buttons = toolbarButtons();
+
+    act(() => buttons[13].click());
+    expect(props.onInsertBlockquote).toHaveBeenCalledOnce();
+  });
+
   it("Image button calls onOpenImageInsertion with the button element", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const image = buttons[13];
+    const image = buttons[14];
 
     act(() => image.click());
     expect(props.onOpenImageInsertion).toHaveBeenCalledWith(image);
@@ -868,7 +880,7 @@ describe("EditorToolbar", () => {
   it("Ruby button calls onOpenRubyDialog with the button element", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const ruby = buttons[15];
+    const ruby = buttons[16];
 
     act(() => ruby.click());
     expect(props.onOpenRubyDialog).toHaveBeenCalledWith(ruby);
@@ -877,7 +889,7 @@ describe("EditorToolbar", () => {
   it("Emphasis button calls onOpenEmphasisDialog with the button element", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const emphasis = buttons[16];
+    const emphasis = buttons[17];
 
     act(() => emphasis.click());
     expect(props.onOpenEmphasisDialog).toHaveBeenCalledWith(emphasis);
@@ -886,7 +898,7 @@ describe("EditorToolbar", () => {
   it("Preview button calls onTogglePreview when clicked", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const preview = buttons[17];
+    const preview = buttons[18];
 
     act(() => preview.click());
     expect(props.onTogglePreview).toHaveBeenCalledOnce();
@@ -894,16 +906,16 @@ describe("EditorToolbar", () => {
 
   it("Preview button reflects isPreviewVisible via aria-pressed", () => {
     renderToolbar({ isPreviewVisible: true });
-    expect(toolbarButtons()[17].getAttribute("aria-pressed")).toBe("true");
+    expect(toolbarButtons()[18].getAttribute("aria-pressed")).toBe("true");
 
     renderToolbar({ isPreviewVisible: false });
-    expect(toolbarButtons()[17].getAttribute("aria-pressed")).toBe("false");
+    expect(toolbarButtons()[18].getAttribute("aria-pressed")).toBe("false");
   });
 
   it("Preview button is disabled when canTogglePreview is false, independent of other gates", () => {
     renderToolbar({ canTogglePreview: false });
     const buttons = toolbarButtons();
-    expect(buttons[17].disabled).toBe(true);
+    expect(buttons[18].disabled).toBe(true);
     // Other commands stay enabled (still passed as true here).
     expect(buttons[1].disabled).toBe(false);
   });
@@ -945,7 +957,7 @@ describe("EditorToolbar", () => {
     renderToolbar({ canInsertTable: false });
 
     const buttons = toolbarButtons();
-    const table = buttons[14];
+    const table = buttons[15];
     expect(table.disabled).toBe(true);
     expect(table.getAttribute("aria-label")).toBe("表を挿入");
     expect(table.getAttribute("title")).toBe("表を挿入");
@@ -957,7 +969,7 @@ describe("EditorToolbar", () => {
     renderToolbar({ canInsertTable: true, onInsertTable });
 
     const buttons = toolbarButtons();
-    const table = buttons[14];
+    const table = buttons[15];
     expect(table.disabled).toBe(false);
 
     // Popover initially not present

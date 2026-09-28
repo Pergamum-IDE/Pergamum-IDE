@@ -65,6 +65,8 @@ describe("application menu command registration", () => {
         canCloseEditor: () => true,
         insertImage: () => undefined,
         canInsertImage: () => true,
+        insertBlockquote: () => undefined,
+        canInsertBlockquote: () => true,
         delegateNativeEditCommand: () => undefined,
         canDelegateNativeEditCommand: () => true
       },
@@ -83,6 +85,8 @@ describe("application menu command registration", () => {
         closeEditorDescription: "Close Current Document",
         insertImage: "Insert Image",
         insertImageDescription: "Insert Image",
+        insertBlockquote: "Insert Blockquote",
+        insertBlockquoteDescription: "Insert Blockquote",
         cutSelection: "Cut",
         cutSelectionDescription: "Cut",
         copySelection: "Copy",

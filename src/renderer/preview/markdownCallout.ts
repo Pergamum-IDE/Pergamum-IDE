@@ -2,7 +2,7 @@ import type MarkdownIt from "markdown-it";
 import type { Token } from "markdown-it";
 import noteIcon from "../../../assets/icons/feather/callout/alert-circle.svg?raw";
 import tipIcon from "../../../assets/icons/codicons/callout/lightbulb.svg?raw";
-import importantIcon from "../../../assets/icons/svgrepo/callout/info-message.svg?raw";
+import importantIcon from "../../../assets/icons/codicons/callout/report.svg?raw";
 import warningIcon from "../../../assets/icons/feather/callout/alert-triangle.svg?raw";
 import cautionIcon from "../../../assets/icons/feather/callout/alert-octagon.svg?raw";
 import { defaultLanguage, t, type TranslationKey } from "../../shared/i18n";
@@ -54,7 +54,7 @@ const calloutLabelKeys: Readonly<Record<MarkdownCalloutType, TranslationKey>> = 
 export const markdownCalloutIconPaths: Readonly<Record<MarkdownCalloutType, string>> = {
   note: "assets/icons/feather/callout/alert-circle.svg",
   tip: "assets/icons/codicons/callout/lightbulb.svg",
-  important: "assets/icons/svgrepo/callout/info-message.svg",
+  important: "assets/icons/codicons/callout/report.svg",
   warning: "assets/icons/feather/callout/alert-triangle.svg",
   caution: "assets/icons/feather/callout/alert-octagon.svg"
 };

@@ -48,6 +48,8 @@ export interface EditorCommandController {
   canCloseEditor(editorId?: EditorId): boolean;
   insertImage(): void | Promise<void>;
   canInsertImage(): boolean;
+  insertBlockquote(): void | Promise<void>;
+  canInsertBlockquote(): boolean;
   delegateNativeEditCommand(commandId: EditCommandId): void | Promise<void>;
   canDelegateNativeEditCommand(commandId: EditCommandId): boolean;
 }
@@ -67,6 +69,8 @@ export interface EditorCommandTitles {
   closeEditorDescription: string;
   insertImage: string;
   insertImageDescription: string;
+  insertBlockquote: string;
+  insertBlockquoteDescription: string;
   cutSelection: string;
   cutSelectionDescription: string;
   copySelection: string;
@@ -102,6 +106,10 @@ export function createEditorCommandTitles(
     insertImage: translate("command.editor.image.insert"),
     insertImageDescription: translate(
       "command.editor.image.insert.description"
+    ),
+    insertBlockquote: translate("command.editor.markdown.insertBlockquote"),
+    insertBlockquoteDescription: translate(
+      "command.editor.markdown.insertBlockquote.description"
     ),
     cutSelection: translate("command.editor.selection.cut"),
     cutSelectionDescription: translate(
@@ -230,6 +238,19 @@ export function createEditorCommands(
         return controller.insertImage();
       },
       isEnabled: () => controller.canInsertImage()
+    },
+    {
+      id: editorCommandIds.insertBlockquote,
+      title: titles.insertBlockquote,
+      description: titles.insertBlockquoteDescription,
+      execute: () => {
+        if (!controller.canInsertBlockquote()) {
+          return;
+        }
+
+        return controller.insertBlockquote();
+      },
+      isEnabled: () => controller.canInsertBlockquote()
     },
     editCommand(
       editCommandIds[0],

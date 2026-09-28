@@ -95,6 +95,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
       canCloseEditor: () => true,
       insertImage: () => undefined,
       canInsertImage: () => true,
+      insertBlockquote: () => undefined,
+      canInsertBlockquote: () => true,
       delegateNativeEditCommand: () => undefined,
       canDelegateNativeEditCommand: () => true
     },
@@ -113,6 +115,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
       closeEditorDescription: "Close Current Document",
       insertImage: "Insert Image",
       insertImageDescription: "Insert Image",
+      insertBlockquote: "Insert Blockquote",
+      insertBlockquoteDescription: "Insert Blockquote",
       cutSelection: "Cut",
       cutSelectionDescription: "Cut",
       copySelection: "Copy",

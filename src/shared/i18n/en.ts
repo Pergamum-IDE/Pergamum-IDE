@@ -46,6 +46,9 @@ export const enTranslations = {
   "command.editor.saveAs.description": "Save the current document with a different name and location.",
   "command.editor.image.insert": "Insert Image...",
   "command.editor.image.insert.description": "Inserts an image at the current cursor position.",
+  "command.editor.markdown.insertBlockquote": "Insert Blockquote",
+  "command.editor.markdown.insertBlockquote.description":
+    "Inserts Markdown blockquote syntax (> ) for the current line or selection.",
   "command.editor.line.goTo": "Go to Line",
   "command.editor.line.goTo.description": "Move the cursor to a line in the active editor",
   "command.assist.lineEndingDistribution.show": "Show Line Ending Distribution",
@@ -1924,6 +1927,7 @@ export const enTranslations = {
   "toolbar.indent": "Indent",
   "toolbar.insertHeading": "Insert heading",
   "toolbar.insertImage": "Insert image",
+  "toolbar.insertBlockquote": "Insert Blockquote",
   "toolbar.insertLink": "Insert link",
   "toolbar.insertTable": "Insert table",
   "toolbar.callout": "Callout",

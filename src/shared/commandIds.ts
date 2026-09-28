@@ -80,6 +80,7 @@ export const editorCommandIds = {
     "editor.close"
   ),
   insertImage: defineCommandId("editor.image.insert"),
+  insertBlockquote: defineCommandId("editor.markdown.insertBlockquote"),
   cutSelection: defineCommandId("editor.selection.cut"),
   copySelection: defineCommandId("editor.selection.copy"),
   pasteSelection: defineCommandId("editor.selection.paste"),
