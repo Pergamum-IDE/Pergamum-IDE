@@ -54,6 +54,7 @@ function createConfig(
     requestOpenLinkDialog: vi.fn(),
     insertHorizontalRule: vi.fn(),
     insertCodeBlock: vi.fn(),
+    insertBlockquote: vi.fn(),
     requestInsertImage: vi.fn(),
     ...overrides
   };
@@ -156,6 +157,24 @@ describe("createMarkdownToolbarShortcutKeymapExtension", () => {
     v.contentDOM.dispatchEvent(event);
     expect(config.insertCodeBlock).toHaveBeenCalledOnce();
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("Ctrl+Shift+Q calls insertBlockquote (#601)", () => {
+    const config = createConfig();
+    const v = createView({ config });
+    const event = keydown({ key: "q", shiftKey: true });
+    v.contentDOM.dispatchEvent(event);
+    expect(config.insertBlockquote).toHaveBeenCalledOnce();
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("Ctrl+Q (without Shift) does not call insertBlockquote", () => {
+    const config = createConfig();
+    const v = createView({ config });
+    const event = keydown({ key: "q" });
+    v.contentDOM.dispatchEvent(event);
+    expect(config.insertBlockquote).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it("Ctrl+L (without Shift) still calls requestOpenHeadingSelector, not insertHorizontalRule", () => {

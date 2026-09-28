@@ -44,6 +44,9 @@ export const jaTranslations = {
   "command.editor.saveAs.description": "現在の文書を任意の場所に別名で保存します。",
   "command.editor.image.insert": "画像を挿入...",
   "command.editor.image.insert.description": "カーソル位置に画像を挿入します。",
+  "command.editor.markdown.insertBlockquote": "引用を挿入",
+  "command.editor.markdown.insertBlockquote.description":
+    "カーソル位置または選択範囲の各行に引用記法（> ）を挿入します。",
   "command.editor.line.goTo": "指定行へ移動",
   "command.editor.line.goTo.description": "アクティブなエディタのカーソルを指定行へ移動します",
   "command.assist.lineEndingDistribution.show": "改行コード分布を表示",
@@ -1923,6 +1926,7 @@ export const jaTranslations = {
   "toolbar.indent": "インデント",
   "toolbar.insertHeading": "見出しを挿入",
   "toolbar.insertImage": "画像を挿入",
+  "toolbar.insertBlockquote": "引用を挿入",
   "toolbar.insertLink": "リンクを挿入",
   "toolbar.insertTable": "表を挿入",
   "toolbar.callout": "コールアウト",

@@ -17,6 +17,7 @@ import strikeIconRaw from "../../../assets/icons/codicons/toolbar/strikethrough.
 import linkIconRaw from "../../../assets/icons/codicons/toolbar/link.svg?raw";
 import horizontalRuleIconRaw from "../../../assets/icons/codicons/toolbar/horizontal-rule.svg?raw";
 import codeBlockIconRaw from "../../../assets/icons/codicons/toolbar/code.svg?raw";
+import quoteIconRaw from "../../../assets/icons/codicons/toolbar/quote.svg?raw";
 import imageIconRaw from "../../../assets/icons/feather/toolbar/image.svg?raw";
 import tableIconRaw from "../../../assets/icons/codicons/toolbar/table.svg?raw";
 import rubyIconRaw from "../../../assets/icons/pergamum/toolbar/ruby.svg?raw";
@@ -51,6 +52,7 @@ export interface EditorToolbarProps {
   onOpenLinkDialog: (opener: Element) => void;
   onInsertHorizontalRule: () => void;
   onInsertCodeBlock: () => void;
+  onInsertBlockquote: () => void;
   /** #535: narrower than `canUseMarkdownToolbarCommands` — image insertion
    *  additionally requires the active document to be project-owned, since
    *  the inserted link's relative path only makes sense for one. */
@@ -113,6 +115,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   onOpenLinkDialog,
   onInsertHorizontalRule,
   onInsertCodeBlock,
+  onInsertBlockquote,
   canInsertImage,
   onOpenImageInsertion,
   onInsertTable,
@@ -411,6 +414,22 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             <span
               className="editorToolbarButtonIcon"
               dangerouslySetInnerHTML={{ __html: codeBlockIconRaw }}
+            />
+          </button>
+        </div>
+
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            disabled={!canUseMarkdownToolbarCommands}
+            onClick={onInsertBlockquote}
+            aria-label={translate("toolbar.insertBlockquote")}
+            title={translate("toolbar.insertBlockquote")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{ __html: quoteIconRaw }}
             />
           </button>
         </div>

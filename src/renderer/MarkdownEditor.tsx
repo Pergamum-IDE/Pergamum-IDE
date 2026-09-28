@@ -56,6 +56,7 @@ import { applyHeadingToLine } from "../shared/markdownHeadingMarkup";
 import { buildMarkdownLink } from "../shared/markdownLinkMarkup";
 import { buildFencedCodeBlock } from "../shared/markdownCodeBlockMarkup";
 import { buildHorizontalRuleInsertion } from "../shared/markdownHorizontalRuleMarkup";
+import { applyBlockquoteToLine } from "../shared/markdownBlockquoteMarkup";
 import {
   buildMarkdownCalloutBlock,
   type MarkdownCalloutType
@@ -540,6 +541,12 @@ export interface MarkdownEditorParagraphIndentController {
    * the same blank-line rule as `insertTable`.
    */
   insertHorizontalRule(): boolean;
+  /**
+   * #601: applies blockquote syntax (> ) to every line touched by the
+   * selection (or the current line when there is no selection). Already
+   * quoted lines are left unchanged.
+   */
+  insertBlockquote(): boolean;
   /**
    * #531: wraps the current selection in a fenced code block (or inserts an
    * empty one with the cursor inside when there is no selection), padded
@@ -1826,6 +1833,42 @@ export function MarkdownEditor({
           selection: {
             anchor: from + leadingLines.length + selectionOffsetFromInsertStart
           },
+          scrollIntoView: true,
+          userEvent: "input.replace"
+        });
+
+        return true;
+      },
+      insertBlockquote: (): boolean => {
+        const view = viewRef.current;
+        if (!view || readOnlyRef.current) {
+          return false;
+        }
+
+        const { from, to } = view.state.selection.main;
+        const doc = view.state.doc;
+        const firstLine = doc.lineAt(from);
+        const lastLine = doc.lineAt(to);
+
+        const changes: ChangeSpec[] = [];
+        for (
+          let lineNumber = firstLine.number;
+          lineNumber <= lastLine.number;
+          lineNumber++
+        ) {
+          const line = doc.line(lineNumber);
+          const newText = applyBlockquoteToLine(line.text);
+          if (newText !== line.text) {
+            changes.push({ from: line.from, to: line.to, insert: newText });
+          }
+        }
+
+        if (changes.length === 0) {
+          return true;
+        }
+
+        view.dispatch({
+          changes,
           scrollIntoView: true,
           userEvent: "input.replace"
         });

@@ -1630,6 +1630,8 @@ export function App(): JSX.Element {
     Promise.resolve()
   );
   const canInsertImageCommandRef = useRef<() => boolean>(() => false);
+  const insertBlockquoteCommandRef = useRef<() => void>(() => undefined);
+  const canInsertBlockquoteCommandRef = useRef<() => boolean>(() => false);
   const saveAllDocumentsCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -3528,6 +3530,9 @@ export function App(): JSX.Element {
   const handleInsertCodeBlock = useCallback(() => {
     paragraphIndentControllerRef.current?.insertCodeBlock();
   }, []);
+  const handleInsertBlockquote = useCallback(() => {
+    paragraphIndentControllerRef.current?.insertBlockquote();
+  }, []);
 
   // #533: Unordered / Ordered / Checklist apply immediately, same shape as
   // the other Markdown-specific toolbar commands above.
@@ -3737,6 +3742,7 @@ export function App(): JSX.Element {
           setLinkInsertDialogState({ selectedText, opener }),
         insertHorizontalRule: handleInsertHorizontalRule,
         insertCodeBlock: handleInsertCodeBlock,
+        insertBlockquote: handleInsertBlockquote,
         requestInsertImage: () => {
           void handleInsertImage(null);
         }
@@ -3747,8 +3753,9 @@ export function App(): JSX.Element {
         handleApplyItalicMarkup,
         handleApplyStrikethroughMarkup,
         handleInsertHorizontalRule,
-        handleInsertImage,
-        handleInsertCodeBlock
+        handleInsertCodeBlock,
+        handleInsertBlockquote,
+        handleInsertImage
       ]
     );
 
@@ -3823,6 +3830,8 @@ export function App(): JSX.Element {
           canCloseEditorCommandRef.current(editorId),
         insertImage: () => insertImageCommandRef.current(),
         canInsertImage: () => canInsertImageCommandRef.current(),
+        insertBlockquote: () => insertBlockquoteCommandRef.current(),
+        canInsertBlockquote: () => canInsertBlockquoteCommandRef.current(),
         delegateNativeEditCommand: (commandId) =>
           delegateNativeEditCommand(commandId),
         canDelegateNativeEditCommand: () => true
@@ -9639,6 +9648,10 @@ export function App(): JSX.Element {
   insertImageCommandRef.current = async () => {
     await handleInsertImage(null);
   };
+  canInsertBlockquoteCommandRef.current = () => canUseMarkdownToolbarCommands;
+  insertBlockquoteCommandRef.current = () => {
+    handleInsertBlockquote();
+  };
   // #342: Save All — save every open document that currently has unsaved
   // changes, reusing the existing per-document `saveFile` spec (line endings,
   // Recovery retirement, atomic write, in-flight guarding). The dirty set is
@@ -12570,6 +12583,7 @@ export function App(): JSX.Element {
         onOpenLinkDialog={handleOpenLinkInsertDialog}
         onInsertHorizontalRule={handleInsertHorizontalRule}
         onInsertCodeBlock={handleInsertCodeBlock}
+        onInsertBlockquote={handleInsertBlockquote}
         canInsertImage={Boolean(canInsertImage)}
         onOpenImageInsertion={(opener) => {
           void handleInsertImage(opener);

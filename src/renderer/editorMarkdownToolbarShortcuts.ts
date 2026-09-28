@@ -34,6 +34,8 @@ export interface MarkdownEditorToolbarShortcutConfig {
   readonly insertHorizontalRule: () => void;
   /** #531 Ctrl+Shift+B */
   readonly insertCodeBlock: () => void;
+  /** #601 Ctrl+Shift+Q */
+  readonly insertBlockquote: () => void;
   /** #535 Ctrl+Shift+I */
   readonly requestInsertImage: () => void;
 }
@@ -67,6 +69,7 @@ type MarkdownToolbarShortcutTrigger =
   | "link"
   | "horizontalRule"
   | "codeBlock"
+  | "insertBlockquote"
   | "insertImage";
 
 function matchMarkdownToolbarShortcutTrigger(
@@ -86,6 +89,8 @@ function matchMarkdownToolbarShortcutTrigger(
         return "horizontalRule";
       case "b":
         return "codeBlock";
+      case "q":
+        return "insertBlockquote";
       case "i":
         return "insertImage";
       default:
@@ -164,6 +169,9 @@ export function createMarkdownToolbarShortcutKeymapExtension(input?: {
             break;
           case "codeBlock":
             config.insertCodeBlock();
+            break;
+          case "insertBlockquote":
+            config.insertBlockquote();
             break;
           case "insertImage":
             config.requestInsertImage();
