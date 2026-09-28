@@ -77,6 +77,12 @@ export const jaTranslations = {
   "command.editor.markdown.insertCallout": "コールアウトを挿入",
   "command.editor.markdown.insertCallout.description":
     "カーソル位置にコールアウトブロックを挿入します。",
+  "command.editor.markdown.insertRuby": "ルビを挿入...",
+  "command.editor.markdown.insertRuby.description":
+    "選択したテキストにルビ（振り仮名）を挿入します。",
+  "command.editor.markdown.insertEmphasisMark": "傍点を挿入...",
+  "command.editor.markdown.insertEmphasisMark.description":
+    "選択したテキストに傍点（圏点）を挿入します。",
   "command.editor.preview.toggle": "プレビュー表示の切り替え",
   "command.editor.preview.toggle.description":
     "プレビュー画面の表示・非表示を切り替えます。",

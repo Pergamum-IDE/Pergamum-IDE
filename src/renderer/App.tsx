@@ -1665,6 +1665,13 @@ export function App(): JSX.Element {
   );
   const insertParagraphIndentCommandRef = useRef<() => void>(() => undefined);
   const removeParagraphIndentCommandRef = useRef<() => void>(() => undefined);
+  const insertRubyCommandRef = useRef<() => void>(() => undefined);
+  const canInsertRubyCommandRef = useRef<() => boolean>(() => false);
+  const insertEmphasisMarkCommandRef = useRef<() => void>(() => undefined);
+  const canInsertEmphasisMarkCommandRef = useRef<() => boolean>(() => false);
+  const canOpenGlossaryEntryTabFromSelectionCommandRef = useRef<() => boolean>(
+    () => false
+  );
   const canDelegateNativeEditCommandRef = useRef<
     (commandId: string) => boolean
   >(() => true);
@@ -3586,7 +3593,7 @@ export function App(): JSX.Element {
   // toolbar click has no direct CodeMirror `view` access the way the keymap
   // handlers do.
   const handleOpenRubyDialogFromToolbar = useCallback(
-    (opener: Element) => {
+    (opener: Element | null) => {
       const controller = paragraphIndentControllerRef.current;
       const selection = controller?.getSelection() ?? null;
       if (!selection || selection.from === selection.to) {
@@ -3607,7 +3614,7 @@ export function App(): JSX.Element {
   );
 
   const handleOpenEmphasisDialogFromToolbar = useCallback(
-    (opener: Element) => {
+    (opener: Element | null) => {
       const controller = paragraphIndentControllerRef.current;
       const selection = controller?.getSelection() ?? null;
       if (!selection || selection.from === selection.to) {
@@ -3885,6 +3892,10 @@ export function App(): JSX.Element {
         canInsertTable: () => canInsertTableCommandRef.current(),
         insertCallout: () => insertCalloutCommandRef.current(),
         canInsertCallout: () => canInsertCalloutCommandRef.current(),
+        insertRuby: () => insertRubyCommandRef.current(),
+        canInsertRuby: () => canInsertRubyCommandRef.current(),
+        insertEmphasisMark: () => insertEmphasisMarkCommandRef.current(),
+        canInsertEmphasisMark: () => canInsertEmphasisMarkCommandRef.current(),
         togglePreview: () => togglePreviewCommandRef.current(),
         canTogglePreview: () => canTogglePreviewCommandRef.current(),
         delegateNativeEditCommand: (commandId) =>
@@ -4037,8 +4048,14 @@ export function App(): JSX.Element {
         openGlossaryEntryTab: async (options) => {
           await openGlossaryDescriptionTab(options.entryId);
         },
+        canOpenGlossaryEntryTabFromSelection: () =>
+          canOpenGlossaryEntryTabFromSelectionCommandRef.current(),
         openGlossaryEntryTabFromSelection: async (selectedText) => {
-          await openGlossaryDescriptionTabFromSelection(selectedText);
+          const targetText =
+            selectedText && selectedText.length > 0
+              ? selectedText
+              : getCurrentActiveEditorSelectionText();
+          await openGlossaryDescriptionTabFromSelection(targetText);
         }
       },
       createGlossaryEntryTabCommandTitles(translate)
@@ -9702,6 +9719,25 @@ export function App(): JSX.Element {
   insertCalloutCommandRef.current = () => {
     paragraphIndentControllerRef.current?.insertCallout("note");
   };
+  const hasNonEmptyEditorSelectionForCommand = () => {
+    const selection = paragraphIndentControllerRef.current?.getSelection() ?? null;
+    if (selection && selection.from !== selection.to) {
+      return true;
+    }
+    return getCurrentActiveEditorSelectionText().length > 0;
+  };
+  canInsertRubyCommandRef.current = () =>
+    hasEditableTextLikeDocument && hasNonEmptyEditorSelectionForCommand();
+  insertRubyCommandRef.current = () => {
+    handleOpenRubyDialogFromToolbar(null);
+  };
+  canInsertEmphasisMarkCommandRef.current = () =>
+    hasEditableTextLikeDocument && hasNonEmptyEditorSelectionForCommand();
+  insertEmphasisMarkCommandRef.current = () => {
+    handleOpenEmphasisDialogFromToolbar(null);
+  };
+  canOpenGlossaryEntryTabFromSelectionCommandRef.current = () =>
+    canUseMarkdownToolbarCommands && hasNonEmptyEditorSelectionForCommand();
   canTogglePreviewCommandRef.current = () => isPreviewEligible;
   togglePreviewCommandRef.current = () => {
     handleTogglePreviewVisible();

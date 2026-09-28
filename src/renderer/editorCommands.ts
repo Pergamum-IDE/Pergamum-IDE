@@ -70,6 +70,10 @@ export interface EditorCommandController {
   canInsertTable(): boolean;
   insertCallout(): void | Promise<void>;
   canInsertCallout(): boolean;
+  insertRuby(): void | Promise<void>;
+  canInsertRuby(): boolean;
+  insertEmphasisMark(): void | Promise<void>;
+  canInsertEmphasisMark(): boolean;
   togglePreview(): void | Promise<void>;
   canTogglePreview(): boolean;
   delegateNativeEditCommand(
@@ -115,6 +119,10 @@ export interface EditorCommandTitles {
   insertTableDescription: string;
   insertCallout: string;
   insertCalloutDescription: string;
+  insertRuby: string;
+  insertRubyDescription: string;
+  insertEmphasisMark: string;
+  insertEmphasisMarkDescription: string;
   togglePreview: string;
   togglePreviewDescription: string;
   cutSelection: string;
@@ -196,6 +204,16 @@ export function createEditorCommandTitles(
     insertCallout: translate("command.editor.markdown.insertCallout"),
     insertCalloutDescription: translate(
       "command.editor.markdown.insertCallout.description"
+    ),
+    insertRuby: translate("command.editor.markdown.insertRuby"),
+    insertRubyDescription: translate(
+      "command.editor.markdown.insertRuby.description"
+    ),
+    insertEmphasisMark: translate(
+      "command.editor.markdown.insertEmphasisMark"
+    ),
+    insertEmphasisMarkDescription: translate(
+      "command.editor.markdown.insertEmphasisMark.description"
     ),
     togglePreview: translate("command.editor.preview.toggle"),
     togglePreviewDescription: translate(
@@ -475,6 +493,32 @@ export function createEditorCommands(
         return controller.insertCallout();
       },
       isEnabled: () => controller.canInsertCallout()
+    },
+    {
+      id: editorCommandIds.insertRuby,
+      title: titles.insertRuby,
+      description: titles.insertRubyDescription,
+      execute: () => {
+        if (!controller.canInsertRuby()) {
+          return;
+        }
+
+        return controller.insertRuby();
+      },
+      isEnabled: () => controller.canInsertRuby()
+    },
+    {
+      id: editorCommandIds.insertEmphasisMark,
+      title: titles.insertEmphasisMark,
+      description: titles.insertEmphasisMarkDescription,
+      execute: () => {
+        if (!controller.canInsertEmphasisMark()) {
+          return;
+        }
+
+        return controller.insertEmphasisMark();
+      },
+      isEnabled: () => controller.canInsertEmphasisMark()
     },
     {
       id: editorCommandIds.togglePreview,

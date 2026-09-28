@@ -55,7 +55,10 @@ describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
     );
 
     expect(body).toContain(
-      "openGlossaryEntryTabFromSelection: async (selectedText) => {\n          await openGlossaryDescriptionTabFromSelection(selectedText);"
+      "openGlossaryEntryTabFromSelection: async (selectedText) => {"
+    );
+    expect(body).toContain(
+      "await openGlossaryDescriptionTabFromSelection(targetText);"
     );
   });
 

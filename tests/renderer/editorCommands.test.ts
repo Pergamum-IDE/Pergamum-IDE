@@ -60,6 +60,10 @@ const titles = {
   insertTableDescription: "Insert Table...",
   insertCallout: "Insert Callout",
   insertCalloutDescription: "Insert Callout",
+  insertRuby: "Insert Ruby...",
+  insertRubyDescription: "Insert Ruby...",
+  insertEmphasisMark: "Insert Emphasis Mark...",
+  insertEmphasisMarkDescription: "Insert Emphasis Mark...",
   togglePreview: "Toggle Preview",
   togglePreviewDescription: "Toggle Preview",
   undo: "Undo",
@@ -143,6 +147,10 @@ function registerEditorCommandSet(
       canInsertTable: () => true,
       insertCallout: () => undefined,
       canInsertCallout: () => true,
+      insertRuby: () => undefined,
+      canInsertRuby: () => true,
+      insertEmphasisMark: () => undefined,
+      canInsertEmphasisMark: () => true,
       togglePreview: () => undefined,
       canTogglePreview: () => true,
       delegateNativeEditCommand: () => undefined,
@@ -187,6 +195,8 @@ describe("editor commands", () => {
       "editor.markdown.insertCodeBlock",
       "editor.markdown.insertTable",
       "editor.markdown.insertCallout",
+      "editor.markdown.insertRuby",
+      "editor.markdown.insertEmphasisMark",
       "editor.preview.toggle",
       "editor.undo",
       "editor.redo",
@@ -553,6 +563,13 @@ describe("editor commands", () => {
       insertCallout: "translated:command.editor.markdown.insertCallout",
       insertCalloutDescription:
         "translated:command.editor.markdown.insertCallout.description",
+      insertRuby: "translated:command.editor.markdown.insertRuby",
+      insertRubyDescription:
+        "translated:command.editor.markdown.insertRuby.description",
+      insertEmphasisMark:
+        "translated:command.editor.markdown.insertEmphasisMark",
+      insertEmphasisMarkDescription:
+        "translated:command.editor.markdown.insertEmphasisMark.description",
       togglePreview: "translated:command.editor.preview.toggle",
       togglePreviewDescription:
         "translated:command.editor.preview.toggle.description",
