@@ -41,6 +41,7 @@ import {
   type ApplicationMenuCommandId,
   type EditCommandId
 } from "../shared/commandIds";
+import { canDelegateNativeEditCommand } from "./nativeEditCommandEnablement";
 import type { CommandContext } from "../shared/commandEnablement";
 import type {
   DebugLogEditorIdKind,
@@ -1664,6 +1665,9 @@ export function App(): JSX.Element {
   );
   const insertParagraphIndentCommandRef = useRef<() => void>(() => undefined);
   const removeParagraphIndentCommandRef = useRef<() => void>(() => undefined);
+  const canDelegateNativeEditCommandRef = useRef<
+    (commandId: string) => boolean
+  >(() => true);
   const paragraphIndentControllerRef =
     useRef<MarkdownEditorParagraphIndentController | null>(null);
   const handleParagraphIndentControllerChange = useCallback(
@@ -3885,7 +3889,8 @@ export function App(): JSX.Element {
         canTogglePreview: () => canTogglePreviewCommandRef.current(),
         delegateNativeEditCommand: (commandId) =>
           delegateNativeEditCommand(commandId),
-        canDelegateNativeEditCommand: () => true
+        canDelegateNativeEditCommand: (commandId) =>
+          canDelegateNativeEditCommandRef.current(commandId)
       },
       createEditorCommandTitles(translate)
     );
@@ -6690,7 +6695,7 @@ export function App(): JSX.Element {
   };
 
   async function delegateNativeEditCommand(
-    commandId: EditCommandId
+    commandId: string
   ): Promise<void> {
     const context = nativeEditCommandContextRef.current;
 
@@ -9701,6 +9706,11 @@ export function App(): JSX.Element {
   togglePreviewCommandRef.current = () => {
     handleTogglePreviewVisible();
   };
+  canDelegateNativeEditCommandRef.current = (commandId) =>
+    canDelegateNativeEditCommand({
+      commandId,
+      isReadOnlyProjectOwnedEditor
+    });
   // #342: Save All — save every open document that currently has unsaved
   // changes, reusing the existing per-document `saveFile` spec (line endings,
   // Recovery retirement, atomic write, in-flight guarding). The dirty set is

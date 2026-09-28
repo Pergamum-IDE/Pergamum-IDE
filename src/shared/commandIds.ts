@@ -79,6 +79,8 @@ export const editorCommandIds = {
   close: defineCommandId<readonly [{ editorId?: EditorId }?], void>(
     "editor.close"
   ),
+  undo: defineCommandId("editor.undo"),
+  redo: defineCommandId("editor.redo"),
   insertImage: defineCommandId("editor.image.insert"),
   insertBlockquote: defineCommandId("editor.markdown.insertBlockquote"),
   toggleSyntaxChecker: defineCommandId("editor.markdown.toggleSyntaxChecker"),
@@ -143,7 +145,13 @@ export const applicationMenuCommandIds = [
   applicationCommandIds.resetZoom,
   projectSettingsCommandIds.open,
   workspaceCommandIds.openApplicationSettings,
-  workspaceCommandIds.showResumeHub
+  workspaceCommandIds.showResumeHub,
+  editorCommandIds.undo,
+  editorCommandIds.redo,
+  editorCommandIds.cutSelection,
+  editorCommandIds.copySelection,
+  editorCommandIds.pasteSelection,
+  editorCommandIds.selectAllSelection
 ] as const;
 
 export type ApplicationMenuCommandId =

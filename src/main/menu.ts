@@ -56,9 +56,11 @@ function roleItem(
   language: Language,
   key: TranslationKey,
   values?: Record<string, string | number>,
-  accelerator?: string
+  accelerator?: string,
+  id?: string
 ): MenuItemConstructorOptions {
   return {
+    ...(id ? { id } : {}),
     role,
     label: label(language, key, values),
     // Electron assigns each role a built-in default accelerator when this
@@ -278,14 +280,14 @@ function editMenu(
   return {
     label: label(language, "menu.edit"),
     submenu: [
-      roleItem("undo", language, "menu.undo"),
-      roleItem("redo", language, "menu.redo"),
+      roleItem("undo", language, "menu.undo", undefined, undefined, editorCommandIds.undo),
+      roleItem("redo", language, "menu.redo", undefined, undefined, editorCommandIds.redo),
       { type: "separator" },
-      roleItem("cut", language, "menu.cut"),
-      roleItem("copy", language, "menu.copy"),
-      roleItem("paste", language, "menu.paste"),
+      roleItem("cut", language, "menu.cut", undefined, undefined, editorCommandIds.cutSelection),
+      roleItem("copy", language, "menu.copy", undefined, undefined, editorCommandIds.copySelection),
+      roleItem("paste", language, "menu.paste", undefined, undefined, editorCommandIds.pasteSelection),
       { type: "separator" },
-      roleItem("selectAll", language, "menu.selectAll"),
+      roleItem("selectAll", language, "menu.selectAll", undefined, undefined, editorCommandIds.selectAllSelection),
       { type: "separator" },
       // #457: seeds the currently selected text (anywhere in the Pergamum
       // UI, not just the active editor) into Project Search / Replace. The

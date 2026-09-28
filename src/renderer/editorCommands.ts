@@ -72,8 +72,10 @@ export interface EditorCommandController {
   canInsertCallout(): boolean;
   togglePreview(): void | Promise<void>;
   canTogglePreview(): boolean;
-  delegateNativeEditCommand(commandId: EditCommandId): void | Promise<void>;
-  canDelegateNativeEditCommand(commandId: EditCommandId): boolean;
+  delegateNativeEditCommand(
+    commandId: EditCommandId | string
+  ): void | Promise<void>;
+  canDelegateNativeEditCommand(commandId: EditCommandId | string): boolean;
 }
 
 export interface EditorCommandTitles {
@@ -123,6 +125,10 @@ export interface EditorCommandTitles {
   pasteSelectionDescription: string;
   selectAllSelection: string;
   selectAllSelectionDescription: string;
+  undo: string;
+  undoDescription: string;
+  redo: string;
+  redoDescription: string;
 }
 
 type EditorCommand = Command<readonly [], void>;
@@ -210,7 +216,11 @@ export function createEditorCommandTitles(
     selectAllSelection: translate("command.editor.selection.selectAll"),
     selectAllSelectionDescription: translate(
       "command.editor.selection.selectAll.description"
-    )
+    ),
+    undo: translate("command.editor.undo"),
+    undoDescription: translate("command.editor.undo.description"),
+    redo: translate("command.editor.redo"),
+    redoDescription: translate("command.editor.redo.description")
   };
 }
 
@@ -478,6 +488,24 @@ export function createEditorCommands(
         return controller.togglePreview();
       },
       isEnabled: () => controller.canTogglePreview()
+    },
+    {
+      id: editorCommandIds.undo,
+      title: titles.undo,
+      description: titles.undoDescription,
+      execute: () =>
+        controller.delegateNativeEditCommand(editorCommandIds.undo),
+      isEnabled: () =>
+        controller.canDelegateNativeEditCommand(editorCommandIds.undo)
+    },
+    {
+      id: editorCommandIds.redo,
+      title: titles.redo,
+      description: titles.redoDescription,
+      execute: () =>
+        controller.delegateNativeEditCommand(editorCommandIds.redo),
+      isEnabled: () =>
+        controller.canDelegateNativeEditCommand(editorCommandIds.redo)
     },
     editCommand(
       editCommandIds[0],
