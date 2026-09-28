@@ -309,7 +309,6 @@ export const debugLogCommandExecutionSources = [
   "documentTabBar",
   "editorSurface",
   "toolbar",
-  "utilityWindow",
   "workspaceSidebar",
   "resumeHub",
   "unknown"
@@ -926,15 +925,8 @@ export const knownDebugLogCommandIds = [
   "workspace.search.focus",
   "workspace.glossary.focus",
   "workspace.applicationSettings.open",
-  "workbench.utilityWindow.open",
-  "workbench.utilityWindow.close",
-  "workbench.utilityWindow.toggle",
   "workbench.debugLog.open",
-  "glossary.entry.open",
-  "glossary.occurrences.previous",
-  "glossary.occurrences.next",
-  "glossary.occurrences.entry.open",
-  "glossary.occurrences.tracking.close"
+  "glossary.entry.open"
 ] as const;
 
 export const knownDebugLogStatusKeys = [

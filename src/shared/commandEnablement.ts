@@ -22,7 +22,6 @@ export type CommandContextKey =
   // file.
   | "editor.document.projectFile"
   | "activeEditor.saveBlockedByReadOnlyProjectRootForUi"
-  | "glossary.occurrences.tracking.active"
   | "recovery.owner"
   | "recovery.hasRecoverableCandidates";
 
@@ -36,7 +35,6 @@ export const commandContextKeys: readonly CommandContextKey[] = [
   "editor.document.projectOwned",
   "editor.document.projectFile",
   "activeEditor.saveBlockedByReadOnlyProjectRootForUi",
-  "glossary.occurrences.tracking.active",
   "recovery.owner",
   "recovery.hasRecoverableCandidates"
 ] as const;

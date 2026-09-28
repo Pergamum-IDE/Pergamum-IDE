@@ -353,41 +353,6 @@ describe("CommandPalette", () => {
         "command.workspace.applicationSettings.open.description",
         "Pergamum全体に有効な設定画面を表示します。",
         "Open application-wide settings."
-      ],
-      [
-        "command.workbench.utilityWindow.open.description",
-        "支援ウィンドウを表示します。",
-        "Show the Utility Window."
-      ],
-      [
-        "command.workbench.utilityWindow.close.description",
-        "支援ウィンドウを非表示にします。",
-        "Hide the Utility Window."
-      ],
-      [
-        "command.workbench.utilityWindow.toggle.description",
-        "支援ウィンドウの表示項目を切り替えます。",
-        "Toggle the Utility Window."
-      ],
-      [
-        "command.glossary.occurrences.previous.description",
-        "（未実装です）",
-        "Not implemented."
-      ],
-      [
-        "command.glossary.occurrences.next.description",
-        "（未実装です）",
-        "Not implemented."
-      ],
-      [
-        "command.glossary.occurrences.entry.open.description",
-        "（未実装です）",
-        "Not implemented."
-      ],
-      [
-        "command.glossary.occurrences.tracking.close.description",
-        "（未実装です）",
-        "Not implemented."
       ]
     ] as const;
 

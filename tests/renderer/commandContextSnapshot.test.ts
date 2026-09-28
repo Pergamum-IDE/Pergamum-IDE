@@ -11,7 +11,6 @@ const baseInput = {
   editorDocumentProjectOwned: true,
   editorDocumentProjectFile: true,
   activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
-  occurrenceTrackingActive: false,
   recoveryOwner: false,
   recoveryHasRecoverableCandidates: false
 };
@@ -28,7 +27,6 @@ describe("buildCommandContextSnapshot", () => {
       "editor.document.projectOwned": true,
       "editor.document.projectFile": true,
       "activeEditor.saveBlockedByReadOnlyProjectRootForUi": false,
-      "glossary.occurrences.tracking.active": false,
       "recovery.owner": false,
       "recovery.hasRecoverableCandidates": false
     });

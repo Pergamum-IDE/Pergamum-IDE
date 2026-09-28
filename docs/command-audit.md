@@ -6,11 +6,10 @@
 
 ## 1. 概要・統計 (Summary & Statistics)
 
-- **総確認項目数**: 59 件
-- **Command Registry 登録コマンド数**: 39 件
-  - **コマンドパレット表示 (Registered in Palette)**: 19 件
-  - **コマンドパレット非表示 (`palette: { visible: false }`)**: 10 件
-  - **内部/デバッグ専用コマンド**: 10 件
+- **総確認項目数**: 69 件
+- **Command Registry 登録コマンド数**: 41 件
+  - **コマンドパレット表示 (Registered in Palette)**: 34 件
+  - **コマンドパレット非表示 / 内部コマンド**: 7 件
 - **Electron メニューアイテム数**: 25 件（うち隠しアクセラレータ 4 件）
 - **キーボードショートカット割り当て項目数**: 33 件
 
@@ -86,18 +85,9 @@
 | **Glossary** | `glossary.entry.open` | 語彙を開く | Open Glossary Entry | - | Command Registry | Workspace | Always | No | Excluded by Design | 引数 `entryId` 必須 |
 | **Glossary** | `glossary.openCreateEntryPane` | 新しい語彙をタブで開く | Open New Glossary Entry Tab | - | Command Registry | Workspace | Always | No | Excluded by Design | 内部オプション引数 |
 | **Glossary** | `glossary.openEditEntryPane` | 語彙をタブで開く | Open Glossary Entry Tab | - | Command Registry | Workspace | Always | No | Excluded by Design | 内部オプション引数 |
-| **Glossary** | `glossary.occurrences.previous` | 前の使用箇所（追跡） | Previous Occurrence (Tracking) | - | Command Registry | Workspace | `glossary.occurrences.tracking.active` | Yes | Registered | 機能未実装 (no-op) |
-| **Glossary** | `glossary.occurrences.next` | 次の使用箇所（追跡） | Next Occurrence (Tracking) | - | Command Registry | Workspace | `glossary.occurrences.tracking.active` | Yes | Registered | 機能未実装 (no-op) |
-| **Glossary** | `glossary.occurrences.entry.open` | 追跡中の語彙を開く | Open Tracked Glossary Entry | - | Command Registry | Workspace | Always | Yes | Registered | 機能未実装 (no-op) |
-| **Glossary** | `glossary.occurrences.tracking.close` | 使用箇所の追跡を閉じる | Close Occurrence Tracking | - | Command Registry | Workspace | `glossary.occurrences.tracking.active` | Yes | Registered | 機能未実装 (no-op) |
 | **Help** | `workbench.showResumeHub` | 作業再開画面を表示 | Show Resume Hub | - | Main Menu / Command Registry | All | `project.isOpen` | Yes | Registered | #538 にて実装完了 |
 | **Help** | `app.about.open` | Pergamum について | About Pergamum | - | Main Menu / Command Registry | All | Always | Yes | Registered | ダイアログ起動 |
 | **Recovery** | `recovery.documents.show` | 未保存の編集内容を復元... | Restore Unsaved Documents... | - | Command Registry | Workspace | `recovery.owner` && `recovery.hasRecoverableCandidates` | Yes | Registered | 復元候補存在時のみ表示 |
-| **Debug** | `debug.session.injectFailure.*` | [Debug] 自動保存の失敗を注入 | Inject Save Failure (Debug) | - | Command Registry | All | Always | Yes | Registered | デバッグ用 11 種のサブコマンド |
-| **Debug** | `debug.session.clearInjection` | [Debug] 自動保存の失敗注入を解除 | Clear Save Failure Injection | - | Command Registry | All | Always | Yes | Registered | デバッグ用 |
-| **Utility** | `workbench.utilityWindow.open` | 支援ウィンドウを開く | Open Utility Window | - | Command Registry | All | Always | Yes | Registered | サブウィンドウ用 |
-| **Utility** | `workbench.utilityWindow.close` | 支援ウィンドウを閉じる | Close Utility Window | - | Command Registry | All | Always | Yes | Registered | サブウィンドウ用 |
-| **Utility** | `workbench.utilityWindow.toggle` | 支援ウィンドウを切り替え | Toggle Utility Window | - | Command Registry | All | Always | Yes | Registered | サブウィンドウ用 |
 | **Context Menu** | - | 名前を変更... | Rename... | `F2` | File Explorer Context Menu | File Explorer | Active item selected | No | Excluded by Design | ファイル名変更 |
 | **Context Menu** | - | 新規 Markdown ファイルを作成 | Create New Markdown File | - | File Explorer Context Menu | File Explorer | Project open | No | Excluded by Design |  |
 | **Context Menu** | - | 新規フォルダを作成 | Create New Folder | - | File Explorer Context Menu | File Explorer | Project open | No | Excluded by Design |  |
@@ -133,10 +123,8 @@
 
 ### 3.3 ラベル調整・ガード強化が必要な項目 (Needs Label / Needs Guard)
 
-1. **未実装の語彙追跡コマンド群**
-   - `glossary.occurrences.previous`, `glossary.occurrences.next`, `glossary.occurrences.entry.open`, `glossary.occurrences.tracking.close` はコマンドパレットに表示されますが、説明文が「（未実装です）」となっており、実行しても no-op となります。将来の実装またはパレットからの一時的除外が検討されます。
-2. **Debug セッション失敗注入コマンド群**
-   - `debug.session.injectFailure.*` などの 11 件のデバッグコマンドはコマンドパレットに表示されます。開発者向けとしては有用ですが、通常ユーザー向けビルドでの可視性制御（フラグガード）の検討が推奨されます。
+1. **廃止コマンド群の整理完了 (#609)**
+   - 旧支援ウィンドウ用 (`workbench.utilityWindow.*`)、デバッグ失敗注入用 (`debug.session.*`)、および旧語彙追跡用 (`glossary.occurrences.*`) コマンド群は廃止に伴い完全に削除されました。現時点でパレット上に残存する不要な no-op コマンドやデバッグ用コマンドはありません。
 
 ### 3.4 曖昧な定義・重複・競合 (Ambiguous Items / Conflicts / Duplicates)
 

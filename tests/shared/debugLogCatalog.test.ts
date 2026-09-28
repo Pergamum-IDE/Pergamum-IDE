@@ -92,7 +92,6 @@ describe("debug log catalog", () => {
       "documentTabBar",
       "editorSurface",
       "toolbar",
-      "utilityWindow",
       "workspaceSidebar",
       "resumeHub",
       "unknown"

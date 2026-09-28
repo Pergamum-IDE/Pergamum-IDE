@@ -133,7 +133,6 @@ describe("#262 document-dependent commands in the zero-tab state", () => {
     editorDocumentProjectOwned: false,
     editorDocumentProjectFile: false,
     activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
-    occurrenceTrackingActive: false,
     recoveryOwner: false,
     recoveryHasRecoverableCandidates: false
   });
@@ -148,7 +147,6 @@ describe("#262 document-dependent commands in the zero-tab state", () => {
     editorDocumentProjectOwned: false,
     editorDocumentProjectFile: false,
     activeEditorSaveBlockedByReadOnlyProjectRootForUi: false,
-    occurrenceTrackingActive: false,
     recoveryOwner: false,
     recoveryHasRecoverableCandidates: false
   });
