@@ -1632,6 +1632,26 @@ export function App(): JSX.Element {
   const canInsertImageCommandRef = useRef<() => boolean>(() => false);
   const insertBlockquoteCommandRef = useRef<() => void>(() => undefined);
   const canInsertBlockquoteCommandRef = useRef<() => boolean>(() => false);
+  const applyBoldCommandRef = useRef<() => void>(() => undefined);
+  const canApplyBoldCommandRef = useRef<() => boolean>(() => false);
+  const applyItalicCommandRef = useRef<() => void>(() => undefined);
+  const canApplyItalicCommandRef = useRef<() => boolean>(() => false);
+  const applyStrikethroughCommandRef = useRef<() => void>(() => undefined);
+  const canApplyStrikethroughCommandRef = useRef<() => boolean>(() => false);
+  const insertHeadingCommandRef = useRef<() => void>(() => undefined);
+  const canInsertHeadingCommandRef = useRef<() => boolean>(() => false);
+  const insertLinkCommandRef = useRef<() => void>(() => undefined);
+  const canInsertLinkCommandRef = useRef<() => boolean>(() => false);
+  const insertHorizontalRuleCommandRef = useRef<() => void>(() => undefined);
+  const canInsertHorizontalRuleCommandRef = useRef<() => boolean>(() => false);
+  const insertCodeBlockCommandRef = useRef<() => void>(() => undefined);
+  const canInsertCodeBlockCommandRef = useRef<() => boolean>(() => false);
+  const insertTableCommandRef = useRef<() => void>(() => undefined);
+  const canInsertTableCommandRef = useRef<() => boolean>(() => false);
+  const insertCalloutCommandRef = useRef<() => void>(() => undefined);
+  const canInsertCalloutCommandRef = useRef<() => boolean>(() => false);
+  const togglePreviewCommandRef = useRef<() => void>(() => undefined);
+  const canTogglePreviewCommandRef = useRef<() => boolean>(() => false);
   const saveAllDocumentsCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -3842,6 +3862,27 @@ export function App(): JSX.Element {
         canInsertBlockquote: () => canInsertBlockquoteCommandRef.current(),
         toggleSyntaxChecker: () => toggleSyntaxCheckerCommandRef.current(),
         canToggleSyntaxChecker: () => canToggleSyntaxCheckerCommandRef.current(),
+        applyBold: () => applyBoldCommandRef.current(),
+        canApplyBold: () => canApplyBoldCommandRef.current(),
+        applyItalic: () => applyItalicCommandRef.current(),
+        canApplyItalic: () => canApplyItalicCommandRef.current(),
+        applyStrikethrough: () => applyStrikethroughCommandRef.current(),
+        canApplyStrikethrough: () => canApplyStrikethroughCommandRef.current(),
+        insertHeading: () => insertHeadingCommandRef.current(),
+        canInsertHeading: () => canInsertHeadingCommandRef.current(),
+        insertLink: () => insertLinkCommandRef.current(),
+        canInsertLink: () => canInsertLinkCommandRef.current(),
+        insertHorizontalRule: () => insertHorizontalRuleCommandRef.current(),
+        canInsertHorizontalRule: () =>
+          canInsertHorizontalRuleCommandRef.current(),
+        insertCodeBlock: () => insertCodeBlockCommandRef.current(),
+        canInsertCodeBlock: () => canInsertCodeBlockCommandRef.current(),
+        insertTable: () => insertTableCommandRef.current(),
+        canInsertTable: () => canInsertTableCommandRef.current(),
+        insertCallout: () => insertCalloutCommandRef.current(),
+        canInsertCallout: () => canInsertCalloutCommandRef.current(),
+        togglePreview: () => togglePreviewCommandRef.current(),
+        canTogglePreview: () => canTogglePreviewCommandRef.current(),
         delegateNativeEditCommand: (commandId) =>
           delegateNativeEditCommand(commandId),
         canDelegateNativeEditCommand: () => true
@@ -9615,6 +9656,50 @@ export function App(): JSX.Element {
   canToggleSyntaxCheckerCommandRef.current = () => canUseMarkdownSyntaxChecker;
   toggleSyntaxCheckerCommandRef.current = () => {
     handleToggleMarkdownSyntaxChecker();
+  };
+  canApplyBoldCommandRef.current = () => canUseMarkdownToolbarCommands;
+  applyBoldCommandRef.current = () => {
+    handleApplyBoldMarkup();
+  };
+  canApplyItalicCommandRef.current = () => canUseMarkdownToolbarCommands;
+  applyItalicCommandRef.current = () => {
+    handleApplyItalicMarkup();
+  };
+  canApplyStrikethroughCommandRef.current = () => canUseMarkdownToolbarCommands;
+  applyStrikethroughCommandRef.current = () => {
+    handleApplyStrikethroughMarkup();
+  };
+  canInsertHeadingCommandRef.current = () => canUseMarkdownToolbarCommands;
+  insertHeadingCommandRef.current = () => {
+    setIsHeadingSelectorOpen((prev) => !prev);
+  };
+  canInsertLinkCommandRef.current = () => canUseMarkdownToolbarCommands;
+  insertLinkCommandRef.current = () => {
+    setLinkInsertDialogState({
+      selectedText: getCurrentActiveEditorSelectionText(),
+      opener: null
+    });
+  };
+  canInsertHorizontalRuleCommandRef.current = () =>
+    canUseMarkdownToolbarCommands;
+  insertHorizontalRuleCommandRef.current = () => {
+    handleInsertHorizontalRule();
+  };
+  canInsertCodeBlockCommandRef.current = () => canUseMarkdownToolbarCommands;
+  insertCodeBlockCommandRef.current = () => {
+    handleInsertCodeBlock();
+  };
+  canInsertTableCommandRef.current = () => canUseMarkdownToolbarCommands;
+  insertTableCommandRef.current = () => {
+    setIsTablePopoverOpen((prev) => !prev);
+  };
+  canInsertCalloutCommandRef.current = () => canUseMarkdownToolbarCommands;
+  insertCalloutCommandRef.current = () => {
+    paragraphIndentControllerRef.current?.insertCallout("note");
+  };
+  canTogglePreviewCommandRef.current = () => isPreviewEligible;
+  togglePreviewCommandRef.current = () => {
+    handleTogglePreviewVisible();
   };
   // #342: Save All — save every open document that currently has unsaved
   // changes, reusing the existing per-document `saveFile` spec (line endings,

@@ -50,6 +50,36 @@ export const jaTranslations = {
   "command.editor.markdown.toggleSyntaxChecker": "Markdown構文チェックを切り替え",
   "command.editor.markdown.toggleSyntaxChecker.description":
     "アクティブなMarkdown文書の構文チェック表示を切り替えます。",
+  "command.editor.markdown.bold": "太字",
+  "command.editor.markdown.bold.description":
+    "選択テキストまたはカーソル位置に太字装飾を適用します。",
+  "command.editor.markdown.italic": "斜体",
+  "command.editor.markdown.italic.description":
+    "選択テキストまたはカーソル位置に斜体装飾を適用します。",
+  "command.editor.markdown.strikethrough": "打ち消し線",
+  "command.editor.markdown.strikethrough.description":
+    "選択テキストまたはカーソル位置に打ち消し線装飾を適用します。",
+  "command.editor.markdown.heading": "見出し...",
+  "command.editor.markdown.heading.description":
+    "見出しレベルを選択して挿入します。",
+  "command.editor.markdown.link": "リンクを挿入...",
+  "command.editor.markdown.link.description":
+    "リンク挿入ダイアログを表示します。",
+  "command.editor.markdown.insertHorizontalRule": "水平線を挿入",
+  "command.editor.markdown.insertHorizontalRule.description":
+    "カーソル位置に水平線を挿入します。",
+  "command.editor.markdown.insertCodeBlock": "コードブロックを挿入",
+  "command.editor.markdown.insertCodeBlock.description":
+    "カーソル位置にコードブロックを挿入します。",
+  "command.editor.markdown.insertTable": "表を挿入...",
+  "command.editor.markdown.insertTable.description":
+    "表のサイズを選択して挿入します。",
+  "command.editor.markdown.insertCallout": "コールアウトを挿入",
+  "command.editor.markdown.insertCallout.description":
+    "カーソル位置にコールアウトブロックを挿入します。",
+  "command.editor.preview.toggle": "プレビュー表示の切り替え",
+  "command.editor.preview.toggle.description":
+    "プレビュー画面の表示・非表示を切り替えます。",
   "command.editor.line.goTo": "指定行へ移動",
   "command.editor.line.goTo.description": "アクティブなエディタのカーソルを指定行へ移動します",
   "command.assist.lineEndingDistribution.show": "改行コード分布を表示",

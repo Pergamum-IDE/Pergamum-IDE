@@ -52,6 +52,26 @@ export interface EditorCommandController {
   canInsertBlockquote(): boolean;
   toggleSyntaxChecker(): void | Promise<void>;
   canToggleSyntaxChecker(): boolean;
+  applyBold(): void | Promise<void>;
+  canApplyBold(): boolean;
+  applyItalic(): void | Promise<void>;
+  canApplyItalic(): boolean;
+  applyStrikethrough(): void | Promise<void>;
+  canApplyStrikethrough(): boolean;
+  insertHeading(): void | Promise<void>;
+  canInsertHeading(): boolean;
+  insertLink(): void | Promise<void>;
+  canInsertLink(): boolean;
+  insertHorizontalRule(): void | Promise<void>;
+  canInsertHorizontalRule(): boolean;
+  insertCodeBlock(): void | Promise<void>;
+  canInsertCodeBlock(): boolean;
+  insertTable(): void | Promise<void>;
+  canInsertTable(): boolean;
+  insertCallout(): void | Promise<void>;
+  canInsertCallout(): boolean;
+  togglePreview(): void | Promise<void>;
+  canTogglePreview(): boolean;
   delegateNativeEditCommand(commandId: EditCommandId): void | Promise<void>;
   canDelegateNativeEditCommand(commandId: EditCommandId): boolean;
 }
@@ -75,6 +95,26 @@ export interface EditorCommandTitles {
   insertBlockquoteDescription: string;
   toggleSyntaxChecker: string;
   toggleSyntaxCheckerDescription: string;
+  bold: string;
+  boldDescription: string;
+  italic: string;
+  italicDescription: string;
+  strikethrough: string;
+  strikethroughDescription: string;
+  heading: string;
+  headingDescription: string;
+  link: string;
+  linkDescription: string;
+  insertHorizontalRule: string;
+  insertHorizontalRuleDescription: string;
+  insertCodeBlock: string;
+  insertCodeBlockDescription: string;
+  insertTable: string;
+  insertTableDescription: string;
+  insertCallout: string;
+  insertCalloutDescription: string;
+  togglePreview: string;
+  togglePreviewDescription: string;
   cutSelection: string;
   cutSelectionDescription: string;
   copySelection: string;
@@ -120,6 +160,40 @@ export function createEditorCommandTitles(
     ),
     toggleSyntaxCheckerDescription: translate(
       "command.editor.markdown.toggleSyntaxChecker.description"
+    ),
+    bold: translate("command.editor.markdown.bold"),
+    boldDescription: translate("command.editor.markdown.bold.description"),
+    italic: translate("command.editor.markdown.italic"),
+    italicDescription: translate("command.editor.markdown.italic.description"),
+    strikethrough: translate("command.editor.markdown.strikethrough"),
+    strikethroughDescription: translate(
+      "command.editor.markdown.strikethrough.description"
+    ),
+    heading: translate("command.editor.markdown.heading"),
+    headingDescription: translate("command.editor.markdown.heading.description"),
+    link: translate("command.editor.markdown.link"),
+    linkDescription: translate("command.editor.markdown.link.description"),
+    insertHorizontalRule: translate(
+      "command.editor.markdown.insertHorizontalRule"
+    ),
+    insertHorizontalRuleDescription: translate(
+      "command.editor.markdown.insertHorizontalRule.description"
+    ),
+    insertCodeBlock: translate("command.editor.markdown.insertCodeBlock"),
+    insertCodeBlockDescription: translate(
+      "command.editor.markdown.insertCodeBlock.description"
+    ),
+    insertTable: translate("command.editor.markdown.insertTable"),
+    insertTableDescription: translate(
+      "command.editor.markdown.insertTable.description"
+    ),
+    insertCallout: translate("command.editor.markdown.insertCallout"),
+    insertCalloutDescription: translate(
+      "command.editor.markdown.insertCallout.description"
+    ),
+    togglePreview: translate("command.editor.preview.toggle"),
+    togglePreviewDescription: translate(
+      "command.editor.preview.toggle.description"
     ),
     cutSelection: translate("command.editor.selection.cut"),
     cutSelectionDescription: translate(
@@ -274,6 +348,136 @@ export function createEditorCommands(
         return controller.toggleSyntaxChecker();
       },
       isEnabled: () => controller.canToggleSyntaxChecker()
+    },
+    {
+      id: editorCommandIds.bold,
+      title: titles.bold,
+      description: titles.boldDescription,
+      execute: () => {
+        if (!controller.canApplyBold()) {
+          return;
+        }
+
+        return controller.applyBold();
+      },
+      isEnabled: () => controller.canApplyBold()
+    },
+    {
+      id: editorCommandIds.italic,
+      title: titles.italic,
+      description: titles.italicDescription,
+      execute: () => {
+        if (!controller.canApplyItalic()) {
+          return;
+        }
+
+        return controller.applyItalic();
+      },
+      isEnabled: () => controller.canApplyItalic()
+    },
+    {
+      id: editorCommandIds.strikethrough,
+      title: titles.strikethrough,
+      description: titles.strikethroughDescription,
+      execute: () => {
+        if (!controller.canApplyStrikethrough()) {
+          return;
+        }
+
+        return controller.applyStrikethrough();
+      },
+      isEnabled: () => controller.canApplyStrikethrough()
+    },
+    {
+      id: editorCommandIds.heading,
+      title: titles.heading,
+      description: titles.headingDescription,
+      execute: () => {
+        if (!controller.canInsertHeading()) {
+          return;
+        }
+
+        return controller.insertHeading();
+      },
+      isEnabled: () => controller.canInsertHeading()
+    },
+    {
+      id: editorCommandIds.link,
+      title: titles.link,
+      description: titles.linkDescription,
+      execute: () => {
+        if (!controller.canInsertLink()) {
+          return;
+        }
+
+        return controller.insertLink();
+      },
+      isEnabled: () => controller.canInsertLink()
+    },
+    {
+      id: editorCommandIds.insertHorizontalRule,
+      title: titles.insertHorizontalRule,
+      description: titles.insertHorizontalRuleDescription,
+      execute: () => {
+        if (!controller.canInsertHorizontalRule()) {
+          return;
+        }
+
+        return controller.insertHorizontalRule();
+      },
+      isEnabled: () => controller.canInsertHorizontalRule()
+    },
+    {
+      id: editorCommandIds.insertCodeBlock,
+      title: titles.insertCodeBlock,
+      description: titles.insertCodeBlockDescription,
+      execute: () => {
+        if (!controller.canInsertCodeBlock()) {
+          return;
+        }
+
+        return controller.insertCodeBlock();
+      },
+      isEnabled: () => controller.canInsertCodeBlock()
+    },
+    {
+      id: editorCommandIds.insertTable,
+      title: titles.insertTable,
+      description: titles.insertTableDescription,
+      execute: () => {
+        if (!controller.canInsertTable()) {
+          return;
+        }
+
+        return controller.insertTable();
+      },
+      isEnabled: () => controller.canInsertTable()
+    },
+    {
+      id: editorCommandIds.insertCallout,
+      title: titles.insertCallout,
+      description: titles.insertCalloutDescription,
+      execute: () => {
+        if (!controller.canInsertCallout()) {
+          return;
+        }
+
+        return controller.insertCallout();
+      },
+      isEnabled: () => controller.canInsertCallout()
+    },
+    {
+      id: editorCommandIds.togglePreview,
+      title: titles.togglePreview,
+      description: titles.togglePreviewDescription,
+      execute: () => {
+        if (!controller.canTogglePreview()) {
+          return;
+        }
+
+        return controller.togglePreview();
+      },
+      isEnabled: () => controller.canTogglePreview()
     },
     editCommand(
       editCommandIds[0],
