@@ -1765,6 +1765,8 @@ export const jaTranslations = {
   "settings.workbench.colorTheme.option.enlightenedGreen.label": "Enlightened Green",
   "settings.workbench.colorTheme.option.bananaYellow.label": "Banana Yellow",
   "settings.workbench.colorTheme.option.sakuraPink.label": "Sakura Pink",
+  "settings.workbench.colorTheme.option.noblePurple.label": "Noble Purple",
+  "settings.workbench.colorTheme.option.skyCyan.label": "Sky Cyan",
   "settings.workbench.colorTheme.optionAria": "配色テーマを {theme} に変更",
   "fontCache.status.notScanned": "未スキャン",
   "fontCache.status.loaded": "最終スキャン: {date}",

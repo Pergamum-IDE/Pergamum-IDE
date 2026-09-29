@@ -22,7 +22,9 @@ export const builtInThemeIds = [
   "resistance-blue",
   "enlightened-green",
   "banana-yellow",
-  "sakura-pink"
+  "sakura-pink",
+  "noble-purple",
+  "sky-cyan"
 ] as const;
 
 export type BuiltInThemeId = (typeof builtInThemeIds)[number];
@@ -137,6 +139,32 @@ const builtInThemeById: Record<BuiltInThemeId, BuiltInTheme> = {
       foreground: "#26191d",
       border: "#dbbfc7",
       accent: "#a03a68"
+    }
+  },
+  "noble-purple": {
+    id: "noble-purple",
+    label: "Noble Purple",
+    kind: "light",
+    cssClassName: "theme-noble-purple",
+    accentColor: "#6b46a1",
+    preview: {
+      background: "#eee8f6",
+      foreground: "#211a2d",
+      border: "#d5c8e6",
+      accent: "#6b46a1"
+    }
+  },
+  "sky-cyan": {
+    id: "sky-cyan",
+    label: "Sky Cyan",
+    kind: "light",
+    cssClassName: "theme-sky-cyan",
+    accentColor: "#007a94",
+    preview: {
+      background: "#e5f5fb",
+      foreground: "#102a34",
+      border: "#b9dbe5",
+      accent: "#007a94"
     }
   }
 };

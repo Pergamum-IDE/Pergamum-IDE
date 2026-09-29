@@ -13,7 +13,7 @@ import {
 } from "../../src/renderer/colorTheme";
 
 describe("built-in color theme registry (#621)", () => {
-  it("registers built-in themes (#623 Slice 2), each with a representative color", () => {
+  it("registers built-in themes (#623 Slice 4), each with a representative color", () => {
     expect(builtInThemes).toEqual([
       {
         id: "pergamum-light",
@@ -92,6 +92,32 @@ describe("built-in color theme registry (#621)", () => {
           border: "#dbbfc7",
           accent: "#a03a68"
         }
+      },
+      {
+        id: "noble-purple",
+        label: "Noble Purple",
+        kind: "light",
+        cssClassName: "theme-noble-purple",
+        accentColor: "#6b46a1",
+        preview: {
+          background: "#eee8f6",
+          foreground: "#211a2d",
+          border: "#d5c8e6",
+          accent: "#6b46a1"
+        }
+      },
+      {
+        id: "sky-cyan",
+        label: "Sky Cyan",
+        kind: "light",
+        cssClassName: "theme-sky-cyan",
+        accentColor: "#007a94",
+        preview: {
+          background: "#e5f5fb",
+          foreground: "#102a34",
+          border: "#b9dbe5",
+          accent: "#007a94"
+        }
       }
     ]);
     expect(defaultColorThemeId).toBe("pergamum-light");
@@ -113,6 +139,8 @@ describe("built-in color theme registry (#621)", () => {
     expect(isBuiltInThemeId("enlightened-green")).toBe(true);
     expect(isBuiltInThemeId("banana-yellow")).toBe(true);
     expect(isBuiltInThemeId("sakura-pink")).toBe(true);
+    expect(isBuiltInThemeId("noble-purple")).toBe(true);
+    expect(isBuiltInThemeId("sky-cyan")).toBe(true);
     for (const bad of [
       "no-such-theme",
       "Pergamum Light",

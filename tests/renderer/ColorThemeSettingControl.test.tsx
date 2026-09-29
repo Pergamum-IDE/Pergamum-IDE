@@ -96,11 +96,15 @@ describe("ColorThemeSettingControl (#623)", () => {
       "resistance-blue",
       "enlightened-green",
       "banana-yellow",
-      "sakura-pink"
+      "sakura-pink",
+      "noble-purple",
+      "sky-cyan"
     ]);
     expect(rows.map((row) => row.getAttribute("aria-selected"))).toEqual([
       "false",
       "true",
+      "false",
+      "false",
       "false",
       "false",
       "false",
@@ -165,6 +169,12 @@ describe("ColorThemeSettingControl (#623)", () => {
     const sakura = container.querySelector<HTMLElement>(
       '[data-theme-id="sakura-pink"]'
     )!;
+    const purple = container.querySelector<HTMLElement>(
+      '[data-theme-id="noble-purple"]'
+    )!;
+    const cyan = container.querySelector<HTMLElement>(
+      '[data-theme-id="sky-cyan"]'
+    )!;
 
     expect(previewOf(banana)).toEqual({
       background: "#f5f0e1",
@@ -174,11 +184,25 @@ describe("ColorThemeSettingControl (#623)", () => {
       background: "#f2e4e8",
       foreground: "#26191d"
     });
+    expect(previewOf(purple)).toEqual({
+      background: "#eee8f6",
+      foreground: "#211a2d"
+    });
+    expect(previewOf(cyan)).toEqual({
+      background: "#e5f5fb",
+      foreground: "#102a34"
+    });
     expect(blue.style.getPropertyValue("--theme-preview-accent")).toBe(
       "#1b62b0"
     );
     expect(green.style.getPropertyValue("--theme-preview-accent")).toBe(
       "#23733e"
+    );
+    expect(purple.style.getPropertyValue("--theme-preview-accent")).toBe(
+      "#6b46a1"
+    );
+    expect(cyan.style.getPropertyValue("--theme-preview-accent")).toBe(
+      "#007a94"
     );
   });
 
@@ -234,7 +258,7 @@ describe("ColorThemeSettingControl (#623)", () => {
     press(listbox()!, "End");
     press(listbox()!, " ");
 
-    expect(onChange).toHaveBeenCalledExactlyOnceWith("sakura-pink");
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("sky-cyan");
   });
 
   it("an outside mouse-down closes the popup without changing the value", () => {
