@@ -138,21 +138,49 @@ export function resolveInsideProject(
   root: string,
   relativePath: string
 ): string | null {
-  // Platform-independent: a Windows drive / UNC path must be refused on POSIX
-  // too (and a POSIX absolute path on Windows), since path.isAbsolute() only
-  // knows the current platform's rules.
+  // Validation is platform-independent: the same input is accepted or refused
+  // on Windows, macOS and Linux (CI). path.isAbsolute() and path.resolve()
+  // only know the current platform's rules, so a Windows drive / UNC path or
+  // a "..\\" traversal would slip through on POSIX without these checks.
+  if (typeof relativePath !== "string" || relativePath.length === 0) {
+    return null;
+  }
+
+  if (relativePath.includes("\0")) {
+    return null;
+  }
+
+  // Absolute in any flavour: POSIX "/x", Windows "\x", "C:\x", "C:/x", UNC.
   if (
     path.isAbsolute(relativePath) ||
     path.posix.isAbsolute(relativePath) ||
     path.win32.isAbsolute(relativePath) ||
+    // Drive-like, including drive-relative "C:x".
     /^[A-Za-z]:/.test(relativePath)
   ) {
     return null;
   }
 
-  const absolute = path.resolve(root, relativePath);
-  const relative = path.relative(path.resolve(root), absolute);
+  // Both "/" and "\\" separate path segments for validation.
+  const normalizedRelative = path.posix.normalize(
+    relativePath.replace(/\\/g, "/")
+  );
 
+  if (
+    normalizedRelative === "" ||
+    normalizedRelative === "." ||
+    normalizedRelative === ".." ||
+    normalizedRelative.startsWith("../") ||
+    normalizedRelative.startsWith("/")
+  ) {
+    return null;
+  }
+
+  const resolvedRoot = path.resolve(root);
+  const absolute = path.resolve(resolvedRoot, normalizedRelative);
+  const relative = path.relative(resolvedRoot, absolute);
+
+  // Defence in depth on the platform's own rules.
   if (
     relative === "" ||
     relative === ".." ||

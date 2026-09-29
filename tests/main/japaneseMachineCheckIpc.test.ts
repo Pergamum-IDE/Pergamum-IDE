@@ -310,6 +310,41 @@ describe("prepare (#625 P2a)", () => {
     }
   });
 
+  it("rejects Windows-style and mixed-separator traversal on every platform", () => {
+    for (const traversal of [
+      "../secret.md",
+      "..\\secret.md",
+      "..\\..\\secret.md",
+      "sub/../../secret.md",
+      "sub\\..\\..\\secret.md",
+      "sub/..\\..\\secret.md",
+      "sub\\../../secret.md",
+      "a/b/../../../secret.md",
+      "..",
+      "..\\",
+      "."
+    ]) {
+      expect(resolveInsideProject(root, traversal), traversal).toBeNull();
+    }
+    expect(resolveInsideProject(root, "")).toBeNull();
+    expect(resolveInsideProject(root, "a\0.md")).toBeNull();
+  });
+
+  it("accepts Windows-style separators in ordinary relative paths", () => {
+    expect(resolveInsideProject(root, "sub\\chapter.md")).toBe(
+      path.join(root, "sub", "chapter.md")
+    );
+    expect(resolveInsideProject(root, "sub\\..\\chapter.md")).toBe(
+      path.join(root, "chapter.md")
+    );
+    expect(resolveInsideProject(root, "chapter.md")).toBe(
+      path.join(root, "chapter.md")
+    );
+    expect(resolveInsideProject(root, "sub/chapter.md")).toBe(
+      path.join(root, "sub", "chapter.md")
+    );
+  });
+
   it("keeps ordinary project-relative paths working", () => {
     expect(resolveInsideProject(root, "sub/a.md")).toBe(path.join(root, "sub", "a.md"));
     expect(resolveInsideProject(root, "..hidden.md")).toBe(
@@ -348,6 +383,8 @@ describe("prepare (#625 P2a)", () => {
       "C:/x.md",
       "\\\\server\\share\\x.md",
       "sub/../../x.md",
+      "..\\..\\secret.md",
+      "sub\\..\\..\\secret.md",
       "."
     ]) {
       expect(await service.prepare({ relativePath })).toEqual({
