@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, expectTypeOf, it } from "vitest";
+import type { BuiltInThemeId } from "../../src/shared/colorTheme";
 import { supportedLanguages } from "../../src/shared/i18n";
 import type { PreviewRendererId } from "../../src/shared/settings";
 import { TEXT_FILE_ENCODINGS, type TextFileEncoding } from "../../src/shared/textFileEncoding";
@@ -277,7 +278,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toEqualTypeOf<string>();
       expectTypeOf(
         getCatalogDefaultValue("workbench.colorTheme")
-      ).toEqualTypeOf<"pergamum-light" | "night-dark">();
+      ).toEqualTypeOf<BuiltInThemeId>();
       expectTypeOf(
         getCatalogDefaultValue("workbench.sound.enabled")
       ).toEqualTypeOf<boolean>();

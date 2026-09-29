@@ -92,11 +92,15 @@ describe("ColorThemeSettingControl (#623)", () => {
     expect(trigger().getAttribute("aria-expanded")).toBe("true");
     expect(rows.map((row) => row.dataset.themeId)).toEqual([
       "pergamum-light",
-      "night-dark"
+      "night-dark",
+      "resistance-blue",
+      "enlightened-green"
     ]);
     expect(rows.map((row) => row.getAttribute("aria-selected"))).toEqual([
       "false",
-      "true"
+      "true",
+      "false",
+      "false"
     ]);
     for (const row of rows) {
       expect(row.querySelector(".colorThemeSwatch")).not.toBeNull();
@@ -128,8 +132,13 @@ describe("ColorThemeSettingControl (#623)", () => {
     const night = container.querySelector<HTMLElement>(
       '[data-theme-id="night-dark"]'
     )!;
+    const blue = container.querySelector<HTMLElement>(
+      '[data-theme-id="resistance-blue"]'
+    )!;
+    const green = container.querySelector<HTMLElement>(
+      '[data-theme-id="enlightened-green"]'
+    )!;
 
-    // Light option: light background + dark text. Night option: the reverse.
     expect(previewOf(light)).toEqual({
       background: "#ffffff",
       foreground: "#1f2933"
@@ -138,8 +147,19 @@ describe("ColorThemeSettingControl (#623)", () => {
       background: "#1a1e25",
       foreground: "#d7dde5"
     });
-    expect(night.style.getPropertyValue("--theme-preview-accent")).toBe(
-      "#5b9bd5"
+    expect(previewOf(blue)).toEqual({
+      background: "#e6eef7",
+      foreground: "#162230"
+    });
+    expect(previewOf(green)).toEqual({
+      background: "#e6f0e8",
+      foreground: "#19261d"
+    });
+    expect(blue.style.getPropertyValue("--theme-preview-accent")).toBe(
+      "#1b62b0"
+    );
+    expect(green.style.getPropertyValue("--theme-preview-accent")).toBe(
+      "#23733e"
     );
   });
 
@@ -195,7 +215,7 @@ describe("ColorThemeSettingControl (#623)", () => {
     press(listbox()!, "End");
     press(listbox()!, " ");
 
-    expect(onChange).toHaveBeenCalledExactlyOnceWith("night-dark");
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("enlightened-green");
   });
 
   it("an outside mouse-down closes the popup without changing the value", () => {

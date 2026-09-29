@@ -16,7 +16,12 @@
 
 // Order is the order shown in the Settings select. Kept as a literal tuple
 // so the settings catalog can use it as an enum value list.
-export const builtInThemeIds = ["pergamum-light", "night-dark"] as const;
+export const builtInThemeIds = [
+  "pergamum-light",
+  "night-dark",
+  "resistance-blue",
+  "enlightened-green"
+] as const;
 
 export type BuiltInThemeId = (typeof builtInThemeIds)[number];
 
@@ -35,9 +40,11 @@ export interface BuiltInTheme {
   readonly accentColor: string;
   /**
    * Colors the Settings theme selector paints a theme's option with, so each
-   * option is a miniature of the theme (#623). Literals for the same reason
-   * as `accentColor`; tests keep them in sync with the theme's CSS tokens
-   * (surface-background / surface-foreground / border-default / accent-primary).
+   * option is a miniature preview of the theme's UI chrome (#623). Literals
+   * for the same reason as `accentColor`; tests keep them in sync with the
+   * theme's CSS tokens (app-background or surface-background /
+   * surface-foreground / border-default / accent-primary). Note: this is for
+   * the Settings dropdown UI option preview, not the Markdown document preview.
    */
   readonly preview: ThemePreviewColors;
 }
@@ -76,6 +83,32 @@ const builtInThemeById: Record<BuiltInThemeId, BuiltInTheme> = {
       foreground: "#d7dde5",
       border: "#3b4452",
       accent: "#5b9bd5"
+    }
+  },
+  "resistance-blue": {
+    id: "resistance-blue",
+    label: "Resistance Blue",
+    kind: "light",
+    cssClassName: "theme-resistance-blue",
+    accentColor: "#1b62b0",
+    preview: {
+      background: "#e6eef7",
+      foreground: "#162230",
+      border: "#c4d5e7",
+      accent: "#1b62b0"
+    }
+  },
+  "enlightened-green": {
+    id: "enlightened-green",
+    label: "Enlightened Green",
+    kind: "light",
+    cssClassName: "theme-enlightened-green",
+    accentColor: "#23733e",
+    preview: {
+      background: "#e6f0e8",
+      foreground: "#19261d",
+      border: "#c3d7c7",
+      accent: "#23733e"
     }
   }
 };

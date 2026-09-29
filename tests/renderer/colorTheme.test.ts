@@ -13,7 +13,7 @@ import {
 } from "../../src/renderer/colorTheme";
 
 describe("built-in color theme registry (#621)", () => {
-  it("registers Pergamum Light and Night Dark (#623 Slice 1), each with a representative color", () => {
+  it("registers built-in themes (#623 Slice 2), each with a representative color", () => {
     expect(builtInThemes).toEqual([
       {
         id: "pergamum-light",
@@ -40,6 +40,32 @@ describe("built-in color theme registry (#621)", () => {
           border: "#3b4452",
           accent: "#5b9bd5"
         }
+      },
+      {
+        id: "resistance-blue",
+        label: "Resistance Blue",
+        kind: "light",
+        cssClassName: "theme-resistance-blue",
+        accentColor: "#1b62b0",
+        preview: {
+          background: "#e6eef7",
+          foreground: "#162230",
+          border: "#c4d5e7",
+          accent: "#1b62b0"
+        }
+      },
+      {
+        id: "enlightened-green",
+        label: "Enlightened Green",
+        kind: "light",
+        cssClassName: "theme-enlightened-green",
+        accentColor: "#23733e",
+        preview: {
+          background: "#e6f0e8",
+          foreground: "#19261d",
+          border: "#c3d7c7",
+          accent: "#23733e"
+        }
       }
     ]);
     expect(defaultColorThemeId).toBe("pergamum-light");
@@ -57,8 +83,10 @@ describe("built-in color theme registry (#621)", () => {
   it("isBuiltInThemeId only accepts registered ids", () => {
     expect(isBuiltInThemeId("pergamum-light")).toBe(true);
     expect(isBuiltInThemeId("night-dark")).toBe(true);
+    expect(isBuiltInThemeId("resistance-blue")).toBe(true);
+    expect(isBuiltInThemeId("enlightened-green")).toBe(true);
     for (const bad of [
-      "resistance-blue",
+      "banana-yellow",
       "Pergamum Light",
       "",
       undefined,
@@ -72,7 +100,7 @@ describe("built-in color theme registry (#621)", () => {
   });
 
   it("resolveColorTheme falls back to Pergamum Light for unknown values", () => {
-    for (const bad of ["resistance-blue", undefined, null, 3, "constructor"]) {
+    for (const bad of ["banana-yellow", undefined, null, 3, "constructor"]) {
       expect(resolveColorTheme(bad).id).toBe("pergamum-light");
     }
   });

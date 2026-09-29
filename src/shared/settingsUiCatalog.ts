@@ -374,7 +374,9 @@ const workbenchLanguageOptions: readonly SettingSelectOption[] =
 // en/ja translations for these option labels are identical text.
 const colorThemeOptionLabelKeys: Record<BuiltInThemeId, I18nKey> = {
   "pergamum-light": "settings.workbench.colorTheme.option.pergamumLight.label",
-  "night-dark": "settings.workbench.colorTheme.option.nightDark.label"
+  "night-dark": "settings.workbench.colorTheme.option.nightDark.label",
+  "resistance-blue": "settings.workbench.colorTheme.option.resistanceBlue.label",
+  "enlightened-green": "settings.workbench.colorTheme.option.enlightenedGreen.label"
 };
 
 const workbenchColorThemeOptions: readonly SettingSelectOption[] =

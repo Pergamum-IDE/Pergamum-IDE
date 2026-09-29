@@ -1760,6 +1760,8 @@ export const enTranslations = {
   "settings.workbench.colorTheme.label": "Color theme",
   "settings.workbench.colorTheme.option.pergamumLight.label": "Pergamum Light",
   "settings.workbench.colorTheme.option.nightDark.label": "Night Dark",
+  "settings.workbench.colorTheme.option.resistanceBlue.label": "Resistance Blue",
+  "settings.workbench.colorTheme.option.enlightenedGreen.label": "Enlightened Green",
   "settings.workbench.colorTheme.optionAria": "Change color theme to {theme}",
   "fontCache.status.notScanned": "Not scanned",
   "fontCache.status.loaded": "Last scanned: {date}",

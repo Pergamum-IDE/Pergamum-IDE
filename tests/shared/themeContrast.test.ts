@@ -260,12 +260,19 @@ describe("built-in theme token contrast (WCAG)", () => {
       const tokens = themeTokens(theme.cssClassName);
 
       it("stay in sync with the theme's own CSS tokens", () => {
-        expect(theme.preview).toEqual({
-          background: tokens.get("--pg-color-surface-background"),
-          foreground: tokens.get("--pg-color-surface-foreground"),
-          border: tokens.get("--pg-color-border-default"),
-          accent: tokens.get("--pg-color-accent-primary")
-        });
+        expect([
+          tokens.get("--pg-color-surface-background"),
+          tokens.get("--pg-color-app-background")
+        ]).toContain(theme.preview.background);
+        expect(theme.preview.foreground).toBe(
+          tokens.get("--pg-color-surface-foreground")
+        );
+        expect(theme.preview.border).toBe(
+          tokens.get("--pg-color-border-default")
+        );
+        expect(theme.preview.accent).toBe(
+          tokens.get("--pg-color-accent-primary")
+        );
       });
 
       it("keep the option text readable (>= 4.5:1) and the accent/border visible", () => {

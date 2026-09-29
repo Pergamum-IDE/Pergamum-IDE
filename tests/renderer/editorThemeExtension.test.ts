@@ -55,6 +55,8 @@ describe("theme tokens in styles.css (#621, #623)", () => {
     `${newline}}${newline}`
   );
   const nightBlock = blockAt(".theme-night-dark {", `${newline}}${newline}`);
+  const blueBlock = blockAt(".theme-resistance-blue {", `${newline}}${newline}`);
+  const greenBlock = blockAt(".theme-enlightened-green {", `${newline}}${newline}`);
   const printBlock = blockAt(
     `@media print {${newline}  .preview {`,
     `${newline}  }${newline}}`
@@ -69,11 +71,18 @@ describe("theme tokens in styles.css (#621, #623)", () => {
     }
   });
 
-  it("Night Dark overrides every semantic token Pergamum Light defines (no token silently stays light)", () => {
-    const night = tokenNames(nightBlock);
+  it("every theme overrides every semantic token Pergamum Light defines (no token silently stays un-overridden)", () => {
+    const lightTokens = tokenNames(lightBlock);
+    const themeBlocks = [
+      { name: "Night Dark", tokens: tokenNames(nightBlock) },
+      { name: "Resistance Blue", tokens: tokenNames(blueBlock) },
+      { name: "Enlightened Green", tokens: tokenNames(greenBlock) }
+    ];
 
-    for (const token of tokenNames(lightBlock)) {
-      expect(night, token).toContain(token);
+    for (const { name, tokens } of themeBlocks) {
+      for (const token of lightTokens) {
+        expect(tokens, `${name} missing ${token}`).toContain(token);
+      }
     }
   });
 
