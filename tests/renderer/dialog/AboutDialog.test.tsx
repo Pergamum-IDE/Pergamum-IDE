@@ -131,7 +131,7 @@ describe("AboutDialog (#221)", () => {
     );
 
     expect(source).toContain("<InfoDialog");
-    expect(source).toContain("../../../assets/logo/logo-outlined.svg?url");
+    expect(source).toContain("../../../assets/logo/logo-mono.svg?url");
     expect(source).toContain("assets/icons/feather/dialog/check-square.svg?url");
     expect(source).toContain("assets/icons/feather/dialog/clipboard.svg?url");
     expect(source).toContain("assets/icons/feather/dialog/external-link.svg?url");
@@ -287,7 +287,7 @@ describe("AboutDialog (#221)", () => {
     expect(brandingCss).toContain("padding-inline");
     expect(appIconButtonCss).toContain("inline-size: 54px");
     expect(appIconButtonCss).toContain("background: transparent");
-    expect(taglineCss).toContain("color: #2b2b2b");
+    expect(taglineCss).toContain("color: var(--pg-color-text-neutral-dark)");
     expect(linkButtonCss).toContain("display: inline-block");
     expect(linkButtonCss).toContain("max-width: 100%");
     expect(linkButtonCss).toContain("min-width: 0");

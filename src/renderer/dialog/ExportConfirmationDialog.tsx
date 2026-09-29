@@ -1,3 +1,4 @@
+import { MaskedIcon } from "../MaskedIcon";
 import {
   Fragment,
   useEffect,
@@ -968,7 +969,7 @@ export function ExportConfirmationDialog({
       data-export-close-button="true"
       onClick={onClose}
     >
-      <img src={closeXIconUrl} alt="" className="appDialogCloseIcon" />
+      <MaskedIcon url={closeXIconUrl} className="appDialogCloseIcon" />
     </button>
   );
 
@@ -1582,11 +1583,7 @@ export function ExportConfirmationDialog({
                         data-export-table-reload-button="true"
                         onClick={() => void handleReloadCandidates()}
                       >
-                        <img
-                          src={reloadIconUrl}
-                          alt=""
-                          className="exportConfirmationDialogReloadIcon"
-                        />
+                        <MaskedIcon url={reloadIconUrl} className="exportConfirmationDialogReloadIcon" />
                       </button>
                     </th>
                     <th className="exportConfirmationDialogIncludeCell">
@@ -1650,11 +1647,7 @@ export function ExportConfirmationDialog({
                               }
                               onDragEnd={handleDragEnd}
                             >
-                              <img
-                                src={gripperIconUrl}
-                                alt=""
-                                className="exportConfirmationDialogHandleIcon"
-                              />
+                              <MaskedIcon url={gripperIconUrl} className="exportConfirmationDialogHandleIcon" />
                             </span>
                           </td>
                           <td className="exportConfirmationDialogIncludeCell">
@@ -1705,21 +1698,13 @@ export function ExportConfirmationDialog({
                                   handleToggleFolderCollapse(group.parentPath)
                                 }
                               >
-                                <img
-                                  src={
+                                <MaskedIcon url={
                                     isCollapsed
                                       ? chevronRightIconUrl
                                       : chevronDownIconUrl
-                                  }
-                                  alt=""
-                                  className="exportConfirmationDialogChevronIcon"
-                                />
+                                  } className="exportConfirmationDialogChevronIcon" />
                               </button>
-                              <img
-                                src={folderIconUrl}
-                                alt=""
-                                className="exportConfirmationDialogFolderIcon"
-                              />
+                              <MaskedIcon url={folderIconUrl} className="exportConfirmationDialogFolderIcon" />
                               <span
                                 className="exportConfirmationDialogFolderLabel"
                                 title={group.label}
@@ -1822,11 +1807,7 @@ export function ExportConfirmationDialog({
                                     }
                                     onDragEnd={handleDragEnd}
                                   >
-                                    <img
-                                      src={gripperIconUrl}
-                                      alt=""
-                                      className="exportConfirmationDialogHandleIcon"
-                                    />
+                                    <MaskedIcon url={gripperIconUrl} className="exportConfirmationDialogHandleIcon" />
                                   </span>
                                 </td>
                                 <td className="exportConfirmationDialogIncludeCell">
@@ -1859,15 +1840,11 @@ export function ExportConfirmationDialog({
                                   title={candidate.fileName}
                                 >
                                   <div className="exportConfirmationDialogDocumentName">
-                                    <img
-                                      src={
+                                    <MaskedIcon url={
                                         candidate.kind === "markdown"
                                           ? markdownFileIconUrl
                                           : textFileIconUrl
-                                      }
-                                      alt=""
-                                      className="exportConfirmationDialogKindIcon"
-                                    />
+                                      } className="exportConfirmationDialogKindIcon" />
                                     <span>{candidate.fileName}</span>
                                   </div>
                                 </td>

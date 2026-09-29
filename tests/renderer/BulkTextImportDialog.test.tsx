@@ -426,10 +426,10 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     const rootIcon = container
       .querySelector<HTMLElement>(".textImportDestinationPickerRoot")!
       .querySelector<HTMLImageElement>(".textImportDestinationPickerFolderIcon")!;
-    expect(rootIcon.tagName).toBe("IMG");
+    expect(rootIcon.classList.contains("maskedIcon")).toBe(true);
     expect(rootIcon.getAttribute("data-folder-icon")).toBe("folder-open");
     expect(rootIcon.getAttribute("aria-hidden")).toBe("true");
-    expect(rootIcon.getAttribute("alt")).toBe("");
+    expect(rootIcon.getAttribute("alt")).toBeNull();
 
     const rows = () =>
       Array.from(
@@ -456,7 +456,7 @@ describe("BulkTextImportDialog (#420 Step 3 + 4)", () => {
     )!;
     expect(icon.getAttribute("data-folder-icon")).toBe("folder");
     expect(icon.getAttribute("aria-hidden")).toBe("true");
-    expect(icon.getAttribute("alt")).toBe("");
+    expect(icon.getAttribute("alt")).toBeNull();
 
     // expand → aria-expanded flips and the icon becomes the open variant
     const twisty = firstRow.querySelector<HTMLButtonElement>(

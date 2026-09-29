@@ -1471,8 +1471,8 @@ describe("SearchSidebar (#455 — multiline Project Search / Replace fields)", (
     const end = styles.indexOf("}", start);
     const rule = styles.slice(start, end + 1);
 
-    expect(rule).toContain("background: #ffffff");
-    expect(rule).toContain("color: #1f2733");
+    expect(rule).toContain("background: var(--pg-color-surface-background)");
+    expect(rule).toContain("color: var(--pg-color-text-emphasis)");
   });
 
   it("Shift+Enter (and plain Enter) insert a newline rather than submitting anything", () => {
@@ -1586,8 +1586,8 @@ describe("SearchSidebar (#455 UI addendum — header row layout, tab styling, pl
     const activeEnd = styles.indexOf("}", activeStart);
     const activeRule = styles.slice(activeStart, activeEnd + 1);
 
-    expect(activeRule).toContain("background: #ffffff");
-    expect(activeRule).toContain("color: #1f2733");
+    expect(activeRule).toContain("background: var(--pg-color-surface-background)");
+    expect(activeRule).toContain("color: var(--pg-color-text-emphasis)");
   });
 
   it("marks the active/inactive tab clearly via aria-selected and data-active", () => {

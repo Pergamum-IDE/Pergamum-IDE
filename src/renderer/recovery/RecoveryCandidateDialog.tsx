@@ -1,3 +1,4 @@
+import { MaskedIcon } from "../MaskedIcon";
 import {
   useEffect,
   useMemo,
@@ -395,12 +396,7 @@ export function RecoveryCandidateDialog({
                 void handleCopyReport();
               }}
             >
-              <img
-                className="aboutDialogCopyTechnicalIcon"
-                src={copyReportIconUrl}
-                alt=""
-                aria-hidden="true"
-              />
+              <MaskedIcon url={copyReportIconUrl} className="aboutDialogCopyTechnicalIcon" />
             </button>
             {copyFeedback ? (
               <span

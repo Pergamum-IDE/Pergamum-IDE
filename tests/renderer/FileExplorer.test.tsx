@@ -3140,7 +3140,10 @@ describe("FileExplorer dirty indicator (#342)", () => {
     await flushPromises();
 
     const indicator = dirtyIndicator("chapter-01.md");
-    expect(indicator!.getAttribute("alt")).toBe("explorer.unsavedChanges");
+    expect(indicator!.getAttribute("aria-label")).toBe(
+      "explorer.unsavedChanges"
+    );
+    expect(indicator!.getAttribute("role")).toBe("img");
     expect(indicator!.getAttribute("title")).toBe("explorer.unsavedChanges");
   });
 

@@ -95,7 +95,7 @@ describe("RecoveryCandidateDialog markup", () => {
     expect(buttonMatch).not.toBeNull();
     const [wholeButton, innerHtml] = buttonMatch!;
     // Icon, not a visible text label.
-    expect(innerHtml).toContain("<img");
+    expect(innerHtml).toContain("maskedIcon");
     expect(innerHtml).toContain("aboutDialogCopyTechnicalIcon");
     expect(innerHtml).not.toContain("復旧レポートをコピー");
     // Accessible label + tooltip both carry the localized name.
@@ -104,7 +104,7 @@ describe("RecoveryCandidateDialog markup", () => {
     // Not destructive, Close is unaffected.
     expect(wholeButton).not.toContain("appDialogButton-choice-destructive");
     // Idle icon is the clipboard glyph.
-    expect(wholeButton).toMatch(/src="[^"]*clipboard[^"]*"/);
+    expect(wholeButton).toMatch(/--masked-icon-url:.*clipboard/);
   });
 
   it("uses the current UI language for the report control label and tooltip", () => {
@@ -345,7 +345,12 @@ describe("RecoveryCandidateDialog behavior", () => {
     )!;
   }
   function reportCopyIconSrc(): string {
-    return reportCopyButton().querySelector("img")!.getAttribute("src") ?? "";
+    // #623: the icon is a MaskedIcon; its SVG URL lives in a style variable.
+    return (
+      reportCopyButton()
+        .querySelector<HTMLElement>(".maskedIcon")!
+        .style.getPropertyValue("--masked-icon-url") ?? ""
+    );
   }
 
   it("disables Restore with zero selected and enables it once a row is selected", () => {

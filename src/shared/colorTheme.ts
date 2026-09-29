@@ -16,7 +16,17 @@
 
 // Order is the order shown in the Settings select. Kept as a literal tuple
 // so the settings catalog can use it as an enum value list.
-export const builtInThemeIds = ["pergamum-light"] as const;
+export const builtInThemeIds = [
+  "pergamum-light",
+  "night-dark",
+  "resistance-blue",
+  "enlightened-green",
+  "banana-yellow",
+  "sakura-pink",
+  "noble-purple",
+  "sky-cyan",
+  "parchment-sheep"
+] as const;
 
 export type BuiltInThemeId = (typeof builtInThemeIds)[number];
 
@@ -27,6 +37,28 @@ export interface BuiltInTheme {
   readonly label: string;
   readonly kind: BuiltInThemeKind;
   readonly cssClassName: string;
+  /**
+   * Representative color shown as a swatch in the Settings theme selector
+   * (#623). Deliberately a literal here, not a CSS token: the selector must
+   * show each theme's own color regardless of the currently active theme.
+   */
+  readonly accentColor: string;
+  /**
+   * Colors the Settings theme selector paints a theme's option with, so each
+   * option is a miniature preview of the theme's UI chrome (#623). Literals
+   * for the same reason as `accentColor`; tests keep them in sync with the
+   * theme's CSS tokens (app-background or surface-background /
+   * surface-foreground / border-default / accent-primary). Note: this is for
+   * the Settings dropdown UI option preview, not the Markdown document preview.
+   */
+  readonly preview: ThemePreviewColors;
+}
+
+export interface ThemePreviewColors {
+  readonly background: string;
+  readonly foreground: string;
+  readonly border: string;
+  readonly accent: string;
 }
 
 export const defaultColorThemeId: BuiltInThemeId = "pergamum-light";
@@ -36,7 +68,118 @@ const builtInThemeById: Record<BuiltInThemeId, BuiltInTheme> = {
     id: "pergamum-light",
     label: "Pergamum Light",
     kind: "light",
-    cssClassName: "theme-pergamum-light"
+    cssClassName: "theme-pergamum-light",
+    accentColor: "#2563a8",
+    preview: {
+      background: "#ffffff",
+      foreground: "#1f2933",
+      border: "#cbd5df",
+      accent: "#2563a8"
+    }
+  },
+  "night-dark": {
+    id: "night-dark",
+    label: "Night Dark",
+    kind: "dark",
+    cssClassName: "theme-night-dark",
+    accentColor: "#5b9bd5",
+    preview: {
+      background: "#1a1e25",
+      foreground: "#d7dde5",
+      border: "#3b4452",
+      accent: "#5b9bd5"
+    }
+  },
+  "resistance-blue": {
+    id: "resistance-blue",
+    label: "Resistance Blue",
+    kind: "light",
+    cssClassName: "theme-resistance-blue",
+    accentColor: "#1b62b0",
+    preview: {
+      background: "#e6eef7",
+      foreground: "#162230",
+      border: "#c4d5e7",
+      accent: "#1b62b0"
+    }
+  },
+  "enlightened-green": {
+    id: "enlightened-green",
+    label: "Enlightened Green",
+    kind: "light",
+    cssClassName: "theme-enlightened-green",
+    accentColor: "#23733e",
+    preview: {
+      background: "#e6f0e8",
+      foreground: "#19261d",
+      border: "#c3d7c7",
+      accent: "#23733e"
+    }
+  },
+  "banana-yellow": {
+    id: "banana-yellow",
+    label: "Banana Yellow",
+    kind: "light",
+    cssClassName: "theme-banana-yellow",
+    accentColor: "#7a5600",
+    preview: {
+      background: "#f5f0e1",
+      foreground: "#272318",
+      border: "#e1d8b9",
+      accent: "#7a5600"
+    }
+  },
+  "sakura-pink": {
+    id: "sakura-pink",
+    label: "Sakura Pink",
+    kind: "light",
+    cssClassName: "theme-sakura-pink",
+    accentColor: "#a03a68",
+    preview: {
+      background: "#f2e4e8",
+      foreground: "#26191d",
+      border: "#dbbfc7",
+      accent: "#a03a68"
+    }
+  },
+  "noble-purple": {
+    id: "noble-purple",
+    label: "Noble Purple",
+    kind: "light",
+    cssClassName: "theme-noble-purple",
+    accentColor: "#6b46a1",
+    preview: {
+      background: "#eee8f6",
+      foreground: "#211a2d",
+      border: "#d5c8e6",
+      accent: "#6b46a1"
+    }
+  },
+  "sky-cyan": {
+    id: "sky-cyan",
+    label: "Sky Cyan",
+    kind: "light",
+    cssClassName: "theme-sky-cyan",
+    accentColor: "#007a94",
+    preview: {
+      background: "#e5f5fb",
+      foreground: "#102a34",
+      border: "#b9dbe5",
+      accent: "#007a94"
+    }
+  },
+  "parchment-sheep": {
+    id: "parchment-sheep",
+    label: "Parchment Sheep",
+    kind: "light",
+    cssClassName: "theme-parchment-sheep",
+    accentColor: "#6b4f2a",
+    preview: {
+      background: "#ececd6",
+      foreground: "#1f1f16",
+      border: "#cdcdaa",
+      accent: "#6b4f2a"
+    }
   }
 };
 

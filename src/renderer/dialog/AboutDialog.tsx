@@ -13,7 +13,8 @@ import checkSquareIconUrl from "../../../assets/icons/feather/dialog/check-squar
 import clipboardIconUrl from "../../../assets/icons/feather/dialog/clipboard.svg?url";
 import externalLinkIconUrl from "../../../assets/icons/feather/dialog/external-link.svg?url";
 import xCircleIconUrl from "../../../assets/icons/feather/dialog/x-circle.svg?url";
-import logoUrl from "../../../assets/logo/logo-outlined.svg?url";
+import logoUrl from "../../../assets/logo/logo-mono.svg?url";
+import { MaskedIcon } from "../MaskedIcon";
 import {
   performClipboardCopy,
   type ClipboardAdapter
@@ -198,12 +199,7 @@ export function AboutDialog({
                 void handleCopyTechnicalInformation();
               }}
             >
-              <img
-                className="aboutDialogCopyTechnicalIcon"
-                src={copyTechnicalInfoIconUrl}
-                alt=""
-                aria-hidden="true"
-              />
+              <MaskedIcon url={copyTechnicalInfoIconUrl} className="aboutDialogCopyTechnicalIcon" />
             </button>
             {copyFeedback ? (
               <span
@@ -244,10 +240,10 @@ export function AboutDialog({
               alt={translate("dialog.about.appIconAlt")}
             />
           </button>
-          <img
+          <MaskedIcon
             className="aboutDialogLogo"
-            src={logoUrl}
-            alt={translate("dialog.about.logoAlt")}
+            url={logoUrl}
+            label={translate("dialog.about.logoAlt")}
           />
         </div>
 
@@ -281,12 +277,7 @@ export function AboutDialog({
           >
             <span>{translate("dialog.about.repositoryName")}</span>
             {"\u00a0"}
-            <img
-              className="aboutDialogExternalLinkIcon"
-              src={externalLinkIconUrl}
-              alt=""
-              aria-hidden="true"
-            />
+            <MaskedIcon url={externalLinkIconUrl} className="aboutDialogExternalLinkIcon" />
           </button>
         </section>
 
@@ -306,12 +297,7 @@ export function AboutDialog({
           >
             <span>{translate("dialog.about.thirdPartyNoticesLink")}</span>
             {"\u00a0"}
-            <img
-              className="aboutDialogExternalLinkIcon"
-              src={externalLinkIconUrl}
-              alt=""
-              aria-hidden="true"
-            />
+            <MaskedIcon url={externalLinkIconUrl} className="aboutDialogExternalLinkIcon" />
           </button>
         </section>
       </div>

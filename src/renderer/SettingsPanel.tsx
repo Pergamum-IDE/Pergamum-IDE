@@ -35,6 +35,7 @@ import {
   SaveDestinationDialog,
   SaveDestinationSettingControl
 } from "./dialog/SaveDestinationDialog";
+import { ColorThemeSettingControl } from "./ColorThemeSettingControl";
 import { FontFamilyListSettingControl } from "./FontFamilyListSettingControl";
 import { FontPickerDialog } from "./dialog/FontPickerDialog";
 import type { FontFamilySetting, FontSlot } from "../shared/fontSettings";
@@ -923,6 +924,21 @@ function SettingControlInput({
         />
       );
     case "select":
+      // #623: the theme selector shows each theme's representative color.
+      if (item.key === "workbench.colorTheme") {
+        return (
+          <ColorThemeSettingControl
+            id={controlId}
+            labelId={labelId}
+            value={String(value)}
+            options={control.options}
+            disabled={disabled}
+            translate={translate}
+            onChange={onChange}
+          />
+        );
+      }
+
       return (
         <select
           id={controlId}

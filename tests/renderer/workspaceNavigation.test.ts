@@ -558,6 +558,8 @@ describe("workspace navigation", () => {
     const element = FileExplorerView(fileExplorerViewProps({
       expandedDirectoryPaths: new Set(["Drafts"])
     }));
+    // The multi-color project icon stays an <img>; single-color tree icons
+    // are theme-aware MaskedIcon elements (#623).
     const images = collectElements(
       element,
       (child) => child.type === "img"
@@ -565,8 +567,12 @@ describe("workspace navigation", () => {
     const rootIcon = images.find(
       (image) => image.props["data-file-explorer-icon"] === "pergamum-project"
     );
-    const openFolderIcon = images.find(
-      (image) => image.props["data-file-explorer-icon"] === "folder-open"
+    const maskedIcons = collectElements(
+      element,
+      (child) => typeof child.props["data-file-explorer-icon"] === "string"
+    );
+    const openFolderIcon = maskedIcons.find(
+      (icon) => icon.props["data-file-explorer-icon"] === "folder-open"
     );
 
     expect(rootIcon).toBeDefined();
@@ -574,6 +580,7 @@ describe("workspace navigation", () => {
     expect(rootIcon?.props["aria-hidden"]).toBe("true");
     expect(rootIcon?.props.className).toContain("fileExplorerProjectIcon");
     expect(openFolderIcon).toBeDefined();
+    expect(openFolderIcon?.type).not.toBe("img");
   });
 
   it("sizes only the File Explorer project root icon larger than regular icons", () => {

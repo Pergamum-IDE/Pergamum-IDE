@@ -43,7 +43,11 @@ describe("Markdown Table Preview & Export Styles (#605)", () => {
 
     expect(stylesCss).toContain(".preview table");
     expect(stylesCss).toContain(".preview th,\n.preview td");
-    expect(stylesCss).toContain("border: 1px solid #d0d7de;");
-    expect(stylesCss).toContain("background-color: #f6f8fa;");
+    expect(stylesCss).toContain(
+      "border: 1px solid var(--pg-color-preview-table-border);"
+    );
+    expect(stylesCss).toContain(
+      "background-color: var(--pg-color-preview-table-header-background);"
+    );
   });
 });
