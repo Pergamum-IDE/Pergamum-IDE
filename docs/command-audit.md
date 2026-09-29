@@ -7,8 +7,8 @@
 ## 1. 概要・統計 (Summary & Statistics)
 
 - **総確認項目数**: 70 件
-- **Command Registry 登録コマンド数**: 53 件
-  - **コマンドパレット表示 (Registered in Palette)**: 47 件
+- **Command Registry 登録コマンド数**: 55 件
+  - **コマンドパレット表示 (Registered in Palette)**: 49 件
   - **コマンドパレット非表示 / 内部コマンド**: 6 件
 - **Electron メニューアイテム数**: 25 件（うち隠しアクセラレータ 4 件）
 - **キーボードショートカット割り当て項目数**: 33 件
@@ -56,8 +56,8 @@
 | **Edit / Formatting** | `editor.markdown.insertCallout` | コールアウト挿入 | Insert Callout | - | Toolbar / Command Registry | Markdown Document | Markdown & Read-Write | Yes | Registered | #611 にてコマンドパレット対応 |
 | **Edit / Formatting** | `editor.markdown.insertRuby` | ルビを挿入... | Insert Ruby... | `Mod+R` | CodeMirror Keymap / Toolbar / Command Registry | Markdown, PlainText Document | Read-Write & Selection active | Yes | Registered | #613 にてコマンドパレット対応 |
 | **Edit / Formatting** | `editor.markdown.insertEmphasisMark` | 傍点を挿入... | Insert Emphasis Mark... | `Mod+.` | CodeMirror Keymap / Toolbar / Command Registry | Markdown, PlainText Document | Read-Write & Selection active | Yes | Registered | #613 にてコマンドパレット対応 |
-| **Edit / Indent** | - | インデント | Indent | `Mod+]`, `Tab` | CodeMirror Keymap / Toolbar | Markdown, PlainText Document | `canIndentEditorState` | No | Missing Candidate | #593 にて toolbar enablement 共通化 |
-| **Edit / Indent** | - | アウトデント | Outdent | `Mod+[`, `Shift+Tab` | CodeMirror Keymap / Toolbar | Markdown, PlainText Document | `canOutdentEditorState` | No | Missing Candidate | #593 にて toolbar enablement 共通化 |
+| **Edit / Indent** | `editor.indent` | インデント | Indent | `Mod+]`, `Tab` | CodeMirror Keymap / Toolbar / Command Registry | Markdown, PlainText Document | `canIndentEditorState` & Read-Write | Yes | Registered | #615 にてコマンドパレット対応 |
+| **Edit / Indent** | `editor.outdent` | アウトデント | Outdent | `Mod+[`, `Shift+Tab` | CodeMirror Keymap / Toolbar / Command Registry | Markdown, PlainText Document | `canOutdentEditorState` & Read-Write | Yes | Registered | #615 にてコマンドパレット対応 |
 | **Edit / Indent** | - | タブキャプチャ脱出 | Tab Capture Bypass | `Ctrl+M`, `Escape→Tab` | CodeMirror Keymap Extension | Editor | `captureTabInEditor` enabled | No | Excluded by Design | アクセシビリティ用 |
 | **Navigation** | `workbench.commandPalette.open` | コマンドパレットを開く | Open Command Palette | `Mod+P`, `F1` | Main Menu / Command Registry | All | Always | Yes | Registered | `F1` は Main Menu 隠しアクセラレータ |
 | **Navigation** | - | プロジェクトファイル検索 | Quick Open Project Files | `Mod+O` | Global Keydown / Toolbar Box | Workspace | `project.isOpen` | No | Excluded by Design | パレットのプレフィックスなしモード |
@@ -106,8 +106,8 @@
    - 選択領域の文字列をシードにしてプロジェクト検索/置換を開くコマンド。ショートカット経由のみで実行可能であり、パレットには収録されていません。
 2. **`glossary.openFromEditorSelection` (`Mod+G`)**
    - 選択範囲から語彙を作成/編集するコマンド。#613 にて Command Palette へ登録完了しました。
-3. **エディタ整形・挿入コマンド (#611 / #613 にて主要項目をコマンドパレット登録完了)**
-   - 太字 (`editor.markdown.bold`), 斜体 (`editor.markdown.italic`), 打消線 (`editor.markdown.strikethrough`), 見出し (`editor.markdown.heading`), リンク (`editor.markdown.link`), 水平線 (`editor.markdown.insertHorizontalRule`), コードブロック (`editor.markdown.insertCodeBlock`), 表 (`editor.markdown.insertTable`), コールアウト (`editor.markdown.insertCallout`) は #611 にて、ルビ挿入 (`editor.markdown.insertRuby`), 傍点挿入 (`editor.markdown.insertEmphasisMark`), 選択範囲から語彙を開く (`glossary.openFromEditorSelection`) は #613 にて Command Registry / Command Palette へ登録完了しました。インデント操作 (`Mod+]`, `Mod+[`) は未登録候補として残っています。
+3. **エディタ整形・挿入・インデントコマンド (#611 / #613 / #615 にて主要項目をコマンドパレット登録完了)**
+   - 太字 (`editor.markdown.bold`), 斜体 (`editor.markdown.italic`), 打消線 (`editor.markdown.strikethrough`), 見出し (`editor.markdown.heading`), リンク (`editor.markdown.link`), 水平線 (`editor.markdown.insertHorizontalRule`), コードブロック (`editor.markdown.insertCodeBlock`), 表 (`editor.markdown.insertTable`), コールアウト (`editor.markdown.insertCallout`) は #611 にて、ルビ挿入 (`editor.markdown.insertRuby`), 傍点挿入 (`editor.markdown.insertEmphasisMark`), 選択範囲から語彙を開く (`glossary.openFromEditorSelection`) は #613 にて、インデント (`editor.indent`), アウトデント (`editor.outdent`) は #615 にて Command Registry / Command Palette へ登録完了しました。
 4. **`editor.preview.toggle` (`Mod+Shift+P`)**
    - プレビュー画面の開閉表示切り替え操作。#611 にて Command Registry および Command Palette へ登録されました。
 

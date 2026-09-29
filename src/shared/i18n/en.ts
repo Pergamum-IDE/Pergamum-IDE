@@ -85,6 +85,12 @@ export const enTranslations = {
   "command.editor.markdown.insertEmphasisMark": "Insert Emphasis Mark...",
   "command.editor.markdown.insertEmphasisMark.description":
     "Insert emphasis marks (bouten) on the selected text.",
+  "command.editor.indent": "Indent",
+  "command.editor.indent.description":
+    "Indent the selection or current line.",
+  "command.editor.outdent": "Outdent",
+  "command.editor.outdent.description":
+    "Outdent the selection or current line.",
   "command.editor.preview.toggle": "Toggle Preview",
   "command.editor.preview.toggle.description":
     "Toggle preview pane visibility.",

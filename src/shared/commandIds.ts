@@ -95,6 +95,8 @@ export const editorCommandIds = {
   insertCallout: defineCommandId("editor.markdown.insertCallout"),
   insertRuby: defineCommandId("editor.markdown.insertRuby"),
   insertEmphasisMark: defineCommandId("editor.markdown.insertEmphasisMark"),
+  indent: defineCommandId("editor.indent"),
+  outdent: defineCommandId("editor.outdent"),
   togglePreview: defineCommandId("editor.preview.toggle"),
   cutSelection: defineCommandId("editor.selection.cut"),
   copySelection: defineCommandId("editor.selection.copy"),

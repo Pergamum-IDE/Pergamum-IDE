@@ -74,6 +74,10 @@ export interface EditorCommandController {
   canInsertRuby(): boolean;
   insertEmphasisMark(): void | Promise<void>;
   canInsertEmphasisMark(): boolean;
+  indent(): void | Promise<void>;
+  canIndent(): boolean;
+  outdent(): void | Promise<void>;
+  canOutdent(): boolean;
   togglePreview(): void | Promise<void>;
   canTogglePreview(): boolean;
   delegateNativeEditCommand(
@@ -123,6 +127,10 @@ export interface EditorCommandTitles {
   insertRubyDescription: string;
   insertEmphasisMark: string;
   insertEmphasisMarkDescription: string;
+  indent: string;
+  indentDescription: string;
+  outdent: string;
+  outdentDescription: string;
   togglePreview: string;
   togglePreviewDescription: string;
   cutSelection: string;
@@ -215,6 +223,10 @@ export function createEditorCommandTitles(
     insertEmphasisMarkDescription: translate(
       "command.editor.markdown.insertEmphasisMark.description"
     ),
+    indent: translate("command.editor.indent"),
+    indentDescription: translate("command.editor.indent.description"),
+    outdent: translate("command.editor.outdent"),
+    outdentDescription: translate("command.editor.outdent.description"),
     togglePreview: translate("command.editor.preview.toggle"),
     togglePreviewDescription: translate(
       "command.editor.preview.toggle.description"
@@ -519,6 +531,32 @@ export function createEditorCommands(
         return controller.insertEmphasisMark();
       },
       isEnabled: () => controller.canInsertEmphasisMark()
+    },
+    {
+      id: editorCommandIds.indent,
+      title: titles.indent,
+      description: titles.indentDescription,
+      execute: () => {
+        if (!controller.canIndent()) {
+          return;
+        }
+
+        return controller.indent();
+      },
+      isEnabled: () => controller.canIndent()
+    },
+    {
+      id: editorCommandIds.outdent,
+      title: titles.outdent,
+      description: titles.outdentDescription,
+      execute: () => {
+        if (!controller.canOutdent()) {
+          return;
+        }
+
+        return controller.outdent();
+      },
+      isEnabled: () => controller.canOutdent()
     },
     {
       id: editorCommandIds.togglePreview,
