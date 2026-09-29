@@ -128,6 +128,11 @@ export const debugLogEventNames = [
   "session.manifestLock.reclaimed",
   "session.persistence.suspended",
   "debug.session.failureInjected",
+  "japaneseLint.request.started",
+  "japaneseLint.request.completed",
+  "japaneseLint.markers.built",
+  "japaneseLint.markers.applied",
+  "japaneseLint.run.completed",
   "app.uncaughtException",
   "app.unhandledRejection"
 ] as const;
@@ -282,6 +287,8 @@ export const debugLogReasons = [
   "quotaExceeded",
   "sessionStorageDisabled",
   "writeFailed",
+  "too_large",
+  "lint_failed",
   "unknown"
 ] as const;
 

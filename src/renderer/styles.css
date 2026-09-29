@@ -4617,6 +4617,48 @@ label.settingsItemHeader {
   mask: var(--masked-icon-url) center / contain no-repeat;
 }
 
+/* #625: Japanese lint gutter markers. Status colors are theme-independent
+   defaults on :root (a neutral slate for info, amber for warning, red for
+   error) with a dark-theme override; the requested "white" info icon would be
+   invisible on the light themes, so light themes use slate. */
+:root {
+  --pg-color-japanese-lint-info: #5f6b78;
+  --pg-color-japanese-lint-warning: #a37600;
+  --pg-color-japanese-lint-error: #c62828;
+}
+
+:root.theme-night-dark {
+  --pg-color-japanese-lint-info: #ffffff;
+  --pg-color-japanese-lint-warning: #f0c040;
+  --pg-color-japanese-lint-error: #ff6b6b;
+}
+
+.cm-pergamum-japaneseLintGutter .cm-gutterElement {
+  display: flex;
+  min-inline-size: 18px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.cm-pergamum-japaneseLintMarker {
+  inline-size: 14px;
+  block-size: 14px;
+  margin-block-start: 3px;
+  cursor: help;
+}
+
+.cm-pergamum-japaneseLintMarker[data-severity="info"] {
+  color: var(--pg-color-japanese-lint-info);
+}
+
+.cm-pergamum-japaneseLintMarker[data-severity="warning"] {
+  color: var(--pg-color-japanese-lint-warning);
+}
+
+.cm-pergamum-japaneseLintMarker[data-severity="error"] {
+  color: var(--pg-color-japanese-lint-error);
+}
+
 .fileExplorerToolbarIcon {
   inline-size: 16px;
   block-size: 16px;

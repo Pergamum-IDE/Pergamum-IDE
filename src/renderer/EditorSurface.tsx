@@ -1,3 +1,5 @@
+import type { JapaneseLintSource } from "../shared/japaneseLint";
+import type { JapaneseLintNotice } from "./japaneseLint/japaneseLintGutterExtension";
 import {
   useCallback,
   useEffect,
@@ -595,6 +597,9 @@ interface EditorSurfaceProps {
   markdownToolbarShortcut?: MarkdownEditorToolbarShortcutConfig | null;
   /** #606: Markdown syntax checker active toggle */
   isMarkdownSyntaxCheckerActive?: boolean;
+  /** #625: Japanese lint source (null/undefined = OFF or unsupported). */
+  japaneseLintSource?: JapaneseLintSource | null;
+  onJapaneseLintNotice?: (notice: JapaneseLintNotice) => void;
   hasProject?: boolean;
   projectAccessMode?: ProjectAccessMode | null;
   onRequestRenameActiveDocument?: () => void;
@@ -737,6 +742,8 @@ export function EditorSurface({
   notifyRubyMultiLine,
   markdownToolbarShortcut,
   isMarkdownSyntaxCheckerActive,
+  japaneseLintSource,
+  onJapaneseLintNotice,
   hasProject,
   projectAccessMode,
   onRequestRenameActiveDocument,
@@ -861,6 +868,8 @@ export function EditorSurface({
           notifyRubyMultiLine={notifyRubyMultiLine}
           markdownToolbarShortcut={markdownToolbarShortcut}
           isMarkdownSyntaxCheckerActive={isMarkdownSyntaxCheckerActive}
+          japaneseLintSource={japaneseLintSource}
+          onJapaneseLintNotice={onJapaneseLintNotice}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}
@@ -965,6 +974,9 @@ interface MarkdownEditorSurfaceProps {
   markdownToolbarShortcut?: MarkdownEditorToolbarShortcutConfig | null;
   /** #606: Markdown syntax checker active toggle */
   isMarkdownSyntaxCheckerActive?: boolean;
+  /** #625: Japanese lint source (null/undefined = OFF or unsupported). */
+  japaneseLintSource?: JapaneseLintSource | null;
+  onJapaneseLintNotice?: (notice: JapaneseLintNotice) => void;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -1073,6 +1085,8 @@ function MarkdownEditorSurface({
   notifyRubyMultiLine,
   markdownToolbarShortcut,
   isMarkdownSyntaxCheckerActive,
+  japaneseLintSource,
+  onJapaneseLintNotice,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -3396,6 +3410,8 @@ function MarkdownEditorSurface({
           rubyShortcut={rubyShortcutConfig}
           markdownToolbarShortcut={markdownToolbarShortcut}
           isMarkdownSyntaxCheckerActive={isMarkdownSyntaxCheckerActive}
+          japaneseLintSource={japaneseLintSource}
+          onJapaneseLintNotice={onJapaneseLintNotice}
           renameShortcut={renameShortcutConfig}
           extraPendingSelection={findExtraSelection}
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}

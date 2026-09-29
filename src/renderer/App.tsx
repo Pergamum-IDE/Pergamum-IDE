@@ -143,6 +143,11 @@ import {
   applyWorkbenchUiFontFamilyList
 } from "./workbenchFontFamily";
 import { applyColorThemeById } from "./colorTheme";
+import {
+  decideJapaneseLintToggle,
+  japaneseLintSourceForPath
+} from "../shared/japaneseLint";
+import { createJapaneseLintTooLargeDialogOptions } from "./japaneseLint/japaneseLintDialog";
 import { CommandPalette } from "./CommandPalette";
 import {
   createCommandPaletteCommandTitles,
@@ -1127,8 +1132,15 @@ export function App(): JSX.Element {
     readonly opener: Element | null;
   } | null>(null);
 
+  // #625: Japanese linter ON/OFF. Same scope as the Markdown syntax checker
+  // above: one App-level flag (not per document), OFF at startup and reset
+  // whenever a project is opened/closed, never persisted.
+  const [isJapaneseLintActive, setIsJapaneseLintActive] =
+    useState<boolean>(false);
+
   useEffect(() => {
     setIsMarkdownSyntaxCheckerActive(false);
+    setIsJapaneseLintActive(false);
   }, [project]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -3029,6 +3041,47 @@ export function App(): JSX.Element {
     activeEditorIsMarkdownEditingTarget && !isReadOnlyProjectOwnedEditor;
   /** #606: Markdown syntax checker enable gate (active Markdown document only, excluding .txt / glossary description / special tabs) */
   const canUseMarkdownSyntaxChecker = activeEditorIsMarkdown;
+  // #625: the Japanese linter supports the body editor of Markdown (.md /
+  // .markdown) and plain text (.txt) documents only - not special tabs, the
+  // Glossary Description editor, or other file types.
+  const japaneseLintDocumentSource = useMemo(() => {
+    if (isEditorAreaSpecialTabActive || currentEditor?.kind !== "markdown") {
+      return null;
+    }
+
+    const document = currentEditor.document;
+
+    if (document.kind === "untitled") {
+      return { format: "markdown", ext: ".md" } as const;
+    }
+
+    return japaneseLintSourceForPath(
+      document.kind === "file" ? document.path : document.relativePath,
+      isMarkdownPath
+    );
+  }, [isEditorAreaSpecialTabActive, currentEditor]);
+  const canUseJapaneseLint = japaneseLintDocumentSource !== null;
+  // #625: an oversized document never turns the instant check ON: no IPC, no
+  // lint, an Information dialog instead (the Main Process keeps its own
+  // too-large guard as a backstop).
+  const handleToggleJapaneseLint = () => {
+    const decision = decideJapaneseLintToggle({
+      canUse: canUseJapaneseLint,
+      isActive: isJapaneseLintActive,
+      documentLength:
+        currentEditor?.kind === "markdown"
+          ? currentEditor.document.content.length
+          : 0
+    });
+
+    if (decision === "turn-on") {
+      setIsJapaneseLintActive(true);
+    } else if (decision === "turn-off") {
+      setIsJapaneseLintActive(false);
+    } else if (decision === "refuse-too-large") {
+      showJapaneseLintTooLargeDialog();
+    }
+  };
   // #531: shared enable gate for the Ruby / Emphasis Mark toolbar buttons —
   // deliberately looser than `canUseMarkdownToolbarCommands` above, since the
   // existing Ctrl+R / Ctrl+. shortcuts already work on `.txt` documents
@@ -3470,6 +3523,36 @@ export function App(): JSX.Element {
     },
     [emphasisMarkDialogState, notifyEmphasisMarkNoSelection]
   );
+
+  // #625: the instant Japanese check cannot run on a document this long.
+  // Information dialog with OK only (never a toast).
+  function showJapaneseLintTooLargeDialog(): void {
+    void confirmDialog(createJapaneseLintTooLargeDialogOptions(translate)).catch((error) => {
+      if (
+        error instanceof AppDialogError &&
+        error.kind === "dialogAlreadyOpen"
+      ) {
+        return;
+      }
+    });
+  }
+
+  // #625: a lint pass that could not show everything. A too-large document
+  // (e.g. it grew past the limit while the check was ON, or a big tab was
+  // opened) switches the check OFF and explains why in a dialog; a merely
+  // truncated result stays a light toast.
+  function notifyJapaneseLint(notice: "too-large" | "truncated"): void {
+    if (notice === "too-large") {
+      setIsJapaneseLintActive(false);
+      showJapaneseLintTooLargeDialog();
+
+      return;
+    }
+
+    notificationController.notify({
+      message: translate("japaneseLint.toast.truncated")
+    });
+  }
 
   const notifyRubyNoSelection = useCallback(() => {
     notificationController.notify({
@@ -12752,6 +12835,9 @@ export function App(): JSX.Element {
         canUseMarkdownSyntaxChecker={canUseMarkdownSyntaxChecker}
         isMarkdownSyntaxCheckerActive={isMarkdownSyntaxCheckerActive}
         onToggleMarkdownSyntaxChecker={handleToggleMarkdownSyntaxChecker}
+        canUseJapaneseLint={canUseJapaneseLint}
+        isJapaneseLintActive={isJapaneseLintActive}
+        onToggleJapaneseLint={handleToggleJapaneseLint}
         isFullscreen={isFullscreen}
         onToggleFullscreen={handleToggleFullscreen}
         translate={translate}
@@ -13159,6 +13245,10 @@ export function App(): JSX.Element {
                         isMarkdownSyntaxCheckerActive={
                           canUseMarkdownSyntaxChecker && isMarkdownSyntaxCheckerActive
                         }
+                        japaneseLintSource={
+                          isJapaneseLintActive ? japaneseLintDocumentSource : null
+                        }
+                        onJapaneseLintNotice={notifyJapaneseLint}
                         hasProject={Boolean(project)}
                         projectAccessMode={project?.accessMode}
                         onRequestRenameActiveDocument={

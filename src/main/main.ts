@@ -39,6 +39,8 @@ import {
 } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
 import { registerFontCacheIpc } from "./fontCacheIpc";
+import { registerJapaneseLintIpc } from "./japaneseLintIpc";
+import { isJapaneseLintRejectionWindow } from "./japaneseLintRejectionGuard";
 import { SESSION_CHANNELS, WINDOW_CHANNELS, type ColdStartRestorePayload } from "../shared/api";
 import {
   DEFAULT_ZOOM_FACTOR,
@@ -282,6 +284,14 @@ function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
         error: reason
       }
     });
+
+    // #625: a rejection leaking out of textlint while a Japanese lint request
+    // is running (or just finished) must not take the app down for a failed
+    // hint feature. It is logged above; every other rejection stays fatal.
+    if (isJapaneseLintRejectionWindow()) {
+      return;
+    }
+
     logger.flushAndClose();
     process.exit(1);
   });
@@ -385,6 +395,7 @@ app.whenReady().then(async () => {
   );
   registerSettingsIpc();
   registerFontCacheIpc();
+  registerJapaneseLintIpc();
   registerImageAttachmentIpc();
   registerImageInsertionIpc();
   // #411: read-only diagnostics for broken project-local image links in the

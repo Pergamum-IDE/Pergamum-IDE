@@ -3,7 +3,9 @@ import {
   japaneseLintRuleIds,
   lintJapanese,
   lintJapaneseMarkdown,
-  lintJapanesePlainText
+  lintJapanesePlainText,
+  toJapaneseLintMessages,
+  toJapaneseLintSeverity
 } from "../../src/main/textlint/japaneseLintEngine";
 
 describe("japaneseLintEngine markdown (textlint-rule-preset-japanese PoC, #625)", () => {
@@ -161,6 +163,63 @@ describe("japaneseLintEngine plain text (#625)", () => {
   });
 });
 
+describe("japaneseLintEngine severity mapping (#625)", () => {
+  // textlint: none=0, warning=1, error=2, info=3.
+  it("maps textlint levels to the user-facing severity (info is 3, not 0)", () => {
+    expect(toJapaneseLintSeverity(1)).toBe("warning");
+    expect(toJapaneseLintSeverity(2)).toBe("error");
+    expect(toJapaneseLintSeverity(3)).toBe("info");
+  });
+
+  it("treats none (0) as 'do not report'", () => {
+    expect(toJapaneseLintSeverity(0)).toBeNull();
+  });
+
+  it("uses error for a missing level and for an unknown level", () => {
+    expect(toJapaneseLintSeverity(undefined)).toBe("error");
+    expect(toJapaneseLintSeverity(99)).toBe("error");
+  });
+
+  it("converts messages: drops none, keeps info/warning/error, orders by index", () => {
+    const raw = (severity: number | undefined, index: number) => ({
+      ruleId: "r",
+      severity,
+      message: "m",
+      line: 1,
+      column: index + 1,
+      index
+    });
+    const messages = toJapaneseLintMessages([
+      raw(3, 30),
+      raw(0, 20),
+      raw(1, 10),
+      raw(2, 0)
+    ]);
+
+    expect(messages.map((m) => [m.index, m.severity])).toEqual([
+      [0, "error"],
+      [10, "warning"],
+      [30, "info"]
+    ]);
+  });
+
+  it("carries a fix through as a plain object", () => {
+    const [message] = toJapaneseLintMessages([
+      {
+        ruleId: "r",
+        severity: 2,
+        message: "m",
+        line: 1,
+        column: 1,
+        index: 0,
+        fix: { range: [0, 1], text: "x" }
+      }
+    ]);
+
+    expect(message?.fix).toEqual({ range: [0, 1], text: "x" });
+  });
+});
+
 describe("japaneseLintEngine extensions (#625)", () => {
   const markdown =
     "# 見出し\n\n私は彼は好きだ。\n\n```\n私は彼は好きだ。\n```\n";
@@ -202,8 +261,8 @@ describe("japaneseLintEngine extensions (#625)", () => {
 
   it("constrains format / ext combinations by type", () => {
     // @ts-expect-error a text document cannot claim a Markdown extension
-    void lintJapanese("", { format: "text", ext: ".md" });
+    lintJapanese("", { format: "text", ext: ".md" }).catch(() => undefined);
     // @ts-expect-error a Markdown document cannot claim the .txt extension
-    void lintJapanese("", { format: "markdown", ext: ".txt" });
+    lintJapanese("", { format: "markdown", ext: ".txt" }).catch(() => undefined);
   });
 });

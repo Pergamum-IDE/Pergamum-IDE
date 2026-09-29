@@ -8,6 +8,7 @@ import {
   EDIT_CHANNELS,
   FILE_CHANNELS,
   FONT_CACHE_CHANNELS,
+  JAPANESE_LINT_CHANNELS,
   GLOSSARY_CHANNELS,
   IMAGE_ATTACHMENT_CHANNELS,
   IMAGE_INSERTION_CHANNELS,
@@ -452,6 +453,9 @@ const pergamumApi: PergamumApi = {
         return "";
       }
     }
+  },
+  japaneseLint: {
+    lint: (request) => ipcRenderer.invoke(JAPANESE_LINT_CHANNELS.lint, request)
   },
   fontCache: {
     load: () => ipcRenderer.invoke(FONT_CACHE_CHANNELS.load),

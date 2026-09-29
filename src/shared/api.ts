@@ -83,6 +83,10 @@ import type { AppPlatform } from "./platform";
 import type { RecoveryStoreStatus } from "./recovery";
 import type { FontCache, FontCacheState } from "./fontCache";
 import type {
+  JapaneseLintRequest,
+  JapaneseLintResponse
+} from "./japaneseLint";
+import type {
   RecoveryDocumentPayload,
   RecoveryDocumentWriteResult
 } from "./recoveryDocument";
@@ -468,6 +472,10 @@ export const DEBUG_LOG_CHANNELS = {
 export const APPLICATION_MENU_CHANNELS = {
   command: "applicationMenu:command",
   setEnablement: "applicationMenu:setEnablement"
+} as const;
+
+export const JAPANESE_LINT_CHANNELS = {
+  lint: "japaneseLint:lint"
 } as const;
 
 export const FONT_CACHE_CHANNELS = {
@@ -1664,6 +1672,9 @@ export interface PergamumApi {
    */
   fileSystem: {
     getPathForFile: (file: File) => string;
+  };
+  japaneseLint: {
+    lint: (request: JapaneseLintRequest) => Promise<JapaneseLintResponse>;
   };
   fontCache: {
     load: () => Promise<FontCacheState>;

@@ -58,11 +58,79 @@ export interface JapaneseLintMessage {
   };
 }
 
-const severityByLevel: Readonly<Record<number, JapaneseLintSeverity>> = {
-  0: "info",
+// textlint's TextlintRuleSeverityLevelKeys: none=0, warning=1, error=2,
+// info=3 (info is 3, not 0). `none` means "disabled" and is never shown, so
+// the wrapper's own severity is exactly the three user-facing states.
+const severityByLevel: Readonly<Record<number, JapaneseLintSeverity | null>> = {
+  0: null,
   1: "warning",
-  2: "error"
+  2: "error",
+  3: "info"
 };
+
+/**
+ * Maps a textlint severity level to the user-facing severity.
+ * Returns null for `none` (0) - such a message must not be reported.
+ * A missing level uses textlint's default (error); an unknown level is
+ * surfaced as `error` rather than silently hidden or downgraded.
+ */
+export function toJapaneseLintSeverity(
+  level: number | undefined
+): JapaneseLintSeverity | null {
+  if (level === undefined) {
+    return "error";
+  }
+
+  const mapped = severityByLevel[level];
+
+  return mapped === undefined ? "error" : mapped;
+}
+
+interface RawLintMessage {
+  readonly ruleId: string;
+  readonly severity?: number;
+  readonly message: string;
+  readonly line: number;
+  readonly column: number;
+  readonly index: number;
+  readonly fix?: { readonly range: readonly number[]; readonly text: string };
+}
+
+/** Converts textlint messages into wrapper messages (position-ordered). */
+export function toJapaneseLintMessages(
+  raw: readonly RawLintMessage[]
+): JapaneseLintMessage[] {
+  return raw
+    .flatMap((message): JapaneseLintMessage[] => {
+      const severity = toJapaneseLintSeverity(message.severity);
+
+      if (severity === null) {
+        return [];
+      }
+
+      const base = {
+        ruleId: message.ruleId,
+        severity,
+        message: message.message,
+        line: message.line,
+        column: message.column,
+        index: message.index
+      };
+
+      return [
+        message.fix
+          ? {
+              ...base,
+              fix: {
+                range: [message.fix.range[0], message.fix.range[1]] as const,
+                text: message.fix.text
+              }
+            }
+          : base
+      ];
+    })
+    .sort((a, b) => a.index - b.index);
+}
 
 // Preset rules with the preset's own default options. A rule whose default
 // option is `false` is disabled, following textlint's rulesConfig convention.
@@ -120,28 +188,7 @@ export async function lintJapanese(
     rules: presetRules
   });
 
-  return result.messages
-    .map((message): JapaneseLintMessage => {
-      const base = {
-        ruleId: message.ruleId,
-        severity: severityByLevel[message.severity ?? 2] ?? "error",
-        message: message.message,
-        line: message.line,
-        column: message.column,
-        index: message.index
-      };
-
-      return message.fix
-        ? {
-            ...base,
-            fix: {
-              range: [message.fix.range[0], message.fix.range[1]] as const,
-              text: message.fix.text
-            }
-          }
-        : base;
-    })
-    .sort((a, b) => a.index - b.index);
+  return toJapaneseLintMessages(result.messages);
 }
 
 /** Convenience wrapper: lint a Markdown document. */
