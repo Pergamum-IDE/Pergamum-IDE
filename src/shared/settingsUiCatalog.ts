@@ -373,7 +373,8 @@ const workbenchLanguageOptions: readonly SettingSelectOption[] =
 // owned by src/shared/colorTheme.ts. Theme names are proper nouns, so the
 // en/ja translations for these option labels are identical text.
 const colorThemeOptionLabelKeys: Record<BuiltInThemeId, I18nKey> = {
-  "pergamum-light": "settings.workbench.colorTheme.option.pergamumLight.label"
+  "pergamum-light": "settings.workbench.colorTheme.option.pergamumLight.label",
+  "night-dark": "settings.workbench.colorTheme.option.nightDark.label"
 };
 
 const workbenchColorThemeOptions: readonly SettingSelectOption[] =

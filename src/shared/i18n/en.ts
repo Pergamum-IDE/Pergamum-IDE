@@ -1759,6 +1759,8 @@ export const enTranslations = {
   "settings.workbench.colorTheme.description": "Selects the color theme used for the application UI.",
   "settings.workbench.colorTheme.label": "Color theme",
   "settings.workbench.colorTheme.option.pergamumLight.label": "Pergamum Light",
+  "settings.workbench.colorTheme.option.nightDark.label": "Night Dark",
+  "settings.workbench.colorTheme.optionAria": "Change color theme to {theme}",
   "fontCache.status.notScanned": "Not scanned",
   "fontCache.status.loaded": "Last scanned: {date}",
   "fontCache.status.error": "Scan failed",

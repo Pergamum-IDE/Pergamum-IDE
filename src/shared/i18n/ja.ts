@@ -1760,6 +1760,8 @@ export const jaTranslations = {
   "settings.workbench.colorTheme.description": "アプリケーションUIに使用する配色テーマを選択します。",
   "settings.workbench.colorTheme.label": "配色テーマ",
   "settings.workbench.colorTheme.option.pergamumLight.label": "Pergamum Light",
+  "settings.workbench.colorTheme.option.nightDark.label": "Night Dark",
+  "settings.workbench.colorTheme.optionAria": "配色テーマを {theme} に変更",
   "fontCache.status.notScanned": "未スキャン",
   "fontCache.status.loaded": "最終スキャン: {date}",
   "fontCache.status.error": "スキャンに失敗しました",

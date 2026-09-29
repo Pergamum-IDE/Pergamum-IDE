@@ -45,6 +45,12 @@ export function createEditorThemeExtension(): Extension {
     },
     ".cm-activeLineGutter": {
       backgroundColor: "var(--pg-color-editor-active-line-gutter-background)"
+    },
+    // Autocomplete (Glossary IntelliSense) / lint tooltips.
+    ".cm-tooltip": {
+      backgroundColor: "var(--pg-color-editor-tooltip-background)",
+      color: "var(--pg-color-editor-tooltip-foreground)",
+      borderColor: "var(--pg-color-editor-tooltip-border)"
     }
   });
 }

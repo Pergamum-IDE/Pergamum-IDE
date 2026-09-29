@@ -98,9 +98,11 @@ describe("NameInputDialog", () => {
     expect(input().placeholder).toBe("P");
     expect(primaryButton().textContent).toBe("GO");
 
-    const icon = container.querySelector<HTMLImageElement>(".nameInputDialogIcon")!;
-    expect(icon.getAttribute("src")).toBe("/caller/icon.svg");
-    expect(icon.getAttribute("alt")).toBe("caller icon");
+    const icon = container.querySelector<HTMLElement>(".nameInputDialogIcon")!;
+    expect(icon.style.getPropertyValue("--masked-icon-url")).toContain(
+      "/caller/icon.svg"
+    );
+    expect(icon.getAttribute("aria-label")).toBe("caller icon");
   });
 
   it("renders caller-provided context (label + value) verbatim above the input", () => {
@@ -147,8 +149,8 @@ describe("NameInputDialog", () => {
 
   it("treats an icon with no alt as decorative", () => {
     render(baseProps({ icon: { url: "/x.svg" } }));
-    const icon = container.querySelector<HTMLImageElement>(".nameInputDialogIcon")!;
-    expect(icon.getAttribute("alt")).toBe("");
+    const icon = container.querySelector<HTMLElement>(".nameInputDialogIcon")!;
+    expect(icon.getAttribute("aria-label")).toBeNull();
     expect(icon.getAttribute("aria-hidden")).toBe("true");
   });
 

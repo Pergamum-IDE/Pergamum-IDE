@@ -1,3 +1,4 @@
+import { MaskedIcon } from "../MaskedIcon";
 import { useCallback, useEffect, useState } from "react";
 import type { Translate } from "../../shared/i18n";
 import { InfoDialog } from "./InfoDialog";
@@ -138,13 +139,7 @@ export function TextImportDestinationPicker({
                 >
                   {isExpanded ? "▾" : "▸"}
                 </button>
-                <img
-                  className="textImportDestinationPickerFolderIcon"
-                  src={isExpanded ? folderOpenIconUrl : folderIconUrl}
-                  alt=""
-                  aria-hidden="true"
-                  data-folder-icon={isExpanded ? "folder-open" : "folder"}
-                />
+                <MaskedIcon url={isExpanded ? folderOpenIconUrl : folderIconUrl} className="textImportDestinationPickerFolderIcon" data-folder-icon={isExpanded ? "folder-open" : "folder"} />
                 <button
                   type="button"
                   role="radio"
@@ -212,13 +207,7 @@ export function TextImportDestinationPicker({
           onClick={() => setSelected("")}
           onDoubleClick={() => onConfirm("")}
         >
-          <img
-            className="textImportDestinationPickerFolderIcon"
-            src={folderOpenIconUrl}
-            alt=""
-            aria-hidden="true"
-            data-folder-icon="folder-open"
-          />
+          <MaskedIcon url={folderOpenIconUrl} className="textImportDestinationPickerFolderIcon" data-folder-icon="folder-open" />
           <span>{translate("textImport.dialog.destinationPickerRoot")}</span>
         </button>
         {renderChildren("", 1)}

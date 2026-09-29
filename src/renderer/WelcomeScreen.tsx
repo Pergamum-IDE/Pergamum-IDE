@@ -16,7 +16,8 @@ import {
   closeIconRaw,
   getWelcomeTipIconRaw
 } from "./welcomeTipIcons";
-import logoUrl from "../../assets/logo/logo-outlined.svg?url";
+import logoUrl from "../../assets/logo/logo-mono.svg?url";
+import { MaskedIcon } from "./MaskedIcon";
 
 interface WelcomeScreenProps {
   recentProjects: RecentProject[];
@@ -78,10 +79,10 @@ export function WelcomeScreen({
       <div className="welcomeContent">
         <section className="welcomePrimary" aria-label={translate("welcome.start")}>
           <div className="welcomeHero">
-            <img
+            <MaskedIcon
               className="welcomeLogo"
-              src={logoUrl}
-              alt={translate("welcome.title")}
+              url={logoUrl}
+              label={translate("welcome.title")}
             />
             <p>{translate("welcome.description")}</p>
           </div>

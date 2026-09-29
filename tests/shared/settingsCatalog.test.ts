@@ -277,7 +277,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toEqualTypeOf<string>();
       expectTypeOf(
         getCatalogDefaultValue("workbench.colorTheme")
-      ).toEqualTypeOf<"pergamum-light">();
+      ).toEqualTypeOf<"pergamum-light" | "night-dark">();
       expectTypeOf(
         getCatalogDefaultValue("workbench.sound.enabled")
       ).toEqualTypeOf<boolean>();

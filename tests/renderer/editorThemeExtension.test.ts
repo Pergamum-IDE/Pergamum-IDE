@@ -30,11 +30,38 @@ describe("editor theme extension (#621)", () => {
   });
 });
 
-describe("theme tokens in styles.css (#621)", () => {
+describe("theme tokens in styles.css (#621, #623)", () => {
   const stylesSource = readFileSync("src/renderer/styles.css", "utf8");
+  const newline = String.fromCharCode(10);
+
+  // Returns the text from `opener` up to (not including) the next `closer`.
+  function blockAt(opener: string, closer: string): string {
+    const start = stylesSource.indexOf(opener);
+    expect(start, opener).toBeGreaterThanOrEqual(0);
+
+    return stylesSource.slice(start, stylesSource.indexOf(closer, start));
+  }
+
+  function tokenNames(block: string): Set<string> {
+    return new Set(
+      [...block.matchAll(/(--pg-color-[a-z0-9-]+):/g)].map(
+        (match) => match[1] ?? ""
+      )
+    );
+  }
+
+  const lightBlock = blockAt(
+    `:root,${newline}.theme-pergamum-light {`,
+    `${newline}}${newline}`
+  );
+  const nightBlock = blockAt(".theme-night-dark {", `${newline}}${newline}`);
+  const printBlock = blockAt(
+    `@media print {${newline}  .preview {`,
+    `${newline}  }${newline}}`
+  );
 
   it("every var(--pg-color-*) used is defined in the theme block", () => {
-    const used = new Set(stylesSource.match(/var\(--pg-color-[a-z-]+/g) ?? []);
+    const used = new Set(stylesSource.match(/var\(--pg-color-[a-z0-9-]+/g) ?? []);
 
     for (const usage of used) {
       const token = usage.slice("var(".length);
@@ -42,12 +69,25 @@ describe("theme tokens in styles.css (#621)", () => {
     }
   });
 
-  it("pins preview tokens to print-safe values under @media print", () => {
-    const printStart = stylesSource.indexOf("@media print {\n  .preview {");
-    const printEnd = stylesSource.indexOf("\n}\n", printStart);
-    const printBlock = stylesSource.slice(printStart, printEnd);
+  it("Night Dark overrides every semantic token Pergamum Light defines (no token silently stays light)", () => {
+    const night = tokenNames(nightBlock);
 
-    expect(printStart).toBeGreaterThan(0);
+    for (const token of tokenNames(lightBlock)) {
+      expect(night, token).toContain(token);
+    }
+  });
+
+  it("the print block re-pins every preview color token, so a dark theme never reaches paper", () => {
+    const pinned = tokenNames(printBlock);
+
+    for (const token of tokenNames(nightBlock)) {
+      if (token.startsWith("--pg-color-preview-")) {
+        expect(pinned, token).toContain(token);
+      }
+    }
+  });
+
+  it("pins preview tokens to print-safe values under @media print", () => {
     expect(printBlock).toContain("--pg-color-preview-background: #ffffff");
     expect(printBlock).toContain("--pg-color-preview-table-header-background");
     expect(printBlock).toContain("--pg-color-preview-table-border");

@@ -11,6 +11,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent
 } from "react";
+import { MaskedIcon } from "./MaskedIcon";
 import pergamumProjectIconUrl from "../../assets/icons/file-associations/pergamum/pergamum-scroll-file-icon.svg?url";
 import filePlusIconUrl from "../../assets/icons/feather/explorer/file-plus.svg?url";
 import folderPlusIconUrl from "../../assets/icons/feather/explorer/folder-plus.svg?url";
@@ -4630,19 +4631,17 @@ export function FileExplorerView({
             }
           }}
         >
-          <img
+          <MaskedIcon
             className="fileExplorerIcon"
-            src={icon.url}
-            alt=""
-            aria-hidden="true"
+            url={icon.url}
             data-file-explorer-icon={icon.name}
           />
           <span className="fileExplorerItemLabel">{entry.name}</span>
           {isDirtyFile ? (
-            <img
+            <MaskedIcon
               className="fileExplorerDirtyIndicator"
-              src={pencilOutlineIconUrl}
-              alt={translate("explorer.unsavedChanges")}
+              url={pencilOutlineIconUrl}
+              label={translate("explorer.unsavedChanges")}
               title={translate("explorer.unsavedChanges")}
               data-file-explorer-dirty-indicator="true"
             />
@@ -4704,10 +4703,8 @@ export function FileExplorerView({
             disabled={!projectName}
             onClick={onReload}
           >
-            <img
-              src={refreshIconUrl}
-              alt=""
-              aria-hidden="true"
+            <MaskedIcon
+              url={refreshIconUrl}
               className="fileExplorerToolbarIcon"
             />
           </button>
@@ -4719,10 +4716,8 @@ export function FileExplorerView({
             disabled={!canCreate}
             onClick={onNewFile}
           >
-            <img
-              src={filePlusIconUrl}
-              alt=""
-              aria-hidden="true"
+            <MaskedIcon
+              url={filePlusIconUrl}
               className="fileExplorerToolbarIcon"
             />
           </button>
@@ -4734,10 +4729,8 @@ export function FileExplorerView({
             disabled={!canCreate}
             onClick={onNewFolder}
           >
-            <img
-              src={folderPlusIconUrl}
-              alt=""
-              aria-hidden="true"
+            <MaskedIcon
+              url={folderPlusIconUrl}
               className="fileExplorerToolbarIcon"
             />
           </button>
@@ -4756,10 +4749,8 @@ export function FileExplorerView({
             aria-disabled={!canMove}
             onClick={() => onMove?.()}
           >
-            <img
-              src={moveIconUrl}
-              alt=""
-              aria-hidden="true"
+            <MaskedIcon
+              url={moveIconUrl}
               className="fileExplorerToolbarIcon"
             />
           </button>

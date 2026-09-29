@@ -40,7 +40,7 @@ describe("WelcomeScreen", () => {
     expect(markup).toContain("welcome.createProject");
     expect(markup).toContain("welcome.openProject");
     expect(markup).toContain("welcomeLogo");
-    expect(markup).toContain("alt=\"welcome.title\"");
+    expect(markup).toContain('aria-label="welcome.title"');
     expect(markup).toContain("Project One");
     expect(markup).toContain("Project Two");
   });

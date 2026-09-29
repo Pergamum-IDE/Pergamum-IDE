@@ -16,7 +16,7 @@
 
 // Order is the order shown in the Settings select. Kept as a literal tuple
 // so the settings catalog can use it as an enum value list.
-export const builtInThemeIds = ["pergamum-light"] as const;
+export const builtInThemeIds = ["pergamum-light", "night-dark"] as const;
 
 export type BuiltInThemeId = (typeof builtInThemeIds)[number];
 
@@ -27,6 +27,26 @@ export interface BuiltInTheme {
   readonly label: string;
   readonly kind: BuiltInThemeKind;
   readonly cssClassName: string;
+  /**
+   * Representative color shown as a swatch in the Settings theme selector
+   * (#623). Deliberately a literal here, not a CSS token: the selector must
+   * show each theme's own color regardless of the currently active theme.
+   */
+  readonly accentColor: string;
+  /**
+   * Colors the Settings theme selector paints a theme's option with, so each
+   * option is a miniature of the theme (#623). Literals for the same reason
+   * as `accentColor`; tests keep them in sync with the theme's CSS tokens
+   * (surface-background / surface-foreground / border-default / accent-primary).
+   */
+  readonly preview: ThemePreviewColors;
+}
+
+export interface ThemePreviewColors {
+  readonly background: string;
+  readonly foreground: string;
+  readonly border: string;
+  readonly accent: string;
 }
 
 export const defaultColorThemeId: BuiltInThemeId = "pergamum-light";
@@ -36,7 +56,27 @@ const builtInThemeById: Record<BuiltInThemeId, BuiltInTheme> = {
     id: "pergamum-light",
     label: "Pergamum Light",
     kind: "light",
-    cssClassName: "theme-pergamum-light"
+    cssClassName: "theme-pergamum-light",
+    accentColor: "#2563a8",
+    preview: {
+      background: "#ffffff",
+      foreground: "#1f2933",
+      border: "#cbd5df",
+      accent: "#2563a8"
+    }
+  },
+  "night-dark": {
+    id: "night-dark",
+    label: "Night Dark",
+    kind: "dark",
+    cssClassName: "theme-night-dark",
+    accentColor: "#5b9bd5",
+    preview: {
+      background: "#1a1e25",
+      foreground: "#d7dde5",
+      border: "#3b4452",
+      accent: "#5b9bd5"
+    }
   }
 };
 

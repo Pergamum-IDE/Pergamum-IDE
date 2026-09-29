@@ -11,6 +11,7 @@ import {
   performClipboardCopy,
   type ClipboardAdapter
 } from "./clipboardAdapter";
+import { MaskedIcon } from "../MaskedIcon";
 import { dialogCopyButtonIconSvg } from "./dialogIcons";
 import { InfoDialog } from "./InfoDialog";
 
@@ -260,11 +261,10 @@ export function NameInputDialog({
         <label className="nameInputDialogLabel" htmlFor={`${inputId}-field`}>
           <span className="nameInputDialogLabelText">{inputLabel}</span>
           <span className="nameInputDialogInputRow">
-            <img
+            <MaskedIcon
               className="nameInputDialogIcon"
-              src={icon.url}
-              alt={icon.alt ?? ""}
-              aria-hidden={icon.alt ? undefined : "true"}
+              url={icon.url}
+              label={icon.alt || undefined}
             />
             <input
               ref={inputRef}

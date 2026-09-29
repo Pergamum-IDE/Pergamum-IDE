@@ -1934,27 +1934,14 @@ describe("SettingsPanelView unwired settings clarity (#236, colorTheme wired in 
     ).toEqual(["preview.renderer"]);
   });
 
-  it("saves workbench.colorTheme for a built-in theme id and ignores an unknown id (#621)", () => {
-    const onChangeSettings = vi.fn();
-    const element = settingsPanelViewElement("en", {
-      searchQuery: isolate("workbench.colorTheme"),
-      onChangeSettings
+  it("renders workbench.colorTheme as a dropdown trigger (open/save behavior: ColorThemeSettingControl.test.tsx)", () => {
+    const markup = renderSettingsPanelView("en", {
+      searchQuery: isolate("workbench.colorTheme")
     });
-    const input = controlElement(element, "workbench.colorTheme");
-    const onChange = input.props.onChange as (event: {
-      target: { value: string };
-    }) => void;
 
-    onChange({ target: { value: "something-else" } });
-
-    expect(onChangeSettings).not.toHaveBeenCalled();
-
-    onChange({ target: { value: "pergamum-light" } });
-
-    expect(onChangeSettings).toHaveBeenCalledTimes(1);
-    expect(onChangeSettings.mock.calls[0]?.[0].workbench.colorTheme).toBe(
-      "pergamum-light"
-    );
+    expect(markup).toContain("colorThemeDropdownTrigger");
+    expect(markup).toContain("Pergamum Light");
+    expect(markup).not.toContain('type="radio"');
   });
 });
 

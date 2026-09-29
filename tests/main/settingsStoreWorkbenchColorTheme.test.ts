@@ -87,7 +87,7 @@ describe("settingsStore workbench.colorTheme (#621)", () => {
   });
 
   it("drops an unknown theme id (no crash) and falls back to pergamum-light", async () => {
-    for (const bad of ["night-dark", "Pergamum Light", 42, null, ""]) {
+    for (const bad of ["resistance-blue", "Pergamum Light", 42, null, ""]) {
       fsMock.readFile.mockResolvedValue(
         onDiskSettings({ workbench: { colorTheme: bad } })
       );
@@ -103,7 +103,7 @@ describe("settingsStore workbench.colorTheme (#621)", () => {
 
   it("an unknown on-disk theme id is never re-persisted by an unrelated save", async () => {
     fsMock.readFile.mockResolvedValue(
-      onDiskSettings({ workbench: { colorTheme: "night-dark" } })
+      onDiskSettings({ workbench: { colorTheme: "resistance-blue" } })
     );
 
     await recordRecentProject(recentProjectInput);
@@ -145,7 +145,7 @@ describe("settingsStore workbench.colorTheme (#621)", () => {
 
   it("rejects a save request carrying an unknown theme id", () => {
     expect(() =>
-      parseSaveApplicationSettingsRequest(validSaveRequest("night-dark"))
+      parseSaveApplicationSettingsRequest(validSaveRequest("resistance-blue"))
     ).toThrow("Invalid application settings.");
   });
 });

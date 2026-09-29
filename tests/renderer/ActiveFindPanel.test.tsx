@@ -1326,7 +1326,7 @@ describe("ActiveFindPanel (#456 — multiline fields + header row layout)", () =
     expect(start).toBeGreaterThan(-1);
     const end = styles.indexOf("}", start);
     const rule = styles.slice(start, end + 1);
-    expect(rule).toContain("background: #dceafc");
-    expect(rule).toContain("border-color: #7aa7d9");
+    expect(rule).toContain("background: var(--pg-color-surface-selected)");
+    expect(rule).toContain("border-color: var(--pg-color-focus-ring)");
   });
 });

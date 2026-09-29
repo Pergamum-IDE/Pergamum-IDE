@@ -168,6 +168,7 @@ const onKeyDownExemptFileNames = new Set([
   "HeadingLevelPopover.tsx",
   "PreviewRendererDropdown.tsx",
   "CalloutInsertDropdown.tsx",
+  "ColorThemeSettingControl.tsx",
   "editorTabShortcuts.ts",
   "editorFindShortcuts.ts",
   "globalKeyboardShortcuts.ts",
