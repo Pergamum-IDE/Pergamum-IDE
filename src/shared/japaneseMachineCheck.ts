@@ -94,7 +94,43 @@ export interface JapaneseMachineCheckRuleCount {
   readonly count: number;
 }
 
+/** #625 P2b: ask Main to save the report of a finished run. */
+export interface JapaneseMachineCheckSaveReportRequest {
+  readonly resultId: string;
+}
+
+export type JapaneseMachineCheckSaveReportResult =
+  | { readonly ok: true; readonly fileName: string }
+  | {
+      readonly ok: false;
+      readonly reason:
+        | "canceled"
+        | "not-ready"
+        | "write-failed"
+        | "invalid-target";
+    };
+
+export function parseJapaneseMachineCheckResultId(
+  value: unknown
+): string | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const { resultId } = value as Record<string, unknown>;
+
+  return typeof resultId === "string" && /^[A-Za-z0-9_.-]{1,80}$/.test(resultId)
+    ? resultId
+    : null;
+}
+
 export interface JapaneseMachineCheckSummary {
+  /**
+   * Identifies the finished run inside the Main Process, which keeps the
+   * findings and the checked text for the Markdown report. The text itself
+   * never reaches the Renderer.
+   */
+  readonly resultId: string;
   readonly fileName: string;
   /** Every finding textlint reported. */
   readonly totalMessages: number;

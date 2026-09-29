@@ -139,6 +139,18 @@ export function getJapaneseLintRuleDefinition(
 }
 
 /**
+ * The short name of a rule for results (the wizard's summary and the Markdown
+ * report), e.g. "読点が多い文" rather than the Settings switch text
+ * "読点が多い文をチェック".
+ */
+export function japaneseLintRuleResultLabelKey(id: JapaneseLintRuleId): string {
+  return getJapaneseLintRuleDefinition(id).labelKey.replace(
+    /\.label$/,
+    ".resultLabel"
+  );
+}
+
+/**
  * The auxiliary path shown under a rule in the Settings UI, matching the
  * command / settings path notation used elsewhere ("JapaneseLinter.<ruleId>").
  * Display only: the textlint rule id, the catalog id and the stored settings

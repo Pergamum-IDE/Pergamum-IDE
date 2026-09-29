@@ -12,7 +12,8 @@ import {
 import type {
   JapaneseMachineCheckPrepareResult,
   JapaneseMachineCheckProgress,
-  JapaneseMachineCheckRunResult
+  JapaneseMachineCheckRunResult,
+  JapaneseMachineCheckSaveReportResult
 } from "../../src/shared/japaneseMachineCheck";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -54,6 +55,8 @@ interface Harness {
   readonly prepare: ReturnType<typeof vi.fn>;
   readonly run: ReturnType<typeof vi.fn>;
   readonly cancel: ReturnType<typeof vi.fn>;
+  readonly saveReport: ReturnType<typeof vi.fn>;
+  readonly discardResult: ReturnType<typeof vi.fn>;
   readonly onClose: ReturnType<typeof vi.fn>;
   emitProgress(progress: JapaneseMachineCheckProgress): void;
   resolveRun(result: JapaneseMachineCheckRunResult): void;
@@ -74,10 +77,19 @@ async function mount(
   );
   const cancel = vi.fn(async () => undefined);
   const onClose = vi.fn();
+  const saveReport = vi.fn(
+    async (): Promise<JapaneseMachineCheckSaveReportResult> => ({
+      ok: true,
+      fileName: "chapter1.md.lint.md"
+    })
+  );
+  const discardResult = vi.fn(async () => undefined);
   const bridge: JapaneseMachineCheckBridge = {
     prepare,
     run,
     cancel,
+    saveReport,
+    discardResult,
     onProgress: (callback) => {
       progressListener = callback;
 
@@ -107,6 +119,8 @@ async function mount(
     prepare,
     run,
     cancel,
+    saveReport,
+    discardResult,
     onClose,
     emitProgress: (progress) => act(() => progressListener?.(progress)),
     resolveRun: (result) => resolveRun(result)
@@ -221,6 +235,8 @@ describe("Japanese machine check dialog: estimate screen (#625 P2a)", () => {
       },
       run: async () => ({ ok: false, reason: "lint-failed" }),
       cancel: async () => undefined,
+      saveReport: async () => ({ ok: false, reason: "canceled" }),
+      discardResult: async () => undefined,
       onProgress: () => () => undefined
     };
 
@@ -336,6 +352,7 @@ describe("Japanese machine check dialog: running screen (#625 P2a)", () => {
     h.resolveRun({
       ok: true,
       summary: {
+        resultId: "result-late",
         fileName: "chapter1.md",
         totalMessages: 5,
         returnedMessages: 5,
@@ -435,6 +452,7 @@ describe("Japanese machine check dialog: summary screen (#625 P2a)", () => {
     h.resolveRun({
       ok: true,
       summary: {
+        resultId: "result-1",
         fileName: "chapter1.md",
         totalMessages: truncated ? 4321 : 15,
         returnedMessages: truncated ? 1000 : 15,
@@ -463,7 +481,13 @@ describe("Japanese machine check dialog: summary screen (#625 P2a)", () => {
       "max-ten",
       "no-doubled-joshi"
     ]);
-    expect(rows[0]?.textContent).toContain("読点が多い文をチェック");
+    // The short result label, not the Settings switch text.
+    expect(rows[0]?.querySelector("td")?.textContent).toBe("読点が多い文");
+    expect(rows[1]?.querySelector("td")?.textContent).toBe("助詞の重なり");
+    expect(document.body.textContent).not.toContain("をチェック");
+    expect(
+      document.querySelector("[data-japanese-machine-check=rule-table] th")?.textContent
+    ).toBe("指摘項目");
     expect(rows[0]?.textContent).toContain("12");
     expect(q('[data-japanese-machine-check="truncated"]')).toBeNull();
   });
@@ -487,14 +511,154 @@ describe("Japanese machine check dialog: summary screen (#625 P2a)", () => {
     expect(q('[data-japanese-machine-check="rule-table"]')).toBeNull();
   });
 
-  it("offers Close only - no save-as-Markdown button yet", async () => {
+  it("offers Close and the Markdown save button", async () => {
     const h = await summary(false);
     const buttons = [...document.querySelectorAll(".appDialogFooter button")];
 
-    expect(buttons.map((b) => b.textContent)).toEqual(["閉じる"]);
+    expect(buttons.map((b) => b.textContent)).toEqual([
+      "閉じる",
+      "結果をMarkdownファイルとして保存する"
+    ]);
     act(() => (buttons[0] as HTMLButtonElement).click());
     expect(h.onClose).toHaveBeenCalledTimes(1);
     expect(h.cancel).not.toHaveBeenCalled();
+  });
+});
+
+describe("Japanese style check dialog: Markdown report save (#625 P2b)", () => {
+  async function onSummary(counts = [{ ruleId: "max-ten", count: 1 }]): Promise<Harness> {
+    const h = await mount();
+
+    act(() => (q('[data-japanese-machine-check="run"]') as HTMLButtonElement).click());
+    await flush();
+    h.resolveRun({
+      ok: true,
+      summary: {
+        resultId: "result-1",
+        fileName: "chapter1.md",
+        totalMessages: counts.length,
+        returnedMessages: counts.length,
+        truncated: false,
+        sourceChars: 10,
+        sourceLines: 1,
+        elapsedMs: 5,
+        ruleCounts: counts
+      }
+    });
+    await flush();
+
+    return h;
+  }
+
+  const saveButton = () =>
+    q('[data-japanese-machine-check="save-report"]') as HTMLButtonElement | null;
+  const status = () => q('[data-japanese-machine-check="report-status"]');
+
+  it("is shown on the summary screen only", async () => {
+    const h = await mount();
+
+    // estimate
+    expect(saveButton()).toBeNull();
+    act(() => (q('[data-japanese-machine-check="run"]') as HTMLButtonElement).click());
+    await flush();
+    // running
+    expect(saveButton()).toBeNull();
+    expect(document.body.textContent).not.toContain("Markdownファイルとして保存");
+    h.resolveRun({ ok: false, reason: "worker-failed" });
+    await flush();
+    // error
+    expect(saveButton()).toBeNull();
+  });
+
+  it("saves by result id only, keeps the dialog open and shows success", async () => {
+    const h = await onSummary();
+
+    expect(status()).toBeNull();
+    act(() => saveButton()!.click());
+    await flush();
+
+    expect(h.saveReport).toHaveBeenCalledExactlyOnceWith({ resultId: "result-1" });
+    expect(status()?.textContent).toBe("Markdown レポートを保存しました。");
+    expect(status()?.getAttribute("data-report-state")).toBe("saved");
+    expect(h.onClose).not.toHaveBeenCalled();
+    // The summary is still there.
+    expect(q('[data-japanese-machine-check="rule-table"]')).not.toBeNull();
+  });
+
+  it("can save a run with no findings", async () => {
+    const h = await onSummary([]);
+
+    act(() => saveButton()!.click());
+    await flush();
+
+    expect(h.saveReport).toHaveBeenCalledTimes(1);
+    expect(status()?.getAttribute("data-report-state")).toBe("saved");
+  });
+
+  it("a canceled save dialog is not an error", async () => {
+    const h = await onSummary();
+
+    h.saveReport.mockResolvedValueOnce({ ok: false, reason: "canceled" });
+    act(() => saveButton()!.click());
+    await flush();
+
+    expect(status()?.textContent).toBe("保存はキャンセルされました。");
+    expect(status()?.getAttribute("role")).toBe("status");
+    expect(saveButton()).not.toBeNull();
+  });
+
+  it.each(["write-failed", "not-ready", "invalid-target"] as const)(
+    "a %s failure shows only the safe message",
+    async (reason) => {
+      const h = await onSummary();
+
+      h.saveReport.mockResolvedValueOnce({ ok: false, reason });
+      act(() => saveButton()!.click());
+      await flush();
+
+      expect(status()?.textContent).toBe("Markdown レポートを保存できませんでした。");
+      expect(status()?.getAttribute("role")).toBe("alert");
+    }
+  );
+
+  it("a rejected save shows the safe message, never the raw error", async () => {
+    const h = await onSummary();
+
+    h.saveReport.mockRejectedValueOnce(new Error("C:\\Users\\tanaka_taro\\x EACCES"));
+    act(() => saveButton()!.click());
+    await flush();
+
+    expect(status()?.textContent).toBe("Markdown レポートを保存できませんでした。");
+    expect(document.body.textContent).not.toContain("tanaka_taro");
+    expect(document.body.textContent).not.toContain("EACCES");
+  });
+
+  it("can be retried after a failure", async () => {
+    const h = await onSummary();
+
+    h.saveReport.mockResolvedValueOnce({ ok: false, reason: "write-failed" });
+    act(() => saveButton()!.click());
+    await flush();
+    act(() => saveButton()!.click());
+    await flush();
+
+    expect(h.saveReport).toHaveBeenCalledTimes(2);
+    expect(status()?.getAttribute("data-report-state")).toBe("saved");
+  });
+
+  it("closing the dialog lets Main forget the finished run", async () => {
+    const h = await onSummary();
+
+    act(() => root.unmount());
+
+    expect(h.discardResult).toHaveBeenCalledExactlyOnceWith({ resultId: "result-1" });
+    root = createRoot(container);
+  });
+
+  it("English wording", () => {
+    expect(t("en", "japaneseMachineCheck.report.button")).toBe(
+      "Save results as Markdown"
+    );
   });
 });
 
@@ -508,6 +672,8 @@ describe("Japanese machine check dialog: platform button order (#625 P2a)", () =
         prepare: async () => prepared(),
         run: async () => ({ ok: false, reason: "lint-failed" }),
         cancel: async () => undefined,
+      saveReport: async () => ({ ok: false, reason: "canceled" }),
+      discardResult: async () => undefined,
         onProgress: () => () => undefined
       };
 

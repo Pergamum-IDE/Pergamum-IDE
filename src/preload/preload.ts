@@ -465,6 +465,10 @@ const pergamumApi: PergamumApi = {
     run: (request) =>
       ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.run, request),
     cancel: () => ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.cancel),
+    saveReport: (request) =>
+      ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.saveReport, request),
+    discardResult: (request) =>
+      ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.discardResult, request),
     onProgress: (callback) => {
       const listener = (
         _event: Electron.IpcRendererEvent,

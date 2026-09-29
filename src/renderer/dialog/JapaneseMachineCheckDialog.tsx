@@ -8,7 +8,7 @@ import {
 } from "../../shared/i18n";
 import { JAPANESE_LINT_MAX_RESULT_COUNT } from "../../shared/japaneseLint";
 import {
-  getJapaneseLintRuleDefinition,
+  japaneseLintRuleResultLabelKey,
   japaneseLintRuleCatalog
 } from "../../shared/japaneseLintRules";
 import type {
@@ -119,6 +119,12 @@ export function JapaneseMachineCheckDialog({
   const runTokenRef = useRef(0);
   const mountedRef = useRef(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  // #625 P2b: the Markdown report save. Main owns the findings and the text;
+  // only the result id travels.
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "canceled" | "failed"
+  >("idle");
+  const resultIdRef = useRef<string | null>(null);
   const fileName = baseName(relativePath);
   const format = (value: number): string =>
     formatLocalizedNumber(value, uiLanguage);
@@ -155,6 +161,14 @@ export function JapaneseMachineCheckDialog({
       if (screenRef.current.kind === "running") {
         runTokenRef.current += 1;
         void api.cancel().catch(() => undefined);
+      }
+
+      // Main may forget the finished run's findings and text.
+      if (resultIdRef.current !== null) {
+        void api
+          .discardResult({ resultId: resultIdRef.current })
+          .catch(() => undefined);
+        resultIdRef.current = null;
       }
     };
     // The target is fixed for the dialog's lifetime.
@@ -206,6 +220,8 @@ export function JapaneseMachineCheckDialog({
         }
 
         if (result.ok) {
+          resultIdRef.current = result.summary.resultId;
+          setSaveState("idle");
           setScreen({ kind: "summary", summary: result.summary });
         } else if (result.reason === "canceled") {
           onClose();
@@ -274,6 +290,36 @@ export function JapaneseMachineCheckDialog({
       {translate("japaneseMachineCheck.button.cancel")}
     </button>
   );
+  const saveReport = useCallback(() => {
+    const resultId = resultIdRef.current;
+
+    if (resultId === null || saveState === "saving") {
+      return;
+    }
+
+    setSaveState("saving");
+    void api
+      .saveReport({ resultId })
+      .then((result) => {
+        if (!mountedRef.current) {
+          return;
+        }
+
+        setSaveState(
+          result.ok
+            ? "saved"
+            : result.reason === "canceled"
+              ? "canceled"
+              : "failed"
+        );
+      })
+      .catch(() => {
+        if (mountedRef.current) {
+          setSaveState("failed");
+        }
+      });
+  }, [api, saveState]);
+
   const closeButton = (
     <button
       key="close"
@@ -415,7 +461,7 @@ export function JapaneseMachineCheckDialog({
     const { summary } = screen;
     const label = (ruleId: string): string => {
       try {
-        return translate(getJapaneseLintRuleDefinition(ruleId as never).labelKey as never);
+        return translate(japaneseLintRuleResultLabelKey(ruleId as never) as never);
       } catch {
         return ruleId;
       }
@@ -487,9 +533,40 @@ export function JapaneseMachineCheckDialog({
             })}
           </p>
         ) : null}
+        {saveState !== "idle" ? (
+          <p
+            className="japaneseMachineCheckReportStatus"
+            role={saveState === "failed" ? "alert" : "status"}
+            data-japanese-machine-check="report-status"
+            data-report-state={saveState}
+          >
+            {translate(
+              saveState === "saving"
+                ? "japaneseMachineCheck.report.saving"
+                : saveState === "saved"
+                  ? "japaneseMachineCheck.report.saved"
+                  : saveState === "canceled"
+                    ? "japaneseMachineCheck.report.canceled"
+                    : "japaneseMachineCheck.report.failed"
+            )}
+          </p>
+        ) : null}
       </div>
     );
-    footer = arrange(closeButton, null);
+    // Close is the primary action; saving keeps the dialog open.
+    footer = arrange(
+      closeButton,
+      <button
+        key="save"
+        type="button"
+        className="appDialogButton appDialogButton-cancel"
+        disabled={saveState === "saving"}
+        data-japanese-machine-check="save-report"
+        onClick={saveReport}
+      >
+        {translate("japaneseMachineCheck.report.button")}
+      </button>
+    );
   } else if (screen.kind === "error") {
     body = (
       <div className="japaneseMachineCheckBody">

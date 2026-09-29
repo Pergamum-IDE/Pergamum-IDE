@@ -1,18 +1,30 @@
-import { ipcMain, type IpcMainInvokeEvent } from "electron";
+import {
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  type IpcMainInvokeEvent
+} from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { JAPANESE_MACHINE_CHECK_CHANNELS } from "../shared/api";
+import { t, type Language } from "../shared/i18n";
+import type { JapaneseLintDiagnostic } from "../shared/japaneseLint";
 import {
   estimateJapaneseMachineCheck,
   japaneseMachineCheckFormatForPath,
   parseJapaneseMachineCheckRequest,
+  parseJapaneseMachineCheckResultId,
   type JapaneseMachineCheckFailureReason,
   type JapaneseMachineCheckPrepareResult,
   type JapaneseMachineCheckProgress,
-  type JapaneseMachineCheckRunResult
+  type JapaneseMachineCheckRunResult,
+  type JapaneseMachineCheckSaveReportResult
 } from "../shared/japaneseMachineCheck";
 import { japaneseLintRuleIds } from "../shared/japaneseLintRules";
+import { buildJapaneseStyleCheckReport } from "../shared/japaneseStyleCheckReport";
 import { buildJapaneseLintWorkerConfig } from "../shared/japaneseLintWorkerProtocol";
+import { isProtectedPergamumDataFilePath } from "../shared/saveTargetPolicy";
+import { writeFileAtomic } from "./atomicFileWrite";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import { decodeMarkdownBytes } from "./markdownFileIo";
 import { currentProjectRootPath } from "./projectIpc";
@@ -44,10 +56,27 @@ export interface JapaneseMachineCheckDeps {
   /** The stored `textFiles.encoding`. */
   textEncodingProvider(): Promise<string>;
   readFile(absolutePath: string): Promise<Uint8Array>;
+  /**
+   * #625 P2b: the OS save dialog. Resolves the chosen path, or null when the
+   * user canceled. The Renderer never supplies a path.
+   */
+  showSaveDialog(defaultPath: string, owner?: unknown): Promise<string | null>;
+  /** Writes the (UTF-8) report. */
+  writeReport(absolutePath: string, content: string): Promise<void>;
+  /** UI language for the report wording. */
+  languageProvider(): Promise<Language>;
+  now?(): Date;
   logger: Pick<DebugLogger, "log">;
 }
 
 export interface JapaneseMachineCheckService {
+  /** #625 P2b: saves the Markdown report of the last finished run. */
+  saveReport(
+    rawRequest: unknown,
+    owner?: unknown
+  ): Promise<JapaneseMachineCheckSaveReportResult>;
+  /** Forgets the kept findings/text of a finished run (dialog closed). */
+  discardResult(rawRequest: unknown): Promise<void>;
   prepare(rawRequest: unknown): Promise<JapaneseMachineCheckPrepareResult>;
   run(
     rawRequest: unknown,
@@ -59,7 +88,23 @@ export interface JapaneseMachineCheckService {
   dispose(): Promise<void>;
 }
 
+/**
+ * What a finished run keeps, in the Main Process only, so the report can be
+ * built on request. Replaced by the next run, dropped on discard / quit.
+ */
+interface FinishedRun {
+  readonly resultId: string;
+  readonly absolutePath: string;
+  readonly fileName: string;
+  readonly sourceText: string;
+  readonly messages: readonly JapaneseLintDiagnostic[];
+  readonly totalMessages: number;
+  readonly truncated: boolean;
+  readonly executedAt: Date;
+}
+
 interface LoadedSource {
+  readonly absolutePath: string;
   readonly fileName: string;
   readonly ext: string;
   readonly format: "markdown" | "text";
@@ -129,6 +174,23 @@ export function createJapaneseMachineCheckService(
   let running = false;
   // A cancel that arrives before the Worker exists (still reading the file).
   let cancelRequested = false;
+  // #625 P2b: the last finished run, for the Markdown report.
+  let lastRun: FinishedRun | null = null;
+
+  const reportLog = (
+    details: Record<string, unknown>,
+    level: "debug" | "warn" = "debug"
+  ): void => {
+    try {
+      deps.logger.log({
+        level,
+        event: "japaneseLint.run.completed",
+        details: { linterMode: "wizard-report", ...details } as never
+      });
+    } catch {
+      /* diagnostics only */
+    }
+  };
 
   const log = (
     details: Record<string, unknown>,
@@ -192,6 +254,7 @@ export function createJapaneseMachineCheckService(
         ok: true,
         isDirty: request.isDirty === true,
         source: {
+          absolutePath: absolute,
           fileName: path.basename(absolute),
           ext: lintExt,
           format,
@@ -252,6 +315,8 @@ export function createJapaneseMachineCheckService(
 
     running = true;
     cancelRequested = false;
+    // A new run replaces the kept result of the previous one.
+    lastRun = null;
 
     const startedAt = Date.now();
     const notify = (progress: JapaneseMachineCheckProgress): void => {
@@ -370,9 +435,22 @@ export function createJapaneseMachineCheckService(
         durationMs: Date.now() - startedAt
       });
 
+      // The findings and the checked text stay here for the report.
+      lastRun = {
+        resultId: jobId,
+        absolutePath: source.absolutePath,
+        fileName: source.fileName,
+        sourceText: source.text,
+        messages: outcome.messages,
+        totalMessages: outcome.totalMessages,
+        truncated: outcome.truncated,
+        executedAt: deps.now?.() ?? new Date()
+      };
+
       return {
         ok: true,
         summary: {
+          resultId: jobId,
           fileName: source.fileName,
           totalMessages: outcome.totalMessages,
           returnedMessages: outcome.messages.length,
@@ -391,14 +469,121 @@ export function createJapaneseMachineCheckService(
         reason: active?.canceled ? "canceled" : "worker-failed"
       };
     } finally {
-      const finished = host;
+      const workerHost = host;
 
       active = null;
       running = false;
 
-      if (finished !== null) {
-        void finished.dispose().catch(() => undefined);
+      if (workerHost !== null) {
+        void workerHost.dispose().catch(() => undefined);
       }
+    }
+  }
+
+  async function saveReport(
+    rawRequest: unknown,
+    owner?: unknown
+  ): Promise<JapaneseMachineCheckSaveReportResult> {
+    const startedAt = Date.now();
+    const resultId = parseJapaneseMachineCheckResultId(rawRequest);
+    const run = lastRun;
+
+    // Only a finished run of this session can be saved, and only by its id.
+    if (resultId === null || run === null || run.resultId !== resultId) {
+      reportLog({ result: "failed", failureReason: "not-ready" });
+
+      return { ok: false, reason: "not-ready" };
+    }
+
+    const counts = {
+      totalMessages: run.totalMessages,
+      returnedMessages: run.messages.length,
+      truncated: run.truncated
+    };
+
+    try {
+      const defaultPath = path.join(
+        path.dirname(run.absolutePath),
+        `${run.fileName}.lint.md`
+      );
+      const chosen = await deps.showSaveDialog(defaultPath, owner);
+
+      if (chosen === null) {
+        reportLog({
+          result: "ignored",
+          failureReason: "canceled",
+          ...counts,
+          workerJobId: run.resultId,
+          durationMs: Date.now() - startedAt
+        });
+
+        return { ok: false, reason: "canceled" };
+      }
+
+      // Never overwrite the checked manuscript or a Pergamum data file.
+      const sameAsSource =
+        path.resolve(chosen).toLowerCase() ===
+        path.resolve(run.absolutePath).toLowerCase();
+
+      if (
+        sameAsSource ||
+        isProtectedPergamumDataFilePath(chosen) ||
+        /^pergamum\.(db|json)(-wal|-shm|-journal)?$/i.test(path.basename(chosen))
+      ) {
+        reportLog({
+          result: "failed",
+          failureReason: "invalid-target",
+          ...counts,
+          workerJobId: run.resultId,
+          durationMs: Date.now() - startedAt
+        });
+
+        return { ok: false, reason: "invalid-target" };
+      }
+
+      const language = await deps.languageProvider().catch(() => "ja" as Language);
+      const content = buildJapaneseStyleCheckReport({
+        fileName: run.fileName,
+        executedAt: run.executedAt,
+        totalMessages: run.totalMessages,
+        returnedMessages: run.messages.length,
+        truncated: run.truncated,
+        sourceText: run.sourceText,
+        messages: run.messages,
+        translate: (key, values) => t(language, key, values),
+        numberLocale: language === "ja" ? "ja-JP" : "en-US"
+      });
+
+      await deps.writeReport(chosen, content);
+      reportLog({
+        result: "succeeded",
+        ...counts,
+        workerJobId: run.resultId,
+        durationMs: Date.now() - startedAt
+      });
+
+      return { ok: true, fileName: path.basename(chosen) };
+    } catch {
+      reportLog(
+        {
+          result: "failed",
+          failureReason: "write-failed",
+          ...counts,
+          workerJobId: run.resultId,
+          durationMs: Date.now() - startedAt
+        },
+        "warn"
+      );
+
+      return { ok: false, reason: "write-failed" };
+    }
+  }
+
+  async function discardResult(rawRequest: unknown): Promise<void> {
+    const resultId = parseJapaneseMachineCheckResultId(rawRequest);
+
+    if (lastRun !== null && (resultId === null || lastRun.resultId === resultId)) {
+      lastRun = null;
     }
   }
 
@@ -427,10 +612,11 @@ export function createJapaneseMachineCheckService(
   }
 
   async function dispose(): Promise<void> {
+    lastRun = null;
     await cancel();
   }
 
-  return { prepare, run, cancel, dispose };
+  return { prepare, run, cancel, dispose, saveReport, discardResult };
 }
 
 let service: JapaneseMachineCheckService | null = null;
@@ -444,6 +630,25 @@ function getService(): JapaneseMachineCheckService {
     textEncodingProvider: async () =>
       (await loadSettings())?.textFiles?.encoding ?? "utf8",
     readFile: (absolutePath) => fs.readFile(absolutePath),
+    showSaveDialog: async (defaultPath, owner) => {
+      const options: Electron.SaveDialogOptions = {
+        title: "日本語表現チェック",
+        defaultPath,
+        filters: [
+          { name: "Markdown Files", extensions: ["md"] },
+          { name: "All Files", extensions: ["*"] }
+        ]
+      };
+      const result =
+        owner instanceof BrowserWindow
+          ? await dialog.showSaveDialog(owner, options)
+          : await dialog.showSaveDialog(options);
+
+      return result.canceled || !result.filePath ? null : result.filePath;
+    },
+    writeReport: (absolutePath, content) => writeFileAtomic(absolutePath, content),
+    languageProvider: async () =>
+      (await loadSettings()).workbench.language as Language,
     logger: getDebugLogger()
   });
 
@@ -472,4 +677,18 @@ export function registerJapaneseMachineCheckIpc(): void {
   ipcMain.handle(JAPANESE_MACHINE_CHECK_CHANNELS.cancel, async () => {
     await getService().cancel();
   });
+  ipcMain.handle(
+    JAPANESE_MACHINE_CHECK_CHANNELS.saveReport,
+    async (event: IpcMainInvokeEvent, rawRequest) =>
+      getService().saveReport(
+        rawRequest,
+        BrowserWindow.fromWebContents(event.sender) ?? undefined
+      )
+  );
+  ipcMain.handle(
+    JAPANESE_MACHINE_CHECK_CHANNELS.discardResult,
+    async (_event, rawRequest) => {
+      await getService().discardResult(rawRequest);
+    }
+  );
 }

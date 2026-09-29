@@ -81,10 +81,17 @@ function setup(
     encoding?: string;
     projectRoot?: string | null;
     readFailure?: boolean;
+    /** What the save dialog answers: a path, or null = canceled. */
+    saveTarget?: string | null;
+    writeFailure?: boolean;
+    dialogFailure?: boolean;
+    language?: "ja" | "en";
   } = {}
 ) {
   const world = createFakeWorkerWorld(worldOptions);
   const events: Logged[] = [];
+  const writes: { path: string; content: string }[] = [];
+  const dialogs: string[] = [];
   const created: JapaneseLintHost[] = [];
   const logger = { log: (input: Logged) => void events.push(input) } as never;
   const service: JapaneseMachineCheckService = createJapaneseMachineCheckService({
@@ -127,10 +134,28 @@ function setup(
         ? new TextEncoder().encode(content)
         : content;
     },
+    showSaveDialog: async (defaultPath) => {
+      dialogs.push(defaultPath);
+
+      if (state.dialogFailure) {
+        throw new Error("dialog exploded");
+      }
+
+      return state.saveTarget === undefined ? defaultPath : state.saveTarget;
+    },
+    writeReport: async (absolute, content) => {
+      if (state.writeFailure) {
+        throw new Error(`EACCES ${absolute} ${secretText}`);
+      }
+
+      writes.push({ path: absolute, content });
+    },
+    languageProvider: async () => state.language ?? "ja",
+    now: () => new Date(2026, 8, 30, 2, 31),
     logger
   });
 
-  return { service, world, events, created, state };
+  return { service, world, events, created, state, writes, dialogs };
 }
 
 const lintDocumentsReceived = (child: { received: unknown[] } | undefined) =>
@@ -746,15 +771,302 @@ describe("Instant Linter independence (#625 P2a)", () => {
   });
 });
 
+describe("Markdown report save (#625 P2b)", () => {
+  const sub = "sub";
+  const summaryOf = async (
+    ctx: ReturnType<typeof setup>,
+    relativePath = `${sub}/a.md`
+  ): Promise<string> => {
+    const result = await ctx.service.run({ relativePath });
+
+    if (!result.ok) {
+      throw new Error(`run failed: ${result.reason}`);
+    }
+
+    return result.summary.resultId;
+  };
+
+  it("saves the report of a finished run, defaulting next to the file as <name>.lint.md", async () => {
+    const ctx = setup({ [`${sub}/a.md`]: joshi });
+    const resultId = await summaryOf(ctx);
+    const saved = await ctx.service.saveReport({ resultId });
+
+    expect(saved).toEqual({ ok: true, fileName: "a.md.lint.md" });
+    expect(ctx.dialogs).toEqual([path.join(root, sub, "a.md.lint.md")]);
+    expect(ctx.writes).toHaveLength(1);
+    expect(ctx.writes[0]?.path).toBe(path.join(root, sub, "a.md.lint.md"));
+
+    const report = ctx.writes[0]!.content;
+
+    expect(report).toContain("# 日本語表現チェック結果");
+    expect(report).toContain("| ファイル | a.md |");
+    expect(report).toContain("| 実行日時 | 2026-09-30 02:31 |");
+    expect(report).toContain("### 助詞の重なり\n");
+    expect(report).not.toContain("助詞の重なりをチェック");
+    expect(report).toContain("`no-doubled-joshi`");
+    // A short snippet of the checked text, not the whole thing.
+    expect(report).toContain("私は彼は好きだ。");
+  });
+
+  it("keeps the original extension for .txt and .markdown", async () => {
+    const ctx = setup({ "c.txt": joshi, "d.markdown": joshi });
+
+    await ctx.service.saveReport({ resultId: await summaryOf(ctx, "c.txt") });
+    await ctx.service.saveReport({ resultId: await summaryOf(ctx, "d.markdown") });
+
+    expect(ctx.dialogs).toEqual([
+      path.join(root, "c.txt.lint.md"),
+      path.join(root, "d.markdown.lint.md")
+    ]);
+  });
+
+  it("writes the user's chosen path, not the default", async () => {
+    const chosen = path.join(root, "reports", "mine.md");
+    const ctx = setup({ "a.md": joshi }, undefined, { saveTarget: chosen });
+
+    expect(await ctx.service.saveReport({ resultId: await summaryOf(ctx, "a.md") })).toEqual(
+      { ok: true, fileName: "mine.md" }
+    );
+    expect(ctx.writes[0]?.path).toBe(chosen);
+  });
+
+  it("can save a run with no findings", async () => {
+    const ctx = setup({ "a.md": "今日は晴れです。" });
+    const saved = await ctx.service.saveReport({ resultId: await summaryOf(ctx, "a.md") });
+
+    expect(saved.ok).toBe(true);
+    expect(ctx.writes[0]?.content).toContain("指摘はありませんでした。");
+  });
+
+  it("a truncated run's report carries the cap notice and only the returned findings", async () => {
+    const many = Array.from({ length: 1500 }, (_, index) => ({
+      ruleId: "no-doubled-joshi",
+      severity: "warning" as const,
+      message: "助詞が連続しています。",
+      line: 1,
+      column: 1,
+      index
+    }));
+    const ctx = setup({ "a.md": "あ".repeat(2000) }, { lint: async () => many, realDictionary });
+
+    await ctx.service.saveReport({ resultId: await summaryOf(ctx, "a.md") });
+
+    const report = ctx.writes[0]!.content;
+
+    expect(report).toContain("| 総指摘数 | 1,500 |");
+    expect(report).toContain("| 表示対象の指摘数 | 1,000 |");
+    expect(report).toContain("| 省略 | あり |");
+    expect(report).toContain("詳細は最初の 1,000 件に制限されています");
+    expect(report).toContain("チェック項目別件数は、表示対象の指摘に基づきます");
+    expect(report.match(/^#### /gm)).toHaveLength(1000);
+  });
+
+  it("uses the UI language for the report", async () => {
+    const ctx = setup({ "a.md": joshi }, undefined, { language: "en" });
+
+    await ctx.service.saveReport({ resultId: await summaryOf(ctx, "a.md") });
+
+    expect(ctx.writes[0]?.content).toContain("# Japanese Style Check Results");
+  });
+
+  it("is not-ready before any run, for an unknown id, and after the result was discarded", async () => {
+    const ctx = setup();
+
+    expect(await ctx.service.saveReport({ resultId: "nope" })).toEqual({
+      ok: false,
+      reason: "not-ready"
+    });
+
+    const resultId = await summaryOf(ctx, "a.md");
+
+    expect(await ctx.service.saveReport({ resultId: "other-id" })).toEqual({
+      ok: false,
+      reason: "not-ready"
+    });
+    await ctx.service.discardResult({ resultId });
+    expect(await ctx.service.saveReport({ resultId })).toEqual({
+      ok: false,
+      reason: "not-ready"
+    });
+    expect(ctx.writes).toHaveLength(0);
+    expect(ctx.dialogs).toHaveLength(0);
+  });
+
+  it("is not-ready while a new run replaces the previous result, and for a canceled/failed run", async () => {
+    const stuck = gate();
+    const ctx = setup(undefined, {
+      lint: async (...args) => {
+        await stuck.opened;
+
+        return realLint(...args);
+      },
+      realDictionary
+    });
+    const first = ctx.service.run({ relativePath: "a.md" });
+
+    await vi.waitFor(() => expect(lintDocumentsReceived(ctx.world.children[0])).toBe(1));
+    // Nothing finished yet.
+    expect(await ctx.service.saveReport({ resultId: "x" })).toEqual({
+      ok: false,
+      reason: "not-ready"
+    });
+    await ctx.service.cancel();
+    await first;
+    stuck.release();
+    expect(await ctx.service.saveReport({ resultId: "x" })).toEqual({
+      ok: false,
+      reason: "not-ready"
+    });
+  });
+
+  it("rejects malformed requests as not-ready and never rejects", async () => {
+    const ctx = setup();
+
+    for (const bad of [undefined, null, 5, "id", {}, { resultId: 3 }, { resultId: "a b" }]) {
+      await expect(ctx.service.saveReport(bad)).resolves.toEqual({
+        ok: false,
+        reason: "not-ready"
+      });
+    }
+  });
+
+  it("a canceled save dialog is 'canceled' and writes nothing", async () => {
+    const ctx = setup({ "a.md": joshi }, undefined, { saveTarget: null });
+    const resultId = await summaryOf(ctx, "a.md");
+
+    expect(await ctx.service.saveReport({ resultId })).toEqual({
+      ok: false,
+      reason: "canceled"
+    });
+    expect(ctx.writes).toHaveLength(0);
+
+    // The result is still there for another try.
+    ctx.state.saveTarget = path.join(root, "again.md");
+    expect((await ctx.service.saveReport({ resultId })).ok).toBe(true);
+  });
+
+  it("a write failure is 'write-failed'", async () => {
+    const ctx = setup({ "a.md": joshi }, undefined, { writeFailure: true });
+    const resultId = await summaryOf(ctx, "a.md");
+
+    expect(await ctx.service.saveReport({ resultId })).toEqual({
+      ok: false,
+      reason: "write-failed"
+    });
+  });
+
+  it("refuses to overwrite the checked file or a Pergamum data file", async () => {
+    const same = setup({ "a.md": joshi }, undefined, {
+      saveTarget: path.join(root, "A.MD")
+    });
+
+    expect(await same.service.saveReport({ resultId: await summaryOf(same, "a.md") })).toEqual({
+      ok: false,
+      reason: "invalid-target"
+    });
+    expect(same.writes).toHaveLength(0);
+
+    const data = setup({ "a.md": joshi }, undefined, {
+      saveTarget: path.join(root, "pergamum.db")
+    });
+
+    expect(await data.service.saveReport({ resultId: await summaryOf(data, "a.md") })).toEqual({
+      ok: false,
+      reason: "invalid-target"
+    });
+    expect(data.writes).toHaveLength(0);
+  });
+
+  it("a save dialog that throws is a safe write-failed", async () => {
+    const ctx = setup({ "a.md": joshi }, undefined, { dialogFailure: true });
+    const resultId = await summaryOf(ctx, "a.md");
+
+    expect(await ctx.service.saveReport({ resultId })).toEqual({
+      ok: false,
+      reason: "write-failed"
+    });
+  });
+
+  it("logs counts and reasons only - never text, snippets, names, paths or raw errors", async () => {
+    const chosen = path.join(root, "very-secret-folder", "out.md");
+    const ok = setup({ [secretFile]: `${secretText}\n${joshi}` }, undefined, {
+      saveTarget: chosen
+    });
+    const failing = setup({ [secretFile]: `${secretText}\n${joshi}` }, undefined, {
+      saveTarget: chosen,
+      writeFailure: true
+    });
+    const canceled = setup({ [secretFile]: `${secretText}\n${joshi}` }, undefined, {
+      saveTarget: null
+    });
+
+    for (const ctx of [ok, failing, canceled]) {
+      await ctx.service.saveReport({ resultId: await summaryOf(ctx, secretFile) });
+    }
+
+    const entry = ok.events.find((e) => e.details?.linterMode === "wizard-report");
+
+    expect(entry?.details).toMatchObject({
+      linterMode: "wizard-report",
+      result: "succeeded",
+      truncated: false
+    });
+    expect(typeof entry?.details?.totalMessages).toBe("number");
+    expect(typeof entry?.details?.returnedMessages).toBe("number");
+    expect(typeof entry?.details?.workerJobId).toBe("string");
+    expect(
+      failing.events.find((e) => e.details?.linterMode === "wizard-report")?.details
+    ).toMatchObject({ result: "failed", failureReason: "write-failed" });
+
+    const runtime = {
+      appVersion: "0.1.0",
+      platform: "win32",
+      arch: "x64",
+      locale: "ja",
+      electronVersion: "43.4.0",
+      nodeVersion: "24.19.0",
+      debugMode: true
+    } as const;
+
+    for (const ctx of [ok, failing, canceled]) {
+      const log = JSON.stringify(
+        ctx.events.map((event) => ({
+          event: event.event,
+          details: sanitizeDebugLogDetails(event.details ?? {}, {
+            runtime,
+            isKnownProjectRef: () => false,
+            isKnownDocumentRef: () => false
+          } as never)
+        }))
+      );
+
+      for (const forbidden of [
+        "秘密",
+        "私は彼",
+        secretFile,
+        "very-secret-folder",
+        "out.md",
+        "lint.md",
+        "EACCES",
+        "Novel"
+      ]) {
+        expect(log, forbidden).not.toContain(forbidden);
+      }
+    }
+  });
+});
+
 describe("IPC registration (#625 P2a)", () => {
-  it("registers prepare / run / cancel", () => {
+  it("registers prepare / run / cancel / saveReport / discardResult", () => {
     electronMock.ipcHandle.mockReset();
     registerJapaneseMachineCheckIpc();
 
     expect(electronMock.ipcHandle.mock.calls.map((c) => c[0])).toEqual([
       JAPANESE_MACHINE_CHECK_CHANNELS.prepare,
       JAPANESE_MACHINE_CHECK_CHANNELS.run,
-      JAPANESE_MACHINE_CHECK_CHANNELS.cancel
+      JAPANESE_MACHINE_CHECK_CHANNELS.cancel,
+      JAPANESE_MACHINE_CHECK_CHANNELS.saveReport,
+      JAPANESE_MACHINE_CHECK_CHANNELS.discardResult
     ]);
   });
 });
@@ -863,6 +1175,9 @@ describe("logging privacy (#625 P2a)", () => {
       settingsProvider: async () => undefined,
       textEncodingProvider: async () => "utf8",
       readFile: async () => new TextEncoder().encode(joshi),
+      showSaveDialog: async (defaultPath) => defaultPath,
+      writeReport: async () => undefined,
+      languageProvider: async () => "ja",
       logger: throwing
     });
 

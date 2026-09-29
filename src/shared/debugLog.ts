@@ -379,6 +379,7 @@ export const debugLogLinterModes = [
   "worker-lint",
   "instant-worker",
   "wizard",
+  "wizard-report",
   "unknown"
 ] as const;
 
@@ -388,6 +389,9 @@ export const debugLogLintFailureReasons = [
   "lint-failed",
   "canceled",
   "worker-failed",
+  "not-ready",
+  "write-failed",
+  "invalid-target",
   "unknown"
 ] as const;
 

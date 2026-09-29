@@ -104,9 +104,27 @@ describe("Japanese machine check wiring (#625 P2a)", () => {
     );
   });
 
-  it("the summary has no Markdown-report button yet", () => {
+  it("the report is built and written in the Main Process; the Renderer sends only a result id", () => {
     const dialog = read("src/renderer/dialog/JapaneseMachineCheckDialog.tsx");
+    const ipc = read("src/main/japaneseMachineCheckIpc.ts");
+    const preload = read("src/preload/preload.ts");
 
-    expect(dialog).not.toMatch(/lint\.md|\.lint\.md|saveReport/);
+    // Renderer: no report building, no source text, no paths.
+    expect(dialog).not.toContain("buildJapaneseStyleCheckReport");
+    expect(dialog).toContain(".saveReport({ resultId })");
+    // Main: dialog, default name, atomic write.
+    expect(ipc).toContain("buildJapaneseStyleCheckReport");
+    expect(ipc).toContain("`${run.fileName}.lint.md`");
+    expect(ipc).toContain("path.dirname(run.absolutePath)");
+    expect(ipc).toContain("dialog.showSaveDialog");
+    expect(ipc).toContain("writeFileAtomic");
+    expect(preload).toContain("JAPANESE_MACHINE_CHECK_CHANNELS.saveReport");
+  });
+
+  it("the save dialog offers Markdown Files and All Files", () => {
+    const ipc = read("src/main/japaneseMachineCheckIpc.ts");
+
+    expect(ipc).toContain('name: "Markdown Files", extensions: ["md"]');
+    expect(ipc).toContain('name: "All Files", extensions: ["*"]');
   });
 });

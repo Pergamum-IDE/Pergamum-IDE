@@ -91,6 +91,8 @@ import type {
   JapaneseMachineCheckPrepareResult,
   JapaneseMachineCheckProgress,
   JapaneseMachineCheckRunResult,
+  JapaneseMachineCheckSaveReportRequest,
+  JapaneseMachineCheckSaveReportResult,
   JapaneseMachineCheckTarget
 } from "./japaneseMachineCheck";
 import type {
@@ -490,6 +492,9 @@ export const JAPANESE_MACHINE_CHECK_CHANNELS = {
   prepare: "japaneseMachineCheck:prepare",
   run: "japaneseMachineCheck:run",
   cancel: "japaneseMachineCheck:cancel",
+  /** #625 P2b: save the Markdown report of the finished run */
+  saveReport: "japaneseMachineCheck:saveReport",
+  discardResult: "japaneseMachineCheck:discardResult",
   /** main -> renderer: coarse stage of the run in flight */
   progress: "japaneseMachineCheck:progress"
 } as const;
@@ -1703,6 +1708,14 @@ export interface PergamumApi {
     ) => Promise<JapaneseMachineCheckRunResult>;
     /** Safe to call repeatedly; a no-op when nothing runs. */
     cancel: () => Promise<void>;
+    /** Main shows the save dialog and writes the report; never rejects. */
+    saveReport: (
+      request: JapaneseMachineCheckSaveReportRequest
+    ) => Promise<JapaneseMachineCheckSaveReportResult>;
+    /** The wizard closed: Main may forget the finished run. */
+    discardResult: (
+      request: JapaneseMachineCheckSaveReportRequest
+    ) => Promise<void>;
     onProgress: (
       callback: (progress: JapaneseMachineCheckProgress) => void
     ) => () => void;
