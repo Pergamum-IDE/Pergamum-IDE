@@ -12654,6 +12654,8 @@ export function App(): JSX.Element {
     <WelcomeScreen
       recentProjects={settings.recentProjects}
       translate={translate}
+      language={displayLanguage}
+      platform={window.pergamum.platform}
       onCreateProject={() => {
         void createProject();
       }}
@@ -12662,6 +12664,16 @@ export function App(): JSX.Element {
       }}
       onOpenRecentProject={(projectFilePath) => {
         void openRecentProject(projectFilePath);
+      }}
+      onRemoveRecentProject={(projectId) => {
+        void (async () => {
+          try {
+            await window.pergamum.projects.removeRecentProject(projectId);
+            await reloadSettings();
+          } catch (error) {
+            // Ignore error
+          }
+        })();
       }}
     />
   );

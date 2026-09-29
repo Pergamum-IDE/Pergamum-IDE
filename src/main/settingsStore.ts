@@ -2003,3 +2003,17 @@ export async function findRecentProjectByFilePath(
     ) ?? null
   );
 }
+
+export async function removeRecentProject(
+  projectId: string
+): Promise<ApplicationSettings> {
+  const settings = await loadSettings();
+  const recentProjects = settings.recentProjects.filter(
+    (storedProject) => storedProject.projectId !== projectId
+  );
+  return saveSettings({
+    ...settings,
+    recentProjects
+  });
+}
+

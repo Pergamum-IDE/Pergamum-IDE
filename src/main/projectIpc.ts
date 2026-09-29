@@ -178,7 +178,8 @@ import { validateProjectName } from "../shared/projectName";
 import {
   findRecentProjectByFilePath,
   loadSettings,
-  recordRecentProject
+  recordRecentProject,
+  removeRecentProject
 } from "./settingsStore";
 import {
   createProjectWindowTitle,
@@ -4449,6 +4450,16 @@ export function registerProjectIpc(
 
         throw safeError;
       }
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.removeRecentProject,
+    async (_event, projectId: unknown) => {
+      if (typeof projectId !== "string" || !projectId) {
+        throw new Error("Invalid projectId.");
+      }
+      return removeRecentProject(projectId);
     }
   );
 
