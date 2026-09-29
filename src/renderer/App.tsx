@@ -1144,6 +1144,20 @@ export function App(): JSX.Element {
     setIsJapaneseLintActive(false);
   }, [project]);
 
+  // #625: Linter OFF (toggle, project open/close, oversized document) lets the
+  // Main Process stop the lint Worker. Nothing is sent while it is ON.
+  useEffect(() => {
+    if (isJapaneseLintActive) {
+      return;
+    }
+
+    try {
+      void window.pergamum.japaneseLint.release().catch(() => undefined);
+    } catch {
+      /* the Worker is only an optimization to stop */
+    }
+  }, [isJapaneseLintActive]);
+
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {

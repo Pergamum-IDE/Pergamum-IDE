@@ -377,6 +377,7 @@ export type DebugLogWorkerRequestType =
 export const debugLogLinterModes = [
   "foundation",
   "worker-lint",
+  "instant-worker",
   "unknown"
 ] as const;
 

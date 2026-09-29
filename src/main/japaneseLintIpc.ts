@@ -1,96 +1,53 @@
-import { app, ipcMain } from "electron";
-import { promises as fs } from "node:fs";
-import path from "node:path";
+import { ipcMain } from "electron";
 import { JAPANESE_LINT_CHANNELS } from "../shared/api";
 import {
-  JAPANESE_LINT_MAX_RESULT_COUNT,
   isJapaneseLintSourceTooLarge,
   parseJapaneseLintRequest,
   type JapaneseLintRequest,
   type JapaneseLintResponse
 } from "../shared/japaneseLint";
-import { enabledJapaneseLintRules } from "../shared/japaneseLintRules";
+import { buildJapaneseLintWorkerConfig } from "../shared/japaneseLintWorkerProtocol";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import { loadSettings } from "./settingsStore";
-import { resolveJapaneseLintDictionaryPath } from "./linterWorker/japaneseLintDictionary";
-import { withJapaneseLintRejectionGuard } from "./japaneseLintRejectionGuard";
-import { lintJapanese } from "./textlint/japaneseLintEngine";
+import type { JapaneseLintHost } from "./linterWorker/japaneseLintHost";
+import { createElectronJapaneseLintHost } from "./linterWorker/japaneseLintHostElectron";
 
 /**
- * #625: runs the Japanese lint engine for a Renderer request. The request is
- * validated (untrusted input) and only serializable diagnostics come back;
- * `fix` suggestions are deliberately not sent (no auto-fix in this slice).
+ * #625: the instant Japanese expression check. The request is validated
+ * (untrusted input) and the lint itself runs in the utilityProcess Worker
+ * (see linterWorker/), never in the Main Process: textlint's cost grows
+ * faster than linearly and would otherwise freeze the window.
  *
- * Documents longer than JAPANESE_LINT_MAX_SOURCE_LENGTH are skipped
- * (`too-large`) without touching textlint: it runs on the Main Process and
- * its cost grows faster than linearly, so a novel-sized text would freeze the
- * window ("Not responding"). At most JAPANESE_LINT_MAX_RESULT_COUNT
- * diagnostics are returned (`truncated`). Body text is never logged - only
- * sizes, timings and counts.
+ * The Renderer contract is unchanged: `{ ok: true, diagnostics, truncated }`
+ * or `{ ok: false, reason }`. Every Worker failure (worker-failed,
+ * dictionary-missing, lint-failed, canceled) folds into `lint-failed`, so the
+ * Renderer just clears its markers. This handler never rejects.
  *
- * This handler never rejects: every failure - including a missing kuromoji
- * dictionary - becomes `{ ok: false }`, and the engine call runs inside the
- * rejection guard so a rejection leaking out of textlint cannot terminate the
- * app (see japaneseLintRejectionGuard.ts).
+ * The 50,000-character guard is kept (Renderer first, here as a backstop):
+ * an oversized document never starts the Worker.
+ *
+ * Lifecycle: the Worker starts lazily on the first lint that has something to
+ * run and is reused afterwards. `release()` (Linter OFF, project close, app
+ * quit) disposes it; the next lint starts a fresh one. Body text is never
+ * logged - only sizes, timings and counts.
  */
 
-// kuromoji reads its dictionary from disk at runtime. textlint's
-// kuromojin resolves the location with `require.resolve("kuromoji")`, which
-// does not work in the packaged app (only whitelisted node_modules are
-// shipped - see forge.config.js), so the dictionary directory is pinned
-// explicitly via kuromojin's own KUROMOJIN_DIC_PATH override.
-const dictionaryProbeFile = "base.dat.gz";
+/** Supplies the stored `japaneseLint` settings; read fresh per request. */
+export type JapaneseLintSettingsProvider = () => Promise<unknown>;
 
-export interface JapaneseLintDictionary {
-  /** Directory holding kuromoji's dictionary files. */
-  readonly directory: string;
+const loadStoredJapaneseLintSettings: JapaneseLintSettingsProvider = async () =>
+  (await loadSettings()).japaneseLint;
+
+export interface InstantJapaneseLintDeps {
+  createHost(getSettings: () => unknown): JapaneseLintHost;
+  settingsProvider: JapaneseLintSettingsProvider;
+  logger: Pick<DebugLogger, "log">;
 }
 
-export function resolveJapaneseLintDictionaryDirectory(
-  appPath: string = app.getAppPath()
-): string {
-  return resolveJapaneseLintDictionaryPath({
-    isPackaged: app.isPackaged === true,
-    resourcesPath: process.resourcesPath,
-    appPath
-  });
-}
-
-let dictionaryCheck: Promise<boolean> | null = null;
-
-/**
- * Pins KUROMOJIN_DIC_PATH and verifies the dictionary is actually readable.
- * A negative result is not cached forever-lost: it is re-checked on the next
- * request only if the previous check failed.
- */
-export function ensureJapaneseLintDictionary(
-  directory: string = resolveJapaneseLintDictionaryDirectory()
-): Promise<boolean> {
-  if (dictionaryCheck === null) {
-    dictionaryCheck = (async () => {
-      try {
-        await fs.access(path.join(directory, dictionaryProbeFile));
-        process.env.KUROMOJIN_DIC_PATH = directory;
-
-        return true;
-      } catch {
-        return false;
-      }
-    })().then((available) => {
-      if (!available) {
-        dictionaryCheck = null;
-      }
-
-      return available;
-    });
-  }
-
-  return dictionaryCheck;
-}
-
-/** Test helper: forget the cached dictionary check. */
-export function resetJapaneseLintDictionaryCheck(): void {
-  dictionaryCheck = null;
+export interface InstantJapaneseLintService {
+  lint(rawRequest: unknown): Promise<JapaneseLintResponse>;
+  /** Linter OFF / project close / app quit: stops the Worker. Never rejects. */
+  release(): Promise<void>;
 }
 
 function countLines(text: string): number {
@@ -104,114 +61,162 @@ function countLines(text: string): number {
   return lines;
 }
 
-/**
- * Supplies the stored `japaneseLint` settings (Application Settings) for a
- * request. Read fresh on every request so a change in Settings applies to the
- * very next lint; a failure to read falls back to the catalog defaults.
- */
-export type JapaneseLintSettingsProvider = () => Promise<unknown>;
+type LintStage = "queued" | "dictionary-check" | "lint-running" | "completed";
 
-const loadStoredJapaneseLintSettings: JapaneseLintSettingsProvider = async () =>
-  (await loadSettings()).japaneseLint;
+export function createInstantJapaneseLintService(
+  deps: InstantJapaneseLintDeps
+): InstantJapaneseLintService {
+  let host: JapaneseLintHost | null = null;
+  // The settings the running Worker was last given (init or updateConfig).
+  let appliedConfigKey: string | null = null;
+  // The settings the current request read; also what a (re)start inits with.
+  let latestStored: unknown;
+  // Jobs of this Instant Linter session that the Worker has not begun yet.
+  const jobStages = new Map<string, LintStage>();
 
-export async function handleJapaneseLintRequest(
-  rawRequest: unknown,
-  logger: DebugLogger = getDebugLogger(),
-  settingsProvider: JapaneseLintSettingsProvider = loadStoredJapaneseLintSettings
-): Promise<JapaneseLintResponse> {
-  const startedAt = Date.now();
-  let request: JapaneseLintRequest | null = null;
-
-  // Logging must never throw into the handler.
-  const logRun = (
-    result: "succeeded" | "failed" | "ignored",
-    extra: { reason?: "too_large" | "lint_failed" | "validation_failed"; count?: number }
-  ): void => {
-    try {
-      logger.log({
-        level: "debug",
-        event: "japaneseLint.run.completed",
-        details: {
-          result,
-          ...extra,
-          ...(request
-            ? {
-                characterLength: request.text.length,
-                lineCount: countLines(request.text),
-                extension: request.ext
-              }
-            : {}),
-          durationMs: Date.now() - startedAt
-        }
-      });
-    } catch {
-      /* diagnostics only */
+  const cancelSuperseded = (activeHost: JapaneseLintHost): void => {
+    for (const [jobId, stage] of jobStages) {
+      // A job textlint is already running cannot be interrupted; cancelling
+      // it would end the whole Worker (and the new job with it). Its result
+      // is simply discarded by the Renderer's stale-result guard.
+      if (stage === "queued" || stage === "dictionary-check") {
+        jobStages.delete(jobId);
+        void activeHost.cancel(jobId).catch(() => undefined);
+      }
     }
   };
 
-  try {
-    request = parseJapaneseLintRequest(rawRequest);
+  const lint = async (rawRequest: unknown): Promise<JapaneseLintResponse> => {
+    const startedAt = Date.now();
+    let request: JapaneseLintRequest | null = null;
 
-    if (request === null) {
-      logRun("failed", { reason: "validation_failed" });
+    // Logging must never throw into the handler.
+    const logRun = (
+      result: "succeeded" | "failed" | "ignored",
+      extra: {
+        reason?: "too_large" | "lint_failed" | "validation_failed";
+        count?: number;
+        failureReason?: "dictionary-missing" | "lint-failed" | "canceled" | "worker-failed";
+        enabledRuleIds?: readonly string[];
+        truncated?: boolean;
+      }
+    ): void => {
+      try {
+        const { count, ...rest } = extra;
 
-      return { ok: false, reason: "invalid-request" };
-    }
-
-    // Too large for the Main Process: skip before doing any work.
-    if (isJapaneseLintSourceTooLarge(request.text.length)) {
-      logRun("ignored", { reason: "too_large" });
-
-      return { ok: false, reason: "too-large" };
-    }
-
-    let storedSettings: unknown;
+        deps.logger.log({
+          level: "debug",
+          event: "japaneseLint.run.completed",
+          details: {
+            linterMode: "instant-worker",
+            result,
+            ...rest,
+            ...(count !== undefined
+              ? { count, totalMessages: count, returnedMessages: count }
+              : {}),
+            ...(request
+              ? {
+                  characterLength: request.text.length,
+                  lineCount: countLines(request.text),
+                  lintFormat: request.format,
+                  extension: request.ext
+                }
+              : {}),
+            durationMs: Date.now() - startedAt
+          }
+        });
+      } catch {
+        /* diagnostics only */
+      }
+    };
 
     try {
-      storedSettings = await settingsProvider();
-    } catch {
-      storedSettings = undefined;
-    }
+      request = parseJapaneseLintRequest(rawRequest);
 
-    const rules = enabledJapaneseLintRules(storedSettings);
+      if (request === null) {
+        logRun("failed", { reason: "validation_failed" });
 
-    // Every rule switched off: nothing to check, so textlint (and its
-    // dictionary) is not started at all.
-    if (rules.length === 0) {
-      logRun("succeeded", { count: 0 });
+        return { ok: false, reason: "invalid-request" };
+      }
 
-      return { ok: true, diagnostics: [], truncated: false };
-    }
+      // Too large: skip before doing any work (and before any Worker start).
+      if (isJapaneseLintSourceTooLarge(request.text.length)) {
+        logRun("ignored", { reason: "too_large" });
 
-    // Without the dictionary textlint's rules fail deep inside promise chains
-    // we cannot await, so do not enter the engine at all.
-    if (!(await ensureJapaneseLintDictionary())) {
-      logRun("failed", { reason: "lint_failed" });
+        return { ok: false, reason: "too-large" };
+      }
 
-      return { ok: false, reason: "lint-failed" };
-    }
+      try {
+        latestStored = await deps.settingsProvider();
+      } catch {
+        latestStored = undefined;
+      }
 
-    const { format, text, ext } = request;
-    const messages = await withJapaneseLintRejectionGuard(() =>
-      format === "markdown"
-        ? lintJapanese(text, {
-            format: "markdown",
-            ext: ext === ".markdown" ? ".markdown" : ".md",
-            rules
-          })
-        : lintJapanese(text, { format: "text", ext: ".txt", rules })
-    );
-    const truncated = messages.length > JAPANESE_LINT_MAX_RESULT_COUNT;
+      const config = buildJapaneseLintWorkerConfig(latestStored);
 
-    logRun("succeeded", { count: messages.length });
+      // Every rule switched off: nothing to check, so no Worker is started.
+      if (config.rules.length === 0) {
+        logRun("succeeded", { count: 0, enabledRuleIds: [] });
 
-    return {
-      ok: true,
-      // The engine returns messages in position order, so the cut keeps the
-      // earliest ones.
-      diagnostics: messages
-        .slice(0, JAPANESE_LINT_MAX_RESULT_COUNT)
-        .map((message) => ({
+        return { ok: true, diagnostics: [], truncated: false };
+      }
+
+      if (host === null) {
+        host = deps.createHost(() => latestStored);
+        appliedConfigKey = null;
+      }
+
+      const activeHost = host;
+      const configKey = JSON.stringify(config);
+
+      if (activeHost.getState() !== "ready") {
+        // (Re)starting inits the Worker with the settings just read.
+        await activeHost.start();
+        appliedConfigKey = configKey;
+      } else if (appliedConfigKey !== configKey) {
+        await activeHost.updateConfig(config);
+        appliedConfigKey = configKey;
+      }
+
+      cancelSuperseded(activeHost);
+
+      const jobId = activeHost.createJobId();
+
+      jobStages.set(jobId, "queued");
+
+      const outcome = await activeHost.lintDocument({
+        source: request.text,
+        format: request.format,
+        ext: request.ext,
+        jobId,
+        onProgress: (progress) => {
+          if (jobStages.has(jobId)) {
+            jobStages.set(jobId, progress.stage);
+          }
+        }
+      });
+
+      jobStages.delete(jobId);
+
+      if (!outcome.ok) {
+        logRun("failed", {
+          reason: "lint_failed",
+          failureReason: outcome.reason,
+          enabledRuleIds: config.enabledRuleIds
+        });
+
+        return { ok: false, reason: "lint-failed" };
+      }
+
+      logRun("succeeded", {
+        count: outcome.messages.length,
+        truncated: outcome.truncated,
+        enabledRuleIds: config.enabledRuleIds
+      });
+
+      return {
+        ok: true,
+        diagnostics: outcome.messages.map((message) => ({
           ruleId: message.ruleId,
           severity: message.severity,
           message: message.message,
@@ -219,17 +224,63 @@ export async function handleJapaneseLintRequest(
           column: message.column,
           index: message.index
         })),
-      truncated
-    };
-  } catch {
-    logRun("failed", { reason: "lint_failed" });
+        truncated: outcome.truncated
+      };
+    } catch {
+      // start() / updateConfig() failing (e.g. a missing Worker bundle).
+      logRun("failed", { reason: "lint_failed", failureReason: "worker-failed" });
 
-    return { ok: false, reason: "lint-failed" };
-  }
+      return { ok: false, reason: "lint-failed" };
+    }
+  };
+
+  const release = async (): Promise<void> => {
+    const released = host;
+
+    host = null;
+    appliedConfigKey = null;
+    jobStages.clear();
+
+    if (released === null) {
+      return;
+    }
+
+    try {
+      await released.dispose();
+    } catch {
+      /* the Worker is being thrown away anyway */
+    }
+  };
+
+  return { lint, release };
+}
+
+let service: InstantJapaneseLintService | null = null;
+
+function getInstantJapaneseLintService(): InstantJapaneseLintService {
+  service ??= createInstantJapaneseLintService({
+    createHost: (getSettings) =>
+      createElectronJapaneseLintHost({
+        logger: getDebugLogger(),
+        getSettings
+      }),
+    settingsProvider: loadStoredJapaneseLintSettings,
+    logger: getDebugLogger()
+  });
+
+  return service;
+}
+
+/** Linter OFF / project close / app quit. Safe to call at any time. */
+export function releaseJapaneseLintWorker(): Promise<void> {
+  return service === null ? Promise.resolve() : service.release();
 }
 
 export function registerJapaneseLintIpc(): void {
   ipcMain.handle(JAPANESE_LINT_CHANNELS.lint, async (_event, rawRequest) =>
-    handleJapaneseLintRequest(rawRequest)
+    getInstantJapaneseLintService().lint(rawRequest)
   );
+  ipcMain.handle(JAPANESE_LINT_CHANNELS.release, async () => {
+    await releaseJapaneseLintWorker();
+  });
 }

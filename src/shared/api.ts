@@ -475,7 +475,8 @@ export const APPLICATION_MENU_CHANNELS = {
 } as const;
 
 export const JAPANESE_LINT_CHANNELS = {
-  lint: "japaneseLint:lint"
+  lint: "japaneseLint:lint",
+  release: "japaneseLint:release"
 } as const;
 
 export const FONT_CACHE_CHANNELS = {
@@ -1675,6 +1676,8 @@ export interface PergamumApi {
   };
   japaneseLint: {
     lint: (request: JapaneseLintRequest) => Promise<JapaneseLintResponse>;
+    /** Linter OFF: lets the Main Process stop the lint Worker. */
+    release: () => Promise<void>;
   };
   fontCache: {
     load: () => Promise<FontCacheState>;

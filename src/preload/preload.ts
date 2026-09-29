@@ -455,7 +455,8 @@ const pergamumApi: PergamumApi = {
     }
   },
   japaneseLint: {
-    lint: (request) => ipcRenderer.invoke(JAPANESE_LINT_CHANNELS.lint, request)
+    lint: (request) => ipcRenderer.invoke(JAPANESE_LINT_CHANNELS.lint, request),
+    release: () => ipcRenderer.invoke(JAPANESE_LINT_CHANNELS.release)
   },
   fontCache: {
     load: () => ipcRenderer.invoke(FONT_CACHE_CHANNELS.load),

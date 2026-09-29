@@ -130,7 +130,14 @@ describe("kuromoji dictionary path resolution (#625 P1a)", () => {
   it("the instant-check IPC resolves the dictionary through the same function", async () => {
     const { readFileSync } = await import("node:fs");
     const ipc = readFileSync("src/main/japaneseLintIpc.ts", "utf8");
+    const host = readFileSync(
+      "src/main/linterWorker/japaneseLintHostElectron.ts",
+      "utf8"
+    );
 
-    expect(ipc).toContain("resolveJapaneseLintDictionaryPath({");
+    // The IPC builds its Worker Host with the Electron factory, which pins
+    // the dictionary with the shared resolver.
+    expect(ipc).toContain("createElectronJapaneseLintHost");
+    expect(host).toContain("resolveJapaneseLintDictionaryPath({");
   });
 });

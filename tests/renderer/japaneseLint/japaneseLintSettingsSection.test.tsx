@@ -503,6 +503,6 @@ describe("instant check picks up settings changes (#625)", () => {
     const ipc = readFileSync("src/main/japaneseLintIpc.ts", "utf8");
 
     expect(ipc).toContain("(await loadSettings()).japaneseLint");
-    expect(ipc).toContain("enabledJapaneseLintRules(storedSettings)");
+    expect(ipc).toContain("buildJapaneseLintWorkerConfig(latestStored)");
   });
 });

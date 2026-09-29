@@ -39,7 +39,10 @@ import {
 } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
 import { registerFontCacheIpc } from "./fontCacheIpc";
-import { registerJapaneseLintIpc } from "./japaneseLintIpc";
+import {
+  registerJapaneseLintIpc,
+  releaseJapaneseLintWorker
+} from "./japaneseLintIpc";
 import { isJapaneseLintRejectionWindow } from "./japaneseLintRejectionGuard";
 import { SESSION_CHANNELS, WINDOW_CHANNELS, type ColdStartRestorePayload } from "../shared/api";
 import {
@@ -251,6 +254,8 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
 function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
   installAppShutdownCleanup(app, async () => {
     try {
+      // #625: stop the Japanese lint Worker (never rejects).
+      await releaseJapaneseLintWorker();
       // #285: release the Recovery Store ownership lock (owner only) before
       // the project write lock, so a normal quit leaves nothing behind.
       await shutdownRecoveryStore(logger);

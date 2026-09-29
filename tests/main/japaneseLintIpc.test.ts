@@ -1,93 +1,171 @@
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { JAPANESE_LINT_CHANNELS } from "../../src/shared/api";
 
-const electronMock = vi.hoisted(() => ({
-  ipcHandle: vi.fn(),
-  appPath: { value: process.cwd() }
-}));
+const electronMock = vi.hoisted(() => ({ ipcHandle: vi.fn() }));
 
 vi.mock("electron", () => ({
-  app: { getAppPath: () => electronMock.appPath.value },
-  ipcMain: { handle: electronMock.ipcHandle }
+  app: { getAppPath: () => process.cwd(), isPackaged: false },
+  ipcMain: { handle: electronMock.ipcHandle },
+  MessageChannelMain: class {},
+  utilityProcess: { fork: () => undefined }
 }));
 
-import { mkdtempSync, rmSync } from "node:fs";
 import {
   JAPANESE_LINT_MAX_RESULT_COUNT,
   JAPANESE_LINT_MAX_SOURCE_LENGTH
 } from "../../src/shared/japaneseLint";
-import type { DebugLogger } from "../../src/main/debugLogger";
-import * as engine from "../../src/main/textlint/japaneseLintEngine";
-import os from "node:os";
-import path from "node:path";
 import {
-  ensureJapaneseLintDictionary,
-  handleJapaneseLintRequest,
+  createInstantJapaneseLintService,
   registerJapaneseLintIpc,
-  resetJapaneseLintDictionaryCheck,
-  resolveJapaneseLintDictionaryDirectory
+  releaseJapaneseLintWorker,
+  type InstantJapaneseLintService
 } from "../../src/main/japaneseLintIpc";
+import { createJapaneseLintHost } from "../../src/main/linterWorker/japaneseLintHost";
+import type { JapaneseLintHost } from "../../src/main/linterWorker/japaneseLintHost";
+import { sanitizeDebugLogDetails } from "../../src/main/debugLogSanitizer";
+import { lintJapanese } from "../../src/main/textlint/japaneseLintEngine";
 import {
-  isJapaneseLintRejectionWindow,
-  resetJapaneseLintRejectionGuard
-} from "../../src/main/japaneseLintRejectionGuard";
+  createFakeWorkerWorld,
+  type FakeLint,
+  type FakeWorkerOptions
+} from "./linterWorker/fakeWorkerWorld";
 
-describe("japaneseLintIpc (#625)", () => {
-  beforeEach(() => {
-    electronMock.ipcHandle.mockReset();
-    electronMock.appPath.value = process.cwd();
-    resetJapaneseLintDictionaryCheck();
-    resetJapaneseLintRejectionGuard();
+const realDictionary = path.join(process.cwd(), "node_modules", "kuromoji", "dict");
+
+const realLint: FakeLint = (source, { format, ext, rules }) =>
+  format === "markdown"
+    ? lintJapanese(source, {
+        format: "markdown",
+        ext: ext === ".markdown" ? ".markdown" : ".md",
+        rules: rules as never
+      })
+    : lintJapanese(source, { format: "text", ext: ".txt", rules: rules as never });
+
+interface Logged {
+  level: string;
+  event: string;
+  details?: Record<string, unknown>;
+}
+
+const joshi = { text: "私は彼は好きだ。", format: "text", ext: ".txt" } as const;
+const secretText = "秘密の本文です。";
+const secretFile = "secret-chapter.md";
+const secretPath = `C:\\Users\\tanaka_taro\\Documents\\${secretFile}`;
+
+const hosts: JapaneseLintHost[] = [];
+
+afterEach(async () => {
+  await Promise.all(hosts.splice(0).map((host) => host.dispose()));
+});
+
+function setup(
+  worldOptions: FakeWorkerOptions = { lint: realLint, realDictionary },
+  initialSettings: unknown = undefined
+) {
+  const world = createFakeWorkerWorld(worldOptions);
+  const events: Logged[] = [];
+  const state = { settings: initialSettings, hostsCreated: 0 };
+  const logger = { log: (input: Logged) => void events.push(input) } as never;
+  const service: InstantJapaneseLintService = createInstantJapaneseLintService({
+    createHost: (getSettings) => {
+      state.hostsCreated += 1;
+
+      const host = createJapaneseLintHost({
+        ...world.deps,
+        getSettings,
+        logger,
+        timeouts: {
+          startMs: 1000,
+          requestMs: 1000,
+          shutdownMs: 500,
+          jobMs: 20_000,
+          cancelGraceMs: 80
+        }
+      });
+
+      hosts.push(host);
+
+      return host;
+    },
+    settingsProvider: async () => state.settings,
+    logger
   });
 
-  it("registers exactly one handler on the japaneseLint:lint channel", async () => {
+  return { service, world, events, state };
+}
+
+const ruleIds = async (
+  service: InstantJapaneseLintService,
+  request: unknown
+): Promise<string[]> => {
+  const response = await service.lint(request);
+
+  return response.ok ? response.diagnostics.map((d) => d.ruleId) : [];
+};
+
+function lintDocumentsReceived(child: { received: unknown[] } | undefined): number {
+  return (child?.received ?? []).filter(
+    (message) => (message as { type?: string }).type === "lintDocument"
+  ).length;
+}
+
+function gate() {
+  let release!: () => void;
+  const opened = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  return { opened, release };
+}
+
+describe("instant japanese lint IPC -> Worker (#625 P1c)", () => {
+  beforeEach(() => electronMock.ipcHandle.mockReset());
+
+  it("registers the lint and release channels", async () => {
     registerJapaneseLintIpc();
 
-    expect(electronMock.ipcHandle).toHaveBeenCalledTimes(1);
-    expect(electronMock.ipcHandle.mock.calls[0]?.[0]).toBe(
-      JAPANESE_LINT_CHANNELS.lint
-    );
+    expect(electronMock.ipcHandle.mock.calls.map((call) => call[0])).toEqual([
+      JAPANESE_LINT_CHANNELS.lint,
+      JAPANESE_LINT_CHANNELS.release
+    ]);
 
-    const handler = electronMock.ipcHandle.mock.calls[0]?.[1] as (
-      event: unknown,
-      request: unknown
-    ) => Promise<unknown>;
+    // Nothing was started, so releasing is a harmless no-op.
+    await expect(releaseJapaneseLintWorker()).resolves.toBeUndefined();
 
-    expect(
-      await handler({}, { text: "私は彼は好きだ。", format: "text", ext: ".txt" })
-    ).toMatchObject({ ok: true });
+    const release = electronMock.ipcHandle.mock.calls[1]?.[1] as () => Promise<unknown>;
+
+    await expect(release()).resolves.toBeUndefined();
   });
 
-  it("lints Markdown (.md and .markdown) and plain text (.txt)", async () => {
+  it("lints Markdown (.md / .markdown) and plain text through the Worker", async () => {
+    const { service, world } = setup();
+
     for (const [format, ext] of [
       ["markdown", ".md"],
       ["markdown", ".markdown"],
       ["text", ".txt"]
     ] as const) {
-      const response = await handleJapaneseLintRequest({
-        text: "私は彼は好きだ。",
-        format,
-        ext
-      });
-
-      expect(response.ok).toBe(true);
-      if (response.ok) {
-        expect(response.diagnostics.map((d) => d.ruleId)).toContain(
-          "no-doubled-joshi"
-        );
-      }
+      expect(await ruleIds(service, { text: joshi.text, format, ext })).toContain(
+        "no-doubled-joshi"
+      );
     }
+
+    // The lint really ran in the (fake) Worker process, and one Worker served
+    // all three requests.
+    expect(world.children).toHaveLength(1);
+    expect(world.children[0]?.received.some((m) => JSON.stringify(m).includes("lintDocument"))).toBe(
+      true
+    );
   });
 
-  it("returns only serializable diagnostics without fix suggestions", async () => {
-    const response = await handleJapaneseLintRequest({
-      text: "私は彼は好きだ。",
-      format: "markdown",
-      ext: ".md"
-    });
+  it("keeps the Renderer contract: serializable diagnostics without fix suggestions", async () => {
+    const { service } = setup();
+    const response = await service.lint(joshi);
 
     expect(JSON.parse(JSON.stringify(response))).toEqual(response);
     if (response.ok) {
+      expect(response.truncated).toBe(false);
       for (const diagnostic of response.diagnostics) {
         expect(Object.keys(diagnostic).sort()).toEqual(
           ["column", "index", "line", "message", "ruleId", "severity"].sort()
@@ -96,411 +174,474 @@ describe("japaneseLintIpc (#625)", () => {
     }
   });
 
-  it("rejects invalid requests without running the engine", async () => {
+  it("rejects invalid requests without starting the Worker, and never rejects", async () => {
+    const { service, world, state } = setup();
+
     for (const bad of [
+      undefined,
       null,
       "text",
+      0,
+      [],
       { text: "x", format: "text", ext: ".md" },
       { text: 5, format: "text", ext: ".txt" }
     ]) {
-      expect(await handleJapaneseLintRequest(bad)).toEqual({
+      await expect(service.lint(bad)).resolves.toEqual({
         ok: false,
         reason: "invalid-request"
       });
     }
+
+    expect(state.hostsCreated).toBe(0);
+    expect(world.children).toHaveLength(0);
   });
 
   it("returns no diagnostics for empty text", async () => {
-    expect(
-      await handleJapaneseLintRequest({ text: "", format: "text", ext: ".txt" })
-    ).toEqual({ ok: true, diagnostics: [], truncated: false });
+    const { service } = setup();
+
+    expect(await service.lint({ text: "", format: "text", ext: ".txt" })).toEqual({
+      ok: true,
+      diagnostics: [],
+      truncated: false
+    });
   });
+});
 
-  describe("crash safety (kuromoji dictionary / leaked rejections)", () => {
-    it("resolves the dictionary under <appPath>/node_modules/kuromoji/dict and pins KUROMOJIN_DIC_PATH", async () => {
-      expect(resolveJapaneseLintDictionaryDirectory("/app.asar")).toBe(
-        path.join("/app.asar", "node_modules", "kuromoji", "dict")
-      );
-
-      expect(await ensureJapaneseLintDictionary()).toBe(true);
-      expect(process.env.KUROMOJIN_DIC_PATH).toBe(
-        resolveJapaneseLintDictionaryDirectory(process.cwd())
-      );
+describe("Worker failures become the existing safe failure (#625 P1c)", () => {
+  it("a dictionary that is missing is { ok:false, lint-failed } and the app is unharmed", async () => {
+    const { service } = setup({
+      lint: realLint,
+      realDictionary,
+      dictionaryExists: false
     });
 
-    it("returns { ok:false } without entering textlint when the dictionary is missing (the packaged-app crash)", async () => {
-      const emptyAppPath = mkdtempSync(path.join(os.tmpdir(), "pergamum-nodict-"));
-      const leaked: unknown[] = [];
-      const onUnhandled = (reason: unknown): void => {
-        leaked.push(reason);
-      };
+    for (let index = 0; index < 3; index += 1) {
+      await expect(service.lint(joshi)).resolves.toEqual({
+        ok: false,
+        reason: "lint-failed"
+      });
+    }
+  });
 
-      electronMock.appPath.value = emptyAppPath;
-      process.on("unhandledRejection", onUnhandled);
+  it("a textlint failure inside the Worker is lint-failed", async () => {
+    const { service } = setup({
+      lint: async () => {
+        throw new Error("boom");
+      },
+      realDictionary
+    });
 
-      try {
-        for (let i = 0; i < 3; i += 1) {
-          expect(
-            await handleJapaneseLintRequest({
-              text: "私は彼は好きだ。",
-              format: "markdown",
-              ext: ".md"
-            })
-          ).toEqual({ ok: false, reason: "lint-failed" });
+    await expect(service.lint(joshi)).resolves.toEqual({
+      ok: false,
+      reason: "lint-failed"
+    });
+  });
+
+  it("a Worker that dies mid-lint settles the request as lint-failed, and the next ON restarts it", async () => {
+    const stuck = gate();
+    let first = true;
+    const { service, world } = setup({
+      lint: async (...args) => {
+        if (first) {
+          first = false;
+          await stuck.opened;
         }
 
-        // Give a leaked rejection (if any) the chance to be reported.
-        await new Promise((resolve) => setTimeout(resolve, 100));
-
-        expect(leaked).toEqual([]);
-        // The engine was never entered, so no guard window was opened.
-        expect(isJapaneseLintRejectionWindow()).toBe(false);
-      } finally {
-        process.off("unhandledRejection", onUnhandled);
-        rmSync(emptyAppPath, { recursive: true, force: true });
-      }
+        return realLint(...args);
+      },
+      realDictionary
     });
+    const pending = service.lint(joshi);
 
-    it("recovers once the dictionary becomes available (a failed check is not cached)", async () => {
-      const emptyAppPath = mkdtempSync(path.join(os.tmpdir(), "pergamum-nodict-"));
+    await vi.waitFor(() => expect(lintDocumentsReceived(world.children[0])).toBeGreaterThan(0));
+    world.children[0]!.crash(1);
 
-      try {
-        electronMock.appPath.value = emptyAppPath;
-        expect(await ensureJapaneseLintDictionary()).toBe(false);
+    await expect(pending).resolves.toEqual({ ok: false, reason: "lint-failed" });
 
-        electronMock.appPath.value = process.cwd();
-        expect(
-          (
-            await handleJapaneseLintRequest({
-              text: "私は彼は好きだ。",
-              format: "text",
-              ext: ".txt"
-            })
-          ).ok
-        ).toBe(true);
-      } finally {
-        rmSync(emptyAppPath, { recursive: true, force: true });
-      }
-    });
+    // A failed Worker is started afresh by the next request.
+    expect(await ruleIds(service, joshi)).toContain("no-doubled-joshi");
+    expect(world.children).toHaveLength(2);
+    stuck.release();
+  });
+});
 
-    it("opens the rejection guard window for a real lint run", async () => {
-      await handleJapaneseLintRequest({
-        text: "私は彼は好きだ。",
-        format: "text",
-        ext: ".txt"
-      });
+describe("Worker lifecycle (#625 P1c)", () => {
+  it("starts lazily on the first lint and reuses the running Worker", async () => {
+    const { service, world, state } = setup();
 
-      expect(isJapaneseLintRejectionWindow()).toBe(true);
-    });
+    expect(state.hostsCreated).toBe(0);
+    await service.lint(joshi);
+    await service.lint(joshi);
+    await service.lint(joshi);
 
-    it("never rejects, whatever the input", async () => {
-      for (const bad of [undefined, null, 0, "x", {}, [], { text: {} }]) {
-        await expect(handleJapaneseLintRequest(bad)).resolves.toMatchObject({
-          ok: false
-        });
-      }
-    });
+    expect(state.hostsCreated).toBe(1);
+    expect(world.children).toHaveLength(1);
   });
 
-  describe("large documents and result caps (freeze remediation)", () => {
-    // Only `log` is used by the handler; the rest of DebugLogger is opaque.
-    const makeLogger = () => {
-      const log = vi.fn();
+  it("release() (Linter OFF / project close / quit) shuts the Worker down; the next lint starts a fresh one", async () => {
+    const { service, world, state } = setup();
 
-      return { log } as unknown as DebugLogger & { log: typeof log };
-    };
+    await service.lint(joshi);
+    await service.release();
 
-    afterEach(() => {
-      vi.restoreAllMocks();
-    });
+    expect(world.children[0]?.exited || world.children[0]?.killed).toBe(true);
 
-    it("answers too-large without ever calling the textlint engine", async () => {
-      const lintSpy = vi.spyOn(engine, "lintJapanese");
-
-      for (const [format, ext] of [
-        ["markdown", ".md"],
-        ["markdown", ".markdown"],
-        ["text", ".txt"]
-      ] as const) {
-        expect(
-          await handleJapaneseLintRequest({
-            text: "あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH + 1),
-            format,
-            ext
-          })
-        ).toEqual({ ok: false, reason: "too-large" });
-      }
-
-      expect(lintSpy).not.toHaveBeenCalled();
-      // No guard window either: nothing was run.
-      expect(isJapaneseLintRejectionWindow()).toBe(false);
-    });
-
-    it("still lints a document exactly at the limit", async () => {
-      const lintSpy = vi.spyOn(engine, "lintJapanese").mockResolvedValue([]);
-      const response = await handleJapaneseLintRequest({
-        text: "あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH),
-        format: "text",
-        ext: ".txt"
-      });
-
-      expect(response).toEqual({ ok: true, diagnostics: [], truncated: false });
-      expect(lintSpy).toHaveBeenCalledTimes(1);
-    });
-
-    it("truncates a result over the cap, keeping the earliest diagnostics", async () => {
-      const many = Array.from(
-        { length: JAPANESE_LINT_MAX_RESULT_COUNT + 500 },
-        (_, index) => ({
-          ruleId: "no-doubled-joshi",
-          severity: "error" as const,
-          message: "m",
-          line: 1,
-          column: 1,
-          index
-        })
-      );
-
-      vi.spyOn(engine, "lintJapanese").mockResolvedValue(many);
-
-      const response = await handleJapaneseLintRequest({
-        text: "私は彼は好きだ。",
-        format: "text",
-        ext: ".txt"
-      });
-
-      expect(response.ok).toBe(true);
-      if (response.ok) {
-        expect(response.truncated).toBe(true);
-        expect(response.diagnostics).toHaveLength(JAPANESE_LINT_MAX_RESULT_COUNT);
-        expect(response.diagnostics[0]?.index).toBe(0);
-        expect(response.diagnostics.at(-1)?.index).toBe(
-          JAPANESE_LINT_MAX_RESULT_COUNT - 1
-        );
-      }
-    });
-
-    it("does not flag a result exactly at the cap as truncated", async () => {
-      vi.spyOn(engine, "lintJapanese").mockResolvedValue(
-        Array.from({ length: JAPANESE_LINT_MAX_RESULT_COUNT }, (_, index) => ({
-          ruleId: "r",
-          severity: "warning" as const,
-          message: "m",
-          line: 1,
-          column: 1,
-          index
-        }))
-      );
-
-      const response = await handleJapaneseLintRequest({
-        text: "あ",
-        format: "text",
-        ext: ".txt"
-      });
-
-      expect(response.ok && response.truncated).toBe(false);
-    });
-
-    it("logs sizes, timing and counts - never the body text", async () => {
-      const logger = makeLogger();
-      const secret = "秘密の本文です。";
-      const body = secret + "\n二行目。";
-
-      await handleJapaneseLintRequest(
-        { text: body, format: "markdown", ext: ".markdown" },
-        logger
-      );
-      await handleJapaneseLintRequest(
-        {
-          text: "あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH + 1),
-          format: "text",
-          ext: ".txt"
-        },
-        logger
-      );
-
-      const events = logger.log.mock.calls.map((call) => call[0]);
-
-      expect(events.map((e) => e.event)).toEqual([
-        "japaneseLint.run.completed",
-        "japaneseLint.run.completed"
-      ]);
-      expect(events[0].details).toMatchObject({
-        result: "succeeded",
-        characterLength: body.length,
-        lineCount: 2,
-        extension: ".markdown"
-      });
-      expect(typeof events[0].details.durationMs).toBe("number");
-      expect(events[1].details).toMatchObject({
-        result: "ignored",
-        reason: "too_large"
-      });
-      expect(JSON.stringify(events)).not.toContain("秘密");
-    });
-
-    it("keeps working when the logger itself throws", async () => {
-      const logger = makeLogger();
-
-      logger.log.mockImplementation(() => {
-        throw new Error("sink down");
-      });
-
-      await expect(
-        handleJapaneseLintRequest(
-          { text: "私は彼は好きだ。", format: "text", ext: ".txt" },
-          logger
-        )
-      ).resolves.toMatchObject({ ok: true });
-    });
+    await service.release(); // idempotent
+    expect(await ruleIds(service, joshi)).toContain("no-doubled-joshi");
+    expect(state.hostsCreated).toBe(2);
+    expect(world.children).toHaveLength(2);
   });
 
-  describe("Application Settings rule switches (instant check)", () => {
-    const quiet = {
-      log: vi.fn()
-    } as unknown as Parameters<typeof handleJapaneseLintRequest>[1];
-    const joshi = {
-      text: "私は彼は好きだ。",
+  it("release() with nothing started does nothing", async () => {
+    const { service, state } = setup();
+
+    await service.release();
+    expect(state.hostsCreated).toBe(0);
+  });
+
+  it("a request in flight when the Linter is turned OFF settles safely", async () => {
+    const stuck = gate();
+    const { service, world } = setup({
+      lint: async (...args) => {
+        await stuck.opened;
+
+        return realLint(...args);
+      },
+      realDictionary
+    });
+    const pending = service.lint(joshi);
+
+    await vi.waitFor(() => expect(lintDocumentsReceived(world.children[0])).toBeGreaterThan(0));
+    await service.release();
+
+    await expect(pending).resolves.toEqual({ ok: false, reason: "lint-failed" });
+    stuck.release();
+  });
+});
+
+describe("Settings reach the Worker (#625 P1c)", () => {
+  it("a rule switched off is honored, and switching it back on applies to the next lint", async () => {
+    const { service, state, world } = setup();
+
+    expect(await ruleIds(service, joshi)).toContain("no-doubled-joshi");
+
+    state.settings = { rules: { "no-doubled-joshi": { enabled: false } } };
+    expect(await ruleIds(service, joshi)).not.toContain("no-doubled-joshi");
+
+    state.settings = undefined;
+    expect(await ruleIds(service, joshi)).toContain("no-doubled-joshi");
+
+    // Applied by updateConfig, without restarting the Worker.
+    expect(world.children).toHaveLength(1);
+    expect(
+      world.children[0]?.received.filter((m) =>
+        JSON.stringify(m).includes('"updateConfig"')
+      )
+    ).toHaveLength(2);
+  });
+
+  it("does not send updateConfig when the settings did not change", async () => {
+    const { service, world } = setup();
+
+    await service.lint(joshi);
+    await service.lint(joshi);
+
+    expect(
+      world.children[0]?.received.filter((m) =>
+        JSON.stringify(m).includes('"updateConfig"')
+      )
+    ).toHaveLength(0);
+  });
+
+  it("keeps sentence-length off by default and applies its threshold once on", async () => {
+    const { service, state } = setup();
+    const long = { text: `${"あ".repeat(60)}。`, format: "markdown", ext: ".md" };
+
+    expect(await ruleIds(service, long)).not.toContain("sentence-length");
+
+    state.settings = { rules: { "sentence-length": { enabled: true, options: { max: 40 } } } };
+    expect(await ruleIds(service, long)).toContain("sentence-length");
+  });
+
+  it("applies the max-ten threshold from Settings", async () => {
+    const { service, state } = setup();
+    const commas = {
+      text: "私は、朝に、昼に、夜に、犬と散歩をした。",
       format: "text",
       ext: ".txt"
-    } as const;
-    const ruleIds = async (
-      request: unknown,
-      settings: unknown
-    ): Promise<string[]> => {
-      const response = await handleJapaneseLintRequest(
-        request,
-        quiet,
-        async () => settings
-      );
-
-      return response.ok ? response.diagnostics.map((d) => d.ruleId) : [];
     };
 
-    afterEach(() => {
-      vi.restoreAllMocks();
+    expect(await ruleIds(service, commas)).not.toContain("max-ten");
+
+    state.settings = { rules: { "max-ten": { options: { max: 3 } } } };
+    expect(await ruleIds(service, commas)).toContain("max-ten");
+  });
+
+  it("the first start inits the Worker with the settings just read", async () => {
+    const { service, world } = setup(undefined, {
+      rules: { "no-doubled-joshi": { enabled: false } }
     });
 
-    it("reflects a rule switched off in Settings", async () => {
-      expect(await ruleIds(joshi, undefined)).toContain("no-doubled-joshi");
-      expect(
-        await ruleIds(joshi, { rules: { "no-doubled-joshi": { enabled: false } } })
-      ).not.toContain("no-doubled-joshi");
+    expect(await ruleIds(service, joshi)).not.toContain("no-doubled-joshi");
+    expect(world.children).toHaveLength(1);
+  });
+
+  it("with every rule off answers an empty ok without starting a Worker", async () => {
+    const off = {
+      rules: Object.fromEntries(
+        [
+          "max-ten",
+          "no-doubled-conjunctive-particle-ga",
+          "no-doubled-conjunction",
+          "no-double-negative-ja",
+          "no-doubled-joshi",
+          "sentence-length",
+          "no-dropping-the-ra",
+          "no-mix-dearu-desumasu",
+          "no-nfd",
+          "no-invalid-control-character",
+          "no-zero-width-spaces",
+          "no-kangxi-radicals"
+        ].map((id) => [id, { enabled: false }])
+      )
+    };
+    const { service, world, state } = setup(undefined, off);
+
+    expect(await service.lint(joshi)).toEqual({
+      ok: true,
+      diagnostics: [],
+      truncated: false
     });
+    expect(state.hostsCreated).toBe(0);
+    expect(world.children).toHaveLength(0);
+  });
 
-    it("keeps sentence-length off by default and applies its threshold once on", async () => {
-      const longSentence = {
-        text: `${"あ".repeat(60)}。`,
-        format: "markdown",
-        ext: ".md"
-      } as const;
+  it("falls back to the defaults when the stored settings cannot be read", async () => {
+    const world = createFakeWorkerWorld({ lint: realLint, realDictionary });
+    const service = createInstantJapaneseLintService({
+      createHost: (getSettings) => {
+        const host = createJapaneseLintHost({
+          ...world.deps,
+          getSettings,
+          logger: { log: () => undefined }
+        });
 
-      expect(await ruleIds(longSentence, undefined)).not.toContain(
-        "sentence-length"
-      );
-      expect(
-        await ruleIds(longSentence, {
-          rules: { "sentence-length": { enabled: true } }
-        })
-      ).not.toContain("sentence-length");
-      expect(
-        await ruleIds(longSentence, {
-          rules: { "sentence-length": { enabled: true, options: { max: 40 } } }
-        })
-      ).toContain("sentence-length");
-    });
+        hosts.push(host);
 
-    it("applies the max-ten threshold from Settings", async () => {
-      const commas = {
-        text: "私は、朝に、昼に、夜に、犬と散歩をした。",
-        format: "text",
-        ext: ".txt"
-      } as const;
-
-      expect(await ruleIds(commas, undefined)).not.toContain("max-ten");
-      expect(
-        await ruleIds(commas, { rules: { "max-ten": { options: { max: 3 } } } })
-      ).toContain("max-ten");
-    });
-
-    it("re-reads the settings on every request, so a change applies to the next lint", async () => {
-      let stored: unknown = undefined;
-      const lintOnce = async (): Promise<string[]> => {
-        const response = await handleJapaneseLintRequest(
-          joshi,
-          quiet,
-          async () => stored
-        );
-
-        return response.ok ? response.diagnostics.map((d) => d.ruleId) : [];
-      };
-
-      expect(await lintOnce()).toContain("no-doubled-joshi");
-      stored = { rules: { "no-doubled-joshi": { enabled: false } } };
-      expect(await lintOnce()).not.toContain("no-doubled-joshi");
-    });
-
-    it("with every rule off, answers an empty ok without touching the dictionary or textlint", async () => {
-      const lintSpy = vi.spyOn(engine, "lintJapanese");
-      const emptyAppPath = mkdtempSync(path.join(os.tmpdir(), "pergamum-nodict-"));
-
-      // A missing dictionary would normally fail the request; with nothing to
-      // run it must not even be looked at.
-      electronMock.appPath.value = emptyAppPath;
-
-      try {
-        const allOff = {
-          rules: Object.fromEntries(
-            [
-              "max-ten",
-              "no-doubled-conjunctive-particle-ga",
-              "no-doubled-conjunction",
-              "no-double-negative-ja",
-              "no-doubled-joshi",
-              "sentence-length",
-              "no-dropping-the-ra",
-              "no-mix-dearu-desumasu",
-              "no-nfd",
-              "no-invalid-control-character",
-              "no-zero-width-spaces",
-              "no-kangxi-radicals"
-            ].map((id) => [id, { enabled: false }])
-          )
-        };
-
-        expect(
-          await handleJapaneseLintRequest(joshi, quiet, async () => allOff)
-        ).toEqual({ ok: true, diagnostics: [], truncated: false });
-        expect(lintSpy).not.toHaveBeenCalled();
-      } finally {
-        rmSync(emptyAppPath, { recursive: true, force: true });
-      }
-    });
-
-    it("falls back to the defaults when the stored settings cannot be read", async () => {
-      const response = await handleJapaneseLintRequest(joshi, quiet, async () => {
+        return host;
+      },
+      settingsProvider: async () => {
         throw new Error("settings.json unreadable");
-      });
-
-      expect(response.ok && response.diagnostics.map((d) => d.ruleId)).toContain(
-        "no-doubled-joshi"
-      );
+      },
+      logger: { log: () => undefined }
     });
 
-    it("hands the resolved rules (with options) to the engine", async () => {
-      const lintSpy = vi.spyOn(engine, "lintJapanese").mockResolvedValue([]);
+    expect(await ruleIds(service, joshi)).toContain("no-doubled-joshi");
+  });
+});
 
-      await handleJapaneseLintRequest(joshi, quiet, async () => ({
-        rules: { "max-ten": { options: { max: 9 } } }
-      }));
+describe("existing behavior is preserved (#625 P1c)", () => {
+  it("answers too-large without ever starting the Worker", async () => {
+    const { service, world, state } = setup();
 
-      const options = lintSpy.mock.calls[0]?.[1];
-      const maxTen = options?.rules?.find((rule) => rule.id === "max-ten");
+    for (const [format, ext] of [
+      ["markdown", ".md"],
+      ["markdown", ".markdown"],
+      ["text", ".txt"]
+    ] as const) {
+      expect(
+        await service.lint({
+          text: "あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH + 1),
+          format,
+          ext
+        })
+      ).toEqual({ ok: false, reason: "too-large" });
+    }
 
-      expect(maxTen?.options).toEqual({ max: 9 });
-      expect(options?.rules?.some((rule) => rule.id === "sentence-length")).toBe(
-        false
-      );
+    expect(state.hostsCreated).toBe(0);
+    expect(world.children).toHaveLength(0);
+  });
+
+  it("still lints a document exactly at the limit", async () => {
+    const { service, world } = setup({
+      lint: async () => [],
+      realDictionary
     });
+    const response = await service.lint({
+      text: "あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH),
+      format: "text",
+      ext: ".txt"
+    });
+
+    expect(response).toEqual({ ok: true, diagnostics: [], truncated: false });
+    expect(world.children).toHaveLength(1);
+  });
+
+  it("truncates a result over the cap, keeping the earliest diagnostics", async () => {
+    const many = Array.from({ length: JAPANESE_LINT_MAX_RESULT_COUNT + 500 }, (_, index) => ({
+      ruleId: "no-doubled-joshi",
+      severity: "error" as const,
+      message: "m",
+      line: 1,
+      column: 1,
+      index
+    }));
+    const { service } = setup({ lint: async () => many, realDictionary });
+    const response = await service.lint(joshi);
+
+    expect(response.ok).toBe(true);
+    if (response.ok) {
+      expect(response.truncated).toBe(true);
+      expect(response.diagnostics).toHaveLength(JAPANESE_LINT_MAX_RESULT_COUNT);
+      expect(response.diagnostics[0]?.index).toBe(0);
+      expect(response.diagnostics.at(-1)?.index).toBe(JAPANESE_LINT_MAX_RESULT_COUNT - 1);
+    }
+  });
+
+  it("does not flag a result exactly at the cap as truncated", async () => {
+    const exact = Array.from({ length: JAPANESE_LINT_MAX_RESULT_COUNT }, (_, index) => ({
+      ruleId: "r",
+      severity: "warning" as const,
+      message: "m",
+      line: 1,
+      column: 1,
+      index
+    }));
+    const { service } = setup({ lint: async () => exact, realDictionary });
+    const response = await service.lint(joshi);
+
+    expect(response.ok && response.truncated).toBe(false);
+  });
+});
+
+describe("superseded requests (#625 P1c)", () => {
+  it("cancels a job that is still queued when a newer request arrives, and never a running one", async () => {
+    const stuck = gate();
+    const seen: string[] = [];
+    const { service, world } = setup({
+      lint: async (source, options) => {
+        seen.push(source);
+
+        if (source === "A。") {
+          await stuck.opened;
+        }
+
+        return realLint(source, options);
+      },
+      realDictionary
+    });
+    const a = service.lint({ text: "A。", format: "text", ext: ".txt" });
+
+    await vi.waitFor(() => expect(seen).toEqual(["A。"]));
+
+    const b = service.lint({ text: "B。", format: "text", ext: ".txt" });
+
+    await vi.waitFor(() =>
+      expect(
+        world.children[0]?.received.filter((m) => JSON.stringify(m).includes('"lintDocument"'))
+      ).toHaveLength(2)
+    );
+
+    const c = service.lint({ text: "C。", format: "text", ext: ".txt" });
+
+    // B (queued behind running A) is superseded by C; A keeps running.
+    expect(await b).toEqual({ ok: false, reason: "lint-failed" });
+    await vi.waitFor(() => expect(world.children[0]?.received.some((m) => (m as { type?: string }).type === "cancel")).toBe(true));
+    stuck.release();
+    expect((await a).ok).toBe(true);
+    expect((await c).ok).toBe(true);
+    expect(seen).not.toContain("B。");
+    expect(world.children).toHaveLength(1);
+  });
+});
+
+describe("logging privacy on the instant Worker path (#625 P1c)", () => {
+  const runtime = {
+    appVersion: "0.1.0",
+    platform: "win32",
+    arch: "x64",
+    locale: "ja",
+    electronVersion: "43.4.0",
+    nodeVersion: "24.19.0",
+    debugMode: true
+  } as const;
+  const written = (events: Logged[]): string =>
+    JSON.stringify(
+      events.map((event) => ({
+        event: event.event,
+        details: sanitizeDebugLogDetails(event.details ?? {}, {
+          runtime,
+          isKnownProjectRef: () => false,
+          isKnownDocumentRef: () => false
+        } as never)
+      }))
+    );
+
+  it("logs counts, ids and flags only - never text, names, paths or raw errors", async () => {
+    const hostile = new TypeError(`${secretText} ${secretPath}`);
+
+    hostile.stack = `TypeError: ${secretText}\n    at leak (${secretPath}:1:1)`;
+
+    const ok = setup();
+
+    await ok.service.lint({ text: `${secretText}\n私は彼は好きだ。`, format: "markdown", ext: ".md" });
+
+    const failing = setup({
+      lint: async () => {
+        throw hostile;
+      },
+      realDictionary
+    });
+
+    await failing.service.lint({ text: secretText, format: "text", ext: ".txt" });
+
+    const okLog = written(ok.events);
+    const failLog = written(failing.events);
+
+    expect(okLog).toContain('"linterMode":"instant-worker"');
+    expect(okLog).toContain('"lintFormat":"markdown"');
+    expect(failLog).toContain('"failureReason":"lint-failed"');
+
+    const run = ok.events.find((e) => e.event === "japaneseLint.run.completed");
+
+    expect(run?.details).toMatchObject({
+      result: "succeeded",
+      characterLength: secretText.length + 1 + "私は彼は好きだ。".length,
+      lineCount: 2,
+      extension: ".md"
+    });
+    expect(Array.isArray(run?.details?.enabledRuleIds)).toBe(true);
+
+    for (const log of [okLog, failLog]) {
+      for (const forbidden of ["秘密", secretFile, "tanaka_taro", "Documents", "at leak"]) {
+        expect(log, forbidden).not.toContain(forbidden);
+      }
+    }
+  });
+
+  it("keeps working when the logger itself throws", async () => {
+    const world = createFakeWorkerWorld({ lint: realLint, realDictionary });
+    const throwing = {
+      log: () => {
+        throw new Error("sink down");
+      }
+    };
+    const service = createInstantJapaneseLintService({
+      createHost: (getSettings) => {
+        const host = createJapaneseLintHost({
+          ...world.deps,
+          getSettings,
+          logger: throwing
+        });
+
+        hosts.push(host);
+
+        return host;
+      },
+      settingsProvider: async () => undefined,
+      logger: throwing
+    });
+
+    expect((await service.lint(joshi)).ok).toBe(true);
   });
 });
