@@ -37,6 +37,8 @@ export function createProjectSettingsCommands(
       title: titles.open,
       description: titles.openDescription,
       when: { key: "project.isOpen" },
+      category: "file",
+      paletteOrder: 100,
       execute: () => {
         controller.openProjectSettings();
       }

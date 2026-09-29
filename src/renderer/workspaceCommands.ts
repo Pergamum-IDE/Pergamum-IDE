@@ -105,6 +105,8 @@ export function createWorkspaceCommands(
       id: workspaceCommandIds.toggleFiles,
       title: titles.toggleFiles,
       description: titles.toggleFilesDescription,
+      category: "navigation",
+      paletteOrder: 20,
       execute: () => {
         controller.focusSidebarMode("files");
       }
@@ -113,6 +115,8 @@ export function createWorkspaceCommands(
       id: workspaceCommandIds.focusSearch,
       title: titles.focusSearch,
       description: titles.focusSearchDescription,
+      category: "search",
+      paletteOrder: 10,
       execute: () => {
         controller.focusSidebarMode("search");
       }
@@ -121,6 +125,8 @@ export function createWorkspaceCommands(
       id: workspaceCommandIds.focusGlossary,
       title: titles.focusGlossary,
       description: titles.focusGlossaryDescription,
+      category: "navigation",
+      paletteOrder: 30,
       execute: () => {
         controller.focusSidebarMode("glossary");
       }
@@ -129,6 +135,8 @@ export function createWorkspaceCommands(
       id: workspaceCommandIds.focusDocumentMap,
       title: titles.focusDocumentMap,
       description: titles.focusDocumentMapDescription,
+      category: "navigation",
+      paletteOrder: 40,
       execute: () => {
         controller.focusSidebarMode("documentMap");
       }
@@ -137,6 +145,8 @@ export function createWorkspaceCommands(
       id: workspaceCommandIds.focusDocumentMetrics,
       title: titles.focusDocumentMetrics,
       description: titles.focusDocumentMetricsDescription,
+      category: "navigation",
+      paletteOrder: 50,
       execute: () => {
         controller.focusSidebarMode("documentMetrics");
       }
@@ -145,6 +155,8 @@ export function createWorkspaceCommands(
       id: workspaceCommandIds.openApplicationSettings,
       title: titles.openApplicationSettings,
       description: titles.openApplicationSettingsDescription,
+      category: "file",
+      paletteOrder: 110,
       execute: () => {
         controller.openApplicationSettings();
       }
@@ -154,6 +166,8 @@ export function createWorkspaceCommands(
       title: titles.showResumeHub,
       description: titles.showResumeHubDescription,
       when: { key: "project.isOpen" },
+      category: "help",
+      paletteOrder: 10,
       execute: () => {
         if (!controller.canShowResumeHub()) {
           return;

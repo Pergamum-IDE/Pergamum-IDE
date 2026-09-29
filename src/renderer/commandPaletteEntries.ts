@@ -3,6 +3,8 @@ import type {
   CommandDisabledReason
 } from "../shared/commandEnablement";
 import type { CommandId, CommandRegistry } from "../shared/commandRegistry";
+import type { CommandCategory } from "../shared/commandCategory";
+import { resolveCommandCategoryOrder } from "../shared/commandCategory";
 import type { Translate, TranslationKey } from "../shared/i18n";
 
 export type CommandPaletteMatchField =
@@ -32,6 +34,8 @@ export interface CommandPaletteEntry {
   readonly title: string;
   readonly description?: string;
   readonly canonicalLabel?: string;
+  readonly category?: CommandCategory;
+  readonly paletteOrder?: number;
   readonly enabled: boolean;
   readonly disabledReason?: CommandDisabledReason | null;
 }
@@ -79,6 +83,8 @@ export function listCommandPaletteEntries(
         title: command.title,
         description: command.description,
         canonicalLabel: command.canonicalLabel,
+        category: command.category ?? command.palette?.category,
+        paletteOrder: command.paletteOrder ?? command.palette?.order,
         enabled: enablement.enabled,
         disabledReason: enablement.disabledReason
       };
@@ -275,6 +281,102 @@ function commandPaletteFilteredEntry(
   };
 }
 
+export function compareCommandPaletteEntriesDefault(
+  left: CommandPaletteEntry,
+  right: CommandPaletteEntry
+): number {
+  const categoryOrderDiff =
+    resolveCommandCategoryOrder(left.category) -
+    resolveCommandCategoryOrder(right.category);
+
+  if (categoryOrderDiff !== 0) {
+    return categoryOrderDiff;
+  }
+
+  const leftOrder = left.paletteOrder ?? Number.POSITIVE_INFINITY;
+  const rightOrder = right.paletteOrder ?? Number.POSITIVE_INFINITY;
+
+  if (leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+
+  const leftLabel = left.canonicalLabel ?? left.title;
+  const rightLabel = right.canonicalLabel ?? right.title;
+  const labelDiff = leftLabel.localeCompare(rightLabel, undefined, {
+    numeric: true,
+    sensitivity: "base"
+  });
+
+  if (labelDiff !== 0) {
+    return labelDiff;
+  }
+
+  return String(left.id).localeCompare(String(right.id));
+}
+
+export function calculateCommandPaletteMatchScore(
+  entry: CommandPaletteEntry,
+  matches: readonly CommandPaletteFieldMatch[],
+  needle: string
+): number {
+  if (needle.length === 0 || matches.length === 0) {
+    return 0;
+  }
+
+  let maxScore = 0;
+
+  for (const match of matches) {
+    const text = commandPaletteFieldText(entry, match.field);
+
+    if (!text) {
+      continue;
+    }
+
+    const lowered = text.toLowerCase();
+    let baseWeight = 100;
+
+    switch (match.field) {
+      case "title":
+      case "canonicalLabel":
+        baseWeight = 1000;
+        break;
+      case "description":
+        baseWeight = 300;
+        break;
+      case "commandId":
+        baseWeight = 200;
+        break;
+    }
+
+    let fieldScore = 0;
+
+    if (lowered === needle) {
+      fieldScore = baseWeight * 10;
+    } else if (lowered.startsWith(needle)) {
+      fieldScore = baseWeight * 5;
+    } else {
+      const index = lowered.indexOf(needle);
+
+      if (index !== -1) {
+        const isWordBoundary =
+          index === 0 || /\s|[._\-/]/.test(lowered[index - 1] ?? "");
+
+        if (isWordBoundary) {
+          fieldScore = baseWeight * 3;
+        } else {
+          fieldScore = baseWeight - Math.min(index * 5, baseWeight / 2);
+        }
+      }
+    }
+
+    if (fieldScore > maxScore) {
+      maxScore = fieldScore;
+    }
+  }
+
+  return maxScore;
+}
+
 export function filterCommandPaletteEntries(
   entries: readonly CommandPaletteEntry[],
   query: string
@@ -282,16 +384,33 @@ export function filterCommandPaletteEntries(
   const needle = query.trim().toLowerCase();
 
   if (needle.length === 0) {
-    return entries.map((entry) => commandPaletteFilteredEntry(entry, []));
+    const sorted = entries.slice().sort(compareCommandPaletteEntriesDefault);
+
+    return sorted.map((entry) => commandPaletteFilteredEntry(entry, []));
   }
 
-  return entries.flatMap((entry) => {
+  const matched = entries.flatMap((entry) => {
     const matches = commandPaletteEntryMatches(entry, needle);
 
-    return matches.length > 0
-      ? [commandPaletteFilteredEntry(entry, matches)]
-      : [];
+    if (matches.length === 0) {
+      return [];
+    }
+
+    const filtered = commandPaletteFilteredEntry(entry, matches);
+    const score = calculateCommandPaletteMatchScore(entry, matches, needle);
+
+    return [{ filtered, score }];
   });
+
+  matched.sort((left, right) => {
+    if (right.score !== left.score) {
+      return right.score - left.score;
+    }
+
+    return compareCommandPaletteEntriesDefault(left.filtered, right.filtered);
+  });
+
+  return matched.map((item) => item.filtered);
 }
 
 /**

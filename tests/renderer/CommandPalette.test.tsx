@@ -820,14 +820,18 @@ describe("CommandPalette highlighting and footer model", () => {
   const entries: CommandPaletteEntry[] = [
     {
       id: defineCommandId("test.command.save"),
-      title: "Save Document",
+      title: "Save Command Document",
       description: "Write the current editor to disk",
+      category: "file",
+      paletteOrder: 10,
       enabled: true
     },
     {
       id: defineCommandId("test.command.disabled"),
       title: "Disabled Command",
       description: "Disabled command description",
+      category: "file",
+      paletteOrder: 20,
       enabled: false
     }
   ];
@@ -868,11 +872,11 @@ describe("CommandPalette highlighting and footer model", () => {
 
     expect(result.primary).toEqual({
       field: "title",
-      text: "Save Document",
-      ranges: [{ start: 5, end: 13 }]
+      text: "Save Command Document",
+      ranges: [{ start: 13, end: 21 }]
     });
     expect(primaryMarkup).toContain(
-      'Save <mark class="commandPaletteMatch">Document</mark>'
+      'Save Command <mark class="commandPaletteMatch">Document</mark>'
     );
   });
 
