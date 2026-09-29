@@ -1669,6 +1669,10 @@ export function App(): JSX.Element {
   const canInsertRubyCommandRef = useRef<() => boolean>(() => false);
   const insertEmphasisMarkCommandRef = useRef<() => void>(() => undefined);
   const canInsertEmphasisMarkCommandRef = useRef<() => boolean>(() => false);
+  const indentCommandRef = useRef<() => void>(() => undefined);
+  const canIndentCommandRef = useRef<() => boolean>(() => false);
+  const outdentCommandRef = useRef<() => void>(() => undefined);
+  const canOutdentCommandRef = useRef<() => boolean>(() => false);
   const canOpenGlossaryEntryTabFromSelectionCommandRef = useRef<() => boolean>(
     () => false
   );
@@ -3896,6 +3900,10 @@ export function App(): JSX.Element {
         canInsertRuby: () => canInsertRubyCommandRef.current(),
         insertEmphasisMark: () => insertEmphasisMarkCommandRef.current(),
         canInsertEmphasisMark: () => canInsertEmphasisMarkCommandRef.current(),
+        indent: () => indentCommandRef.current(),
+        canIndent: () => canIndentCommandRef.current(),
+        outdent: () => outdentCommandRef.current(),
+        canOutdent: () => canOutdentCommandRef.current(),
         togglePreview: () => togglePreviewCommandRef.current(),
         canTogglePreview: () => canTogglePreviewCommandRef.current(),
         delegateNativeEditCommand: (commandId) =>
@@ -9735,6 +9743,18 @@ export function App(): JSX.Element {
     hasEditableTextLikeDocument && hasNonEmptyEditorSelectionForCommand();
   insertEmphasisMarkCommandRef.current = () => {
     handleOpenEmphasisDialogFromToolbar(null);
+  };
+  canIndentCommandRef.current = () =>
+    hasEditableTextLikeDocument &&
+    Boolean(paragraphIndentControllerRef.current?.canIndent?.());
+  indentCommandRef.current = () => {
+    handleIndent();
+  };
+  canOutdentCommandRef.current = () =>
+    hasEditableTextLikeDocument &&
+    Boolean(paragraphIndentControllerRef.current?.canOutdent?.());
+  outdentCommandRef.current = () => {
+    handleOutdent();
   };
   canOpenGlossaryEntryTabFromSelectionCommandRef.current = () =>
     canUseMarkdownToolbarCommands && hasNonEmptyEditorSelectionForCommand();

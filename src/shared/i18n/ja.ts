@@ -83,6 +83,12 @@ export const jaTranslations = {
   "command.editor.markdown.insertEmphasisMark": "傍点を挿入...",
   "command.editor.markdown.insertEmphasisMark.description":
     "選択したテキストに傍点（圏点）を挿入します。",
+  "command.editor.indent": "インデント",
+  "command.editor.indent.description":
+    "選択範囲またはカーソル行をインデントします。",
+  "command.editor.outdent": "アウトデント",
+  "command.editor.outdent.description":
+    "選択範囲またはカーソル行をアウトデントします。",
   "command.editor.preview.toggle": "プレビュー表示の切り替え",
   "command.editor.preview.toggle.description":
     "プレビュー画面の表示・非表示を切り替えます。",
