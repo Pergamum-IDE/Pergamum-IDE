@@ -17,10 +17,7 @@ import type {
   JapaneseLintResponse,
   JapaneseLintSource
 } from "../../../src/shared/japaneseLint";
-import {
-  JAPANESE_LINT_MAX_RESULT_COUNT,
-  JAPANESE_LINT_MAX_SOURCE_LENGTH
-} from "../../../src/shared/japaneseLint";
+import { JAPANESE_LINT_MAX_RESULT_COUNT } from "../../../src/shared/japaneseLint";
 import {
   JAPANESE_LINT_DEBOUNCE_MS,
   type JapaneseLintNotice,
@@ -370,78 +367,32 @@ describe("Japanese lint gutter driver (#625)", () => {
   });
 
   describe("large documents and result caps (#625 freeze remediation)", () => {
-    const bigDoc = "あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH + 1);
+    // The 50,000-character limit is gone: the Worker keeps Main free.
+    const bigDoc = "あ".repeat(50_001);
 
-    it("never sends an oversized document over IPC, and tells the user once", async () => {
+    it("sends a document over 50,000 characters over IPC and shows its markers", async () => {
+      lint.mockResolvedValue({
+        ok: true,
+        diagnostics: [diagnostic()],
+        truncated: false
+      });
       mount(bigDoc);
       source = { format: "markdown", ext: ".md" };
       refreshJapaneseLint(view);
       await settle(0);
 
-      expect(lint).not.toHaveBeenCalled();
-      expect(markers()).toEqual([]);
-      expect(notices).toEqual(["too-large"]);
-
-      // A debounced re-lint of the same too-large document does not repeat it.
-      view.dispatch({ changes: { from: 0, insert: "い" } });
-      await settle(JAPANESE_LINT_DEBOUNCE_MS + 10);
-
-      expect(lint).not.toHaveBeenCalled();
-      expect(notices).toEqual(["too-large"]);
-    });
-
-    it("lints a document exactly at the limit", async () => {
-      mount("あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH));
-      source = { format: "text", ext: ".txt" };
-      refreshJapaneseLint(view);
-      await settle(0);
-
       expect(lint).toHaveBeenCalledTimes(1);
+      expect(lint.mock.calls[0]?.[0].text).toHaveLength(50_001);
+      expect(markers()).toHaveLength(1);
       expect(notices).toEqual([]);
     });
 
-    it("clears existing markers when the document grows past the limit", async () => {
-      lint.mockResolvedValueOnce({
-        ok: true,
-        diagnostics: [diagnostic()],
-        truncated: false
-      });
-      mount("私は彼は好きだ。");
-      source = { format: "text", ext: ".txt" };
-      refreshJapaneseLint(view);
-      await settle(0);
-      expect(markers()).toHaveLength(1);
+    it("a slow long-document result is discarded after OFF", async () => {
+      let resolveLint!: (response: JapaneseLintResponse) => void;
 
-      view.dispatch({
-        changes: { from: 0, insert: "あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH) }
-      });
-      await settle(JAPANESE_LINT_DEBOUNCE_MS + 10);
-
-      expect(markers()).toEqual([]);
-      expect(notices).toEqual(["too-large"]);
-    });
-
-    it("clears markers and notifies when the main process answers too-large", async () => {
-      lint.mockResolvedValueOnce({
-        ok: true,
-        diagnostics: [diagnostic()],
-        truncated: false
-      });
-      mount("私は彼は好きだ。");
-      source = { format: "text", ext: ".txt" };
-      refreshJapaneseLint(view);
-      await settle(0);
-      expect(markers()).toHaveLength(1);
-
-      lint.mockResolvedValue({ ok: false, reason: "too-large" });
-      refreshJapaneseLint(view);
-      await settle(0);
-
-      expect(markers()).toEqual([]);
-      expect(notices).toEqual(["too-large"]);
-    });
-
-    it("re-arms the notice after the linter is turned OFF and ON again", async () => {
+      lint.mockImplementationOnce(
+        () => new Promise<JapaneseLintResponse>((resolve) => (resolveLint = resolve))
+      );
       mount(bigDoc);
       source = { format: "text", ext: ".txt" };
       refreshJapaneseLint(view);
@@ -449,11 +400,47 @@ describe("Japanese lint gutter driver (#625)", () => {
       source = null;
       refreshJapaneseLint(view);
       await settle(0);
+      resolveLint({ ok: true, diagnostics: [diagnostic()], truncated: false });
+      await settle(0);
+
+      expect(markers()).toEqual([]);
+    });
+
+    it("a slow long-document result is discarded after an edit (stale token)", async () => {
+      let resolveLint!: (response: JapaneseLintResponse) => void;
+
+      lint.mockImplementationOnce(
+        () => new Promise<JapaneseLintResponse>((resolve) => (resolveLint = resolve))
+      );
+      mount(bigDoc);
       source = { format: "text", ext: ".txt" };
       refreshJapaneseLint(view);
       await settle(0);
+      view.dispatch({ changes: { from: 0, insert: "い" } });
+      resolveLint({ ok: true, diagnostics: [diagnostic()], truncated: false });
+      await settle(0);
 
-      expect(notices).toEqual(["too-large", "too-large"]);
+      expect(markers()).toEqual([]);
+    });
+
+    it("a failed long-document lint clears the markers and shows no notice", async () => {
+      lint.mockResolvedValueOnce({
+        ok: true,
+        diagnostics: [diagnostic()],
+        truncated: false
+      });
+      mount(bigDoc);
+      source = { format: "text", ext: ".txt" };
+      refreshJapaneseLint(view);
+      await settle(0);
+      expect(markers()).toHaveLength(1);
+
+      lint.mockResolvedValue({ ok: false, reason: "lint-failed" });
+      refreshJapaneseLint(view);
+      await settle(0);
+
+      expect(markers()).toEqual([]);
+      expect(notices).toEqual([]);
     });
 
     it("builds markers for a truncated, maximum-size result without failing", async () => {

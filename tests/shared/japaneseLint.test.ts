@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   JAPANESE_LINT_MAX_RESULT_COUNT,
-  JAPANESE_LINT_MAX_SOURCE_LENGTH,
-  isJapaneseLintSourceTooLarge,
+  decideJapaneseLintToggle,
   japaneseLintSourceForPath,
   parseJapaneseLintRequest
 } from "../../src/shared/japaneseLint";
@@ -43,7 +42,7 @@ describe("parseJapaneseLintRequest (#625)", () => {
   it("drops unknown extra fields and leaves the size check to the handler", () => {
     expect(
       parseJapaneseLintRequest({
-        text: "a".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH + 1),
+        text: "a".repeat(500_000),
         format: "text",
         ext: ".txt"
       })
@@ -92,20 +91,20 @@ describe("japaneseLintSourceForPath (#625)", () => {
   });
 });
 
-describe("Japanese lint size limits (#625)", () => {
-  it("skips documents longer than the source limit (boundary is inclusive)", () => {
-    expect(isJapaneseLintSourceTooLarge(0)).toBe(false);
-    expect(isJapaneseLintSourceTooLarge(JAPANESE_LINT_MAX_SOURCE_LENGTH)).toBe(
-      false
-    );
-    expect(
-      isJapaneseLintSourceTooLarge(JAPANESE_LINT_MAX_SOURCE_LENGTH + 1)
-    ).toBe(true);
+describe("Japanese lint result cap (#625)", () => {
+  it("keeps the result cap; there is no source length limit any more", () => {
+    expect(JAPANESE_LINT_MAX_RESULT_COUNT).toBe(1_000);
   });
 
-  it("keeps the limits at values measured to be safe for the Main Process", () => {
-    // ~1s of textlint at 50k chars; 200k chars measured ~9s (frozen window).
-    expect(JAPANESE_LINT_MAX_SOURCE_LENGTH).toBeLessThanOrEqual(100_000);
-    expect(JAPANESE_LINT_MAX_RESULT_COUNT).toBeLessThanOrEqual(1_000);
+  it("the toolbar toggle turns ON for any document and OFF when active", () => {
+    expect(
+      decideJapaneseLintToggle({ canUse: true, isActive: false })
+    ).toBe("turn-on");
+    expect(decideJapaneseLintToggle({ canUse: true, isActive: true })).toBe(
+      "turn-off"
+    );
+    expect(
+      decideJapaneseLintToggle({ canUse: false, isActive: false })
+    ).toBe("ignore");
   });
 });

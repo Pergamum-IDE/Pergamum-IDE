@@ -147,7 +147,6 @@ import {
   decideJapaneseLintToggle,
   japaneseLintSourceForPath
 } from "../shared/japaneseLint";
-import { createJapaneseLintTooLargeDialogOptions } from "./japaneseLint/japaneseLintDialog";
 import {
   resolveJapaneseLintDebounceMs,
   resolveJapaneseLintSettings
@@ -3093,25 +3092,18 @@ export function App(): JSX.Element {
     );
   }, [isEditorAreaSpecialTabActive, currentEditor]);
   const canUseJapaneseLint = japaneseLintDocumentSource !== null;
-  // #625: an oversized document never turns the instant check ON: no IPC, no
-  // lint, an Information dialog instead (the Main Process keeps its own
-  // too-large guard as a backstop).
+  // #625: the instant check runs in the Worker process, so a document of any
+  // length may be turned ON.
   const handleToggleJapaneseLint = () => {
     const decision = decideJapaneseLintToggle({
       canUse: canUseJapaneseLint,
-      isActive: isJapaneseLintActive,
-      documentLength:
-        currentEditor?.kind === "markdown"
-          ? currentEditor.document.content.length
-          : 0
+      isActive: isJapaneseLintActive
     });
 
     if (decision === "turn-on") {
       setIsJapaneseLintActive(true);
     } else if (decision === "turn-off") {
       setIsJapaneseLintActive(false);
-    } else if (decision === "refuse-too-large") {
-      showJapaneseLintTooLargeDialog();
     }
   };
   // #531: shared enable gate for the Ruby / Emphasis Mark toolbar buttons —
@@ -3556,30 +3548,9 @@ export function App(): JSX.Element {
     [emphasisMarkDialogState, notifyEmphasisMarkNoSelection]
   );
 
-  // #625: the instant Japanese check cannot run on a document this long.
-  // Information dialog with OK only (never a toast).
-  function showJapaneseLintTooLargeDialog(): void {
-    void confirmDialog(createJapaneseLintTooLargeDialogOptions(translate)).catch((error) => {
-      if (
-        error instanceof AppDialogError &&
-        error.kind === "dialogAlreadyOpen"
-      ) {
-        return;
-      }
-    });
-  }
-
-  // #625: a lint pass that could not show everything. A too-large document
-  // (e.g. it grew past the limit while the check was ON, or a big tab was
-  // opened) switches the check OFF and explains why in a dialog; a merely
-  // truncated result stays a light toast.
-  function notifyJapaneseLint(notice: "too-large" | "truncated"): void {
-    if (notice === "too-large") {
-      setIsJapaneseLintActive(false);
-      showJapaneseLintTooLargeDialog();
-
-      return;
-    }
+  // #625: a lint pass whose result was cut at the cap stays a light toast.
+  function notifyJapaneseLint(notice: "truncated"): void {
+    void notice;
 
     notificationController.notify({
       message: translate("japaneseLint.toast.truncated")

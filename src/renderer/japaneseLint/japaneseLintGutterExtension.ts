@@ -13,10 +13,7 @@ import {
   gutter,
   type ViewUpdate
 } from "@codemirror/view";
-import {
-  JAPANESE_LINT_MAX_RESULT_COUNT,
-  isJapaneseLintSourceTooLarge
-} from "../../shared/japaneseLint";
+import { JAPANESE_LINT_MAX_RESULT_COUNT } from "../../shared/japaneseLint";
 import {
   durationSincePerformanceMark,
   logRendererDebugEvent
@@ -191,9 +188,9 @@ const japaneseLintMarkersField = StateField.define<RangeSet<GutterMarker>>({
 
 /**
  * A user-visible note about a lint pass that could not show everything:
- * the document is too large to lint at all, or the result was cut.
+ * the result was cut at the result cap.
  */
-export type JapaneseLintNotice = "too-large" | "truncated";
+export type JapaneseLintNotice = "truncated";
 
 export interface JapaneseLintDriverConfig {
   /**
@@ -346,25 +343,6 @@ class JapaneseLintDriver {
     const doc: Text = this.view.state.doc;
     const token = ++this.token;
 
-    // Renderer-side guard: never even send a novel-sized text over IPC (the
-    // Main Process would only refuse it).
-    if (isJapaneseLintSourceTooLarge(doc.length)) {
-      logRendererDebugEvent({
-        level: "debug",
-        event: "japaneseLint.request.completed",
-        details: {
-          result: "ignored",
-          reason: "too_large",
-          characterLength: doc.length,
-          lineCount: doc.lines
-        }
-      });
-      this.clearMarkers();
-      this.notify(config, "too-large");
-
-      return;
-    }
-
     let response: JapaneseLintResponse;
     const requestStartedAt = performance.now();
 
@@ -390,20 +368,14 @@ class JapaneseLintDriver {
       event: "japaneseLint.request.completed",
       details: {
         durationMs: durationSincePerformanceMark(requestStartedAt),
-        result: response.ok
-          ? "succeeded"
-          : response.reason === "too-large"
-            ? "ignored"
-            : "failed",
+        result: response.ok ? "succeeded" : "failed",
         ...(response.ok
           ? { count: response.diagnostics.length }
           : {
               reason:
-                response.reason === "too-large"
-                  ? "too_large"
-                  : response.reason === "invalid-request"
-                    ? "validation_failed"
-                    : "lint_failed"
+                response.reason === "invalid-request"
+                  ? "validation_failed"
+                  : "lint_failed"
             })
       }
     });
@@ -420,10 +392,10 @@ class JapaneseLintDriver {
     }
 
     if (!response.ok) {
-      // A failed / skipped lint shows no diagnostics rather than markers that
+      // A failed lint shows no diagnostics rather than markers that
       // may no longer match the text.
       this.clearMarkers();
-      this.notify(config, response.reason === "too-large" ? "too-large" : null);
+      this.notify(config, null);
 
       return;
     }

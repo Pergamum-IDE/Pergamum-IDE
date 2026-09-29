@@ -47,25 +47,11 @@ export type JapaneseLintResponse =
     }
   | {
       readonly ok: false;
-      readonly reason: "invalid-request" | "lint-failed" | "too-large";
+      readonly reason: "invalid-request" | "lint-failed";
     };
-
-/**
- * Longest text (UTF-16 units) the Japanese linter will run on. textlint's
- * cost grows faster than linearly and it runs on the Main Process, which must
- * keep pumping window messages: measured in Electron's Node, ~50k chars take
- * ~1s, 100k ~2.8s, 200k ~9s, 400k ~57s (a frozen "Not responding" window).
- * Larger documents are skipped, not linted.
- */
-export const JAPANESE_LINT_MAX_SOURCE_LENGTH = 50_000;
 
 /** Most diagnostics returned for one request; the rest are cut (truncated). */
 export const JAPANESE_LINT_MAX_RESULT_COUNT = 1_000;
-
-/** True when a document of this length is too large for the Japanese linter. */
-export function isJapaneseLintSourceTooLarge(length: number): boolean {
-  return length > JAPANESE_LINT_MAX_SOURCE_LENGTH;
-}
 
 const allowedExtensionsByFormat: Readonly<
   Record<JapaneseLintFormat, readonly JapaneseLintExtension[]>
@@ -77,8 +63,8 @@ const allowedExtensionsByFormat: Readonly<
 /**
  * Validates an untrusted request (the Renderer is not trusted, ADR-0006
  * S-15 style). Returns null when the shape or the format/ext pairing is
- * invalid. Size is deliberately NOT checked here: an oversized text is a
- * well-formed request that the handler answers with `too-large`.
+ * invalid. Size is deliberately NOT checked: the lint runs in the Worker
+ * process, so a long text never blocks the Main Process.
  */
 export function parseJapaneseLintRequest(
   value: unknown
@@ -137,8 +123,6 @@ export function japaneseLintSourceForPath(
 export type JapaneseLintToggleDecision =
   | "turn-off"
   | "turn-on"
-  /** Turning ON is refused: the document is too long (show the dialog). */
-  | "refuse-too-large"
   /** The active surface does not support the check. */
   | "ignore";
 
@@ -149,7 +133,6 @@ export type JapaneseLintToggleDecision =
 export function decideJapaneseLintToggle(input: {
   readonly canUse: boolean;
   readonly isActive: boolean;
-  readonly documentLength: number;
 }): JapaneseLintToggleDecision {
   if (!input.canUse) {
     return "ignore";
@@ -159,7 +142,5 @@ export function decideJapaneseLintToggle(input: {
     return "turn-off";
   }
 
-  return isJapaneseLintSourceTooLarge(input.documentLength)
-    ? "refuse-too-large"
-    : "turn-on";
+  return "turn-on";
 }

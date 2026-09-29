@@ -2017,8 +2017,6 @@ export const jaTranslations = {
   "japaneseLint.rule.maxTen.option.max.description": "一文に含められる読点の最大数です。これを超えると検出します。",
   "japaneseLint.rule.sentenceLength.option.max.label": "一文あたりの文字数",
   "japaneseLint.rule.sentenceLength.option.max.description": "一文の最大文字数です。これを超えると検出します。",
-  "japaneseLint.dialog.tooLarge.title": "インスタント日本語表現チェック",
-  "japaneseLint.dialog.tooLarge.message": "この文書は長文すぎるため、インスタント日本語表現チェックが行えません。\nファイルの右クリックメニューから個別に実施するか、文書を分割してください。",
   "japaneseLint.toast.truncated": "指摘が多いため、一部のみ表示しています。",
   "toolbar.insertLink": "リンクを挿入",
   "toolbar.insertTable": "表を挿入",

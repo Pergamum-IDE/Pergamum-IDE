@@ -29,12 +29,21 @@ describe("instant japanese lint -> Worker wiring (#625 P1c)", () => {
     expect(app).toContain("}, [isJapaneseLintActive]);");
   });
 
-  it("the renderer keeps its own 50,000-character guard before any IPC", () => {
-    const driver = source("src/renderer/japaneseLint/japaneseLintGutterExtension.ts");
+  it("no 50,000-character guard or dialog remains anywhere", () => {
+    for (const file of [
+      "src/renderer/japaneseLint/japaneseLintGutterExtension.ts",
+      "src/renderer/App.tsx",
+      "src/main/japaneseLintIpc.ts",
+      "src/shared/japaneseLint.ts"
+    ]) {
+      const text = source(file);
 
-    expect(driver.indexOf("isJapaneseLintSourceTooLarge(doc.length)")).toBeGreaterThan(0);
-    expect(driver.indexOf("isJapaneseLintSourceTooLarge(doc.length)")).toBeLessThan(
-      driver.indexOf("config.lint(")
+      expect(text, file).not.toContain("isJapaneseLintSourceTooLarge");
+      expect(text, file).not.toContain("JAPANESE_LINT_MAX_SOURCE_LENGTH");
+      expect(text, file).not.toContain("TooLargeDialog");
+    }
+    expect(source("src/shared/japaneseLint.ts")).toContain(
+      "JAPANESE_LINT_MAX_RESULT_COUNT = 1_000"
     );
   });
 

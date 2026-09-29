@@ -11,10 +11,7 @@ vi.mock("electron", () => ({
   utilityProcess: { fork: () => undefined }
 }));
 
-import {
-  JAPANESE_LINT_MAX_RESULT_COUNT,
-  JAPANESE_LINT_MAX_SOURCE_LENGTH
-} from "../../src/shared/japaneseLint";
+import { JAPANESE_LINT_MAX_RESULT_COUNT } from "../../src/shared/japaneseLint";
 import {
   createInstantJapaneseLintService,
   registerJapaneseLintIpc,
@@ -441,40 +438,74 @@ describe("Settings reach the Worker (#625 P1c)", () => {
 });
 
 describe("existing behavior is preserved (#625 P1c)", () => {
-  it("answers too-large without ever starting the Worker", async () => {
-    const { service, world, state } = setup();
+  it("lints documents over 50,000 characters in the Worker (no source length limit)", async () => {
+    const lengths: number[] = [];
+    const { service, world } = setup({
+      lint: async (source) => {
+        lengths.push(source.length);
 
-    for (const [format, ext] of [
-      ["markdown", ".md"],
-      ["markdown", ".markdown"],
-      ["text", ".txt"]
-    ] as const) {
-      expect(
-        await service.lint({
-          text: "あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH + 1),
-          format,
-          ext
-        })
-      ).toEqual({ ok: false, reason: "too-large" });
+        return [];
+      },
+      realDictionary
+    });
+
+    for (const length of [50_000, 50_001, 400_000]) {
+      for (const [format, ext] of [
+        ["markdown", ".md"],
+        ["markdown", ".markdown"],
+        ["text", ".txt"]
+      ] as const) {
+        expect(
+          await service.lint({ text: "あ".repeat(length), format, ext })
+        ).toEqual({ ok: true, diagnostics: [], truncated: false });
+      }
     }
 
-    expect(state.hostsCreated).toBe(0);
-    expect(world.children).toHaveLength(0);
+    expect(lengths.filter((length) => length === 50_001)).toHaveLength(3);
+    expect(lengths.filter((length) => length === 400_000)).toHaveLength(3);
+    expect(world.children).toHaveLength(1);
   });
 
-  it("still lints a document exactly at the limit", async () => {
-    const { service, world } = setup({
-      lint: async () => [],
+  it("never answers too-large, and a long document does not reject the handler", async () => {
+    const { service } = setup({
+      lint: async () => {
+        throw new Error("boom");
+      },
       realDictionary
     });
     const response = await service.lint({
-      text: "あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH),
+      text: "あ".repeat(100_000),
       format: "text",
       ext: ".txt"
     });
 
-    expect(response).toEqual({ ok: true, diagnostics: [], truncated: false });
-    expect(world.children).toHaveLength(1);
+    expect(response).toEqual({ ok: false, reason: "lint-failed" });
+  });
+
+  it("a Worker killed during a long-document lint settles safely and restarts", async () => {
+    const stuck = gate();
+    const { service, world } = setup({
+      lint: async (source, options) => {
+        // Only the long document hangs; the crashed Worker's leftover job
+        // must not steal the hang from a later request.
+        if (source.length > 50_000) {
+          await stuck.opened;
+
+          return [];
+        }
+
+        return realLint(source, options);
+      },
+      realDictionary
+    });
+    const pending = service.lint({ text: "あ".repeat(80_000), format: "text", ext: ".txt" });
+
+    await vi.waitFor(() => expect(lintDocumentsReceived(world.children[0])).toBeGreaterThan(0));
+    world.children[0]!.crash(1);
+
+    await expect(pending).resolves.toEqual({ ok: false, reason: "lint-failed" });
+    expect((await service.lint(joshi)).ok).toBe(true);
+    stuck.release();
   });
 
   it("truncates a result over the cap, keeping the earliest diagnostics", async () => {
@@ -617,6 +648,26 @@ describe("logging privacy on the instant Worker path (#625 P1c)", () => {
         expect(log, forbidden).not.toContain(forbidden);
       }
     }
+  });
+
+  it("a long (over 50,000 chars) source is not logged either, only its size", async () => {
+    const { service, events } = setup({ lint: async () => [], realDictionary });
+    const text = Array.from({ length: 8000 }, () => secretText).join("\n");
+
+    expect(text.length).toBeGreaterThan(50_000);
+    await service.lint({ text, format: "markdown", ext: ".md" });
+
+    const run = events.find((e) => e.event === "japaneseLint.run.completed");
+    const log = written(events);
+
+    expect(run?.details).toMatchObject({
+      result: "succeeded",
+      characterLength: text.length,
+      lineCount: 8000,
+      linterMode: "instant-worker"
+    });
+    expect(log).not.toContain("秘密");
+    expect(log).not.toContain(secretFile);
   });
 
   it("keeps working when the logger itself throws", async () => {

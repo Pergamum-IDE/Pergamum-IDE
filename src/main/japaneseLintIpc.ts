@@ -1,7 +1,6 @@
 import { ipcMain } from "electron";
 import { JAPANESE_LINT_CHANNELS } from "../shared/api";
 import {
-  isJapaneseLintSourceTooLarge,
   parseJapaneseLintRequest,
   type JapaneseLintRequest,
   type JapaneseLintResponse
@@ -23,11 +22,9 @@ import { createElectronJapaneseLintHost } from "./linterWorker/japaneseLintHostE
  * dictionary-missing, lint-failed, canceled) folds into `lint-failed`, so the
  * Renderer just clears its markers. This handler never rejects.
  *
- * The 50,000-character guard is kept (Renderer first, here as a backstop):
- * an oversized document never starts the Worker.
- *
  * Lifecycle: the Worker starts lazily on the first lint that has something to
- * run and is reused afterwards. `release()` (Linter OFF, project close, app
+ * run (a document of any length: there is no size limit, the Worker keeps
+ * the Main Process free) and is reused afterwards. `release()` (Linter OFF, project close, app
  * quit) disposes it; the next lint starts a fresh one. Body text is never
  * logged - only sizes, timings and counts.
  */
@@ -92,9 +89,9 @@ export function createInstantJapaneseLintService(
 
     // Logging must never throw into the handler.
     const logRun = (
-      result: "succeeded" | "failed" | "ignored",
+      result: "succeeded" | "failed",
       extra: {
-        reason?: "too_large" | "lint_failed" | "validation_failed";
+        reason?: "lint_failed" | "validation_failed";
         count?: number;
         failureReason?: "dictionary-missing" | "lint-failed" | "canceled" | "worker-failed";
         enabledRuleIds?: readonly string[];
@@ -137,13 +134,6 @@ export function createInstantJapaneseLintService(
         logRun("failed", { reason: "validation_failed" });
 
         return { ok: false, reason: "invalid-request" };
-      }
-
-      // Too large: skip before doing any work (and before any Worker start).
-      if (isJapaneseLintSourceTooLarge(request.text.length)) {
-        logRun("ignored", { reason: "too_large" });
-
-        return { ok: false, reason: "too-large" };
       }
 
       try {

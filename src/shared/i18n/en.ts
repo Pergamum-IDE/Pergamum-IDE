@@ -2018,8 +2018,6 @@ export const enTranslations = {
   "japaneseLint.rule.maxTen.option.max.description": "The most commas allowed in one sentence; more than this is reported.",
   "japaneseLint.rule.sentenceLength.option.max.label": "Characters per sentence",
   "japaneseLint.rule.sentenceLength.option.max.description": "The most characters allowed in one sentence; more than this is reported.",
-  "japaneseLint.dialog.tooLarge.title": "Instant Japanese Style Check",
-  "japaneseLint.dialog.tooLarge.message": "This document is too long for the instant Japanese style check.\nRun the check individually from the file's context menu, or split the document.",
   "japaneseLint.toast.truncated": "There are many findings, so only some are shown.",
   "toolbar.insertLink": "Insert link",
   "toolbar.insertTable": "Insert table",

@@ -8,7 +8,6 @@ import type {
   JapaneseLintResponse,
   JapaneseLintSource
 } from "../../../src/shared/japaneseLint";
-import { JAPANESE_LINT_MAX_SOURCE_LENGTH } from "../../../src/shared/japaneseLint";
 import {
   JAPANESE_LINT_DEBOUNCE_MS,
   clampJapaneseLintDebounceMs,
@@ -205,12 +204,12 @@ describe("Japanese lint driver debounce follows the setting (#625 P1d)", () => {
     expect(parent.querySelectorAll(".cm-pergamum-japaneseLintMarker")).toHaveLength(0);
   });
 
-  it("keeps the 50,000-character guard", async () => {
+  it("a document over 50,000 characters is linted with the same debounce", async () => {
     debounce = 300;
-    await start("あ".repeat(JAPANESE_LINT_MAX_SOURCE_LENGTH + 1));
-    refreshJapaneseLint(view);
-    await settle(0);
-    expect(lint).not.toHaveBeenCalled();
+    await start("あ".repeat(50_001));
+    edit();
+    await settle(300);
+    expect(lint).toHaveBeenCalledTimes(1);
   });
 });
 
