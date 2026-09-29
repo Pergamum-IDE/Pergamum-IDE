@@ -73,6 +73,8 @@ export function createAssistCommands(
       title: titles.showLineEndingDistribution,
       description: titles.showLineEndingDistributionDescription,
       when: showLineEndingDistributionCommandWhen,
+      category: "assist",
+      paletteOrder: 10,
       execute: () => controller.showLineEndingDistribution()
     },
     {
@@ -80,6 +82,8 @@ export function createAssistCommands(
       title: titles.insertParagraphIndent,
       description: titles.insertParagraphIndentDescription,
       when: paragraphIndentCommandWhen,
+      category: "assist",
+      paletteOrder: 20,
       execute: () => controller.insertParagraphIndent()
     },
     {
@@ -87,6 +91,8 @@ export function createAssistCommands(
       title: titles.removeParagraphIndent,
       description: titles.removeParagraphIndentDescription,
       when: paragraphIndentCommandWhen,
+      category: "assist",
+      paletteOrder: 30,
       execute: () => controller.removeParagraphIndent()
     }
   ];

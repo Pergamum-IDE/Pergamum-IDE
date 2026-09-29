@@ -258,12 +258,15 @@ function editCommand(
   commandId: EditCommandId,
   title: string,
   description: string,
-  controller: EditorCommandController
+  controller: EditorCommandController,
+  order: number
 ): EditorCommand {
   return {
     id: commandId,
     title,
     description,
+    category: "edit",
+    paletteOrder: order,
     execute: () => controller.delegateNativeEditCommand(commandId),
     isEnabled: () => controller.canDelegateNativeEditCommand(commandId)
   };
@@ -278,6 +281,8 @@ export function createEditorCommands(
       id: editorCommandIds.newFile,
       title: titles.newFile,
       description: titles.newFileDescription,
+      category: "file",
+      paletteOrder: 40,
       execute: () => {
         if (!controller.canNewFile()) {
           return;
@@ -292,12 +297,16 @@ export function createEditorCommands(
       id: editorCommandIds.openMarkdownDocument,
       title: titles.openMarkdownDocument,
       description: titles.openMarkdownDocumentDescription,
+      category: "file",
+      paletteOrder: 50,
       execute: () => controller.openMarkdownDocument()
     },
     {
       id: editorCommandIds.saveDocument,
       title: titles.saveDocument,
       description: titles.saveDocumentDescription,
+      category: "file",
+      paletteOrder: 60,
       execute: () => {
         if (!controller.canSaveCurrentDocument()) {
           return;
@@ -312,6 +321,8 @@ export function createEditorCommands(
       id: editorCommandIds.saveAll,
       title: titles.saveAll,
       description: titles.saveAllDescription,
+      category: "file",
+      paletteOrder: 70,
       execute: () => {
         if (!controller.canSaveAllDocuments()) {
           return;
@@ -325,6 +336,8 @@ export function createEditorCommands(
       id: editorCommandIds.saveAs,
       title: titles.saveAs,
       description: titles.saveAsDescription,
+      category: "file",
+      paletteOrder: 80,
       execute: () => {
         if (!controller.canSaveCurrentDocumentAs()) {
           return;
@@ -339,6 +352,8 @@ export function createEditorCommands(
       id: editorCommandIds.close,
       title: titles.closeEditor,
       description: titles.closeEditorDescription,
+      category: "file",
+      paletteOrder: 90,
       execute: (options?: { editorId?: EditorId }) =>
         controller.closeEditor(options?.editorId),
       isEnabled: (options?: { editorId?: EditorId }) =>
@@ -354,6 +369,8 @@ export function createEditorCommands(
       id: editorCommandIds.insertImage,
       title: titles.insertImage,
       description: titles.insertImageDescription,
+      category: "formatting",
+      paletteOrder: 120,
       execute: () => {
         if (!controller.canInsertImage()) {
           return;
@@ -367,6 +384,8 @@ export function createEditorCommands(
       id: editorCommandIds.insertBlockquote,
       title: titles.insertBlockquote,
       description: titles.insertBlockquoteDescription,
+      category: "formatting",
+      paletteOrder: 20,
       execute: () => {
         if (!controller.canInsertBlockquote()) {
           return;
@@ -380,6 +399,8 @@ export function createEditorCommands(
       id: editorCommandIds.toggleSyntaxChecker,
       title: titles.toggleSyntaxChecker,
       description: titles.toggleSyntaxCheckerDescription,
+      category: "view",
+      paletteOrder: 20,
       execute: () => {
         if (!controller.canToggleSyntaxChecker()) {
           return;
@@ -393,6 +414,8 @@ export function createEditorCommands(
       id: editorCommandIds.bold,
       title: titles.bold,
       description: titles.boldDescription,
+      category: "formatting",
+      paletteOrder: 10,
       execute: () => {
         if (!controller.canApplyBold()) {
           return;
@@ -406,6 +429,8 @@ export function createEditorCommands(
       id: editorCommandIds.italic,
       title: titles.italic,
       description: titles.italicDescription,
+      category: "formatting",
+      paletteOrder: 15,
       execute: () => {
         if (!controller.canApplyItalic()) {
           return;
@@ -419,6 +444,8 @@ export function createEditorCommands(
       id: editorCommandIds.strikethrough,
       title: titles.strikethrough,
       description: titles.strikethroughDescription,
+      category: "formatting",
+      paletteOrder: 18,
       execute: () => {
         if (!controller.canApplyStrikethrough()) {
           return;
@@ -432,6 +459,8 @@ export function createEditorCommands(
       id: editorCommandIds.heading,
       title: titles.heading,
       description: titles.headingDescription,
+      category: "formatting",
+      paletteOrder: 40,
       execute: () => {
         if (!controller.canInsertHeading()) {
           return;
@@ -445,6 +474,8 @@ export function createEditorCommands(
       id: editorCommandIds.link,
       title: titles.link,
       description: titles.linkDescription,
+      category: "formatting",
+      paletteOrder: 50,
       execute: () => {
         if (!controller.canInsertLink()) {
           return;
@@ -458,6 +489,8 @@ export function createEditorCommands(
       id: editorCommandIds.insertHorizontalRule,
       title: titles.insertHorizontalRule,
       description: titles.insertHorizontalRuleDescription,
+      category: "formatting",
+      paletteOrder: 60,
       execute: () => {
         if (!controller.canInsertHorizontalRule()) {
           return;
@@ -471,6 +504,8 @@ export function createEditorCommands(
       id: editorCommandIds.insertCodeBlock,
       title: titles.insertCodeBlock,
       description: titles.insertCodeBlockDescription,
+      category: "formatting",
+      paletteOrder: 70,
       execute: () => {
         if (!controller.canInsertCodeBlock()) {
           return;
@@ -484,6 +519,8 @@ export function createEditorCommands(
       id: editorCommandIds.insertTable,
       title: titles.insertTable,
       description: titles.insertTableDescription,
+      category: "formatting",
+      paletteOrder: 80,
       execute: () => {
         if (!controller.canInsertTable()) {
           return;
@@ -497,6 +534,8 @@ export function createEditorCommands(
       id: editorCommandIds.insertCallout,
       title: titles.insertCallout,
       description: titles.insertCalloutDescription,
+      category: "formatting",
+      paletteOrder: 90,
       execute: () => {
         if (!controller.canInsertCallout()) {
           return;
@@ -510,6 +549,8 @@ export function createEditorCommands(
       id: editorCommandIds.insertRuby,
       title: titles.insertRuby,
       description: titles.insertRubyDescription,
+      category: "formatting",
+      paletteOrder: 100,
       execute: () => {
         if (!controller.canInsertRuby()) {
           return;
@@ -523,6 +564,8 @@ export function createEditorCommands(
       id: editorCommandIds.insertEmphasisMark,
       title: titles.insertEmphasisMark,
       description: titles.insertEmphasisMarkDescription,
+      category: "formatting",
+      paletteOrder: 110,
       execute: () => {
         if (!controller.canInsertEmphasisMark()) {
           return;
@@ -536,6 +579,8 @@ export function createEditorCommands(
       id: editorCommandIds.indent,
       title: titles.indent,
       description: titles.indentDescription,
+      category: "edit",
+      paletteOrder: 70,
       execute: () => {
         if (!controller.canIndent()) {
           return;
@@ -549,6 +594,8 @@ export function createEditorCommands(
       id: editorCommandIds.outdent,
       title: titles.outdent,
       description: titles.outdentDescription,
+      category: "edit",
+      paletteOrder: 80,
       execute: () => {
         if (!controller.canOutdent()) {
           return;
@@ -562,6 +609,8 @@ export function createEditorCommands(
       id: editorCommandIds.togglePreview,
       title: titles.togglePreview,
       description: titles.togglePreviewDescription,
+      category: "view",
+      paletteOrder: 10,
       execute: () => {
         if (!controller.canTogglePreview()) {
           return;
@@ -575,6 +624,8 @@ export function createEditorCommands(
       id: editorCommandIds.undo,
       title: titles.undo,
       description: titles.undoDescription,
+      category: "edit",
+      paletteOrder: 10,
       execute: () =>
         controller.delegateNativeEditCommand(editorCommandIds.undo),
       isEnabled: () =>
@@ -584,6 +635,8 @@ export function createEditorCommands(
       id: editorCommandIds.redo,
       title: titles.redo,
       description: titles.redoDescription,
+      category: "edit",
+      paletteOrder: 20,
       execute: () =>
         controller.delegateNativeEditCommand(editorCommandIds.redo),
       isEnabled: () =>
@@ -593,25 +646,29 @@ export function createEditorCommands(
       editCommandIds[0],
       titles.cutSelection,
       titles.cutSelectionDescription,
-      controller
+      controller,
+      30
     ),
     editCommand(
       editCommandIds[1],
       titles.copySelection,
       titles.copySelectionDescription,
-      controller
+      controller,
+      40
     ),
     editCommand(
       editCommandIds[2],
       titles.pasteSelection,
       titles.pasteSelectionDescription,
-      controller
+      controller,
+      50
     ),
     editCommand(
       editCommandIds[3],
       titles.selectAllSelection,
       titles.selectAllSelectionDescription,
-      controller
+      controller,
+      60
     )
   ];
 }

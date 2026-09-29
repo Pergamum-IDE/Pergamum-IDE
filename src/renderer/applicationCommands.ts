@@ -83,24 +83,32 @@ export function createApplicationCommands(
       id: applicationCommandIds.openAbout,
       title: titles.openAbout,
       description: titles.openAboutDescription,
+      category: "help",
+      paletteOrder: 20,
       execute: () => controller.openAbout()
     },
     {
       id: applicationCommandIds.quitApplication,
       title: titles.quitApplication,
       description: titles.quitApplicationDescription,
+      category: "file",
+      paletteOrder: 120,
       execute: () => controller.quitApplication()
     },
     {
       id: applicationCommandIds.createProject,
       title: titles.createProject,
       description: titles.createProjectDescription,
+      category: "file",
+      paletteOrder: 10,
       execute: () => controller.createProject()
     },
     {
       id: applicationCommandIds.openProject,
       title: titles.openProject,
       description: titles.openProjectDescription,
+      category: "file",
+      paletteOrder: 20,
       execute: () => controller.openProject()
     },
     {
@@ -108,6 +116,8 @@ export function createApplicationCommands(
       title: titles.closeProject,
       description: titles.closeProjectDescription,
       when: { key: "project.isOpen" },
+      category: "file",
+      paletteOrder: 30,
       execute: () => controller.closeProject()
     },
     {
@@ -121,18 +131,24 @@ export function createApplicationCommands(
       id: applicationCommandIds.zoomIn,
       title: titles.zoomIn,
       description: titles.zoomInDescription,
+      category: "view",
+      paletteOrder: 30,
       execute: () => controller.zoomIn()
     },
     {
       id: applicationCommandIds.zoomOut,
       title: titles.zoomOut,
       description: titles.zoomOutDescription,
+      category: "view",
+      paletteOrder: 40,
       execute: () => controller.zoomOut()
     },
     {
       id: applicationCommandIds.resetZoom,
       title: titles.resetZoom,
       description: titles.resetZoomDescription,
+      category: "view",
+      paletteOrder: 50,
       execute: () => controller.resetZoom()
     }
   ];

@@ -98,6 +98,8 @@ export function createGlossaryCommands(
       title: titles.manageTags,
       description: titles.manageTagsDescription,
       when: glossaryTagManagerCommandWhen,
+      category: "glossary",
+      paletteOrder: 10,
       execute: () => controller.openGlossaryTagManager()
     },
     {
@@ -105,6 +107,8 @@ export function createGlossaryCommands(
       title: titles.manageEntries,
       description: titles.manageEntriesDescription,
       when: glossaryEntryManagerCommandWhen,
+      category: "glossary",
+      paletteOrder: 20,
       execute: () => controller.openGlossaryEntryManager()
     }
   ];

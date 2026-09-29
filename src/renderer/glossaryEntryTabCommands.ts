@@ -161,6 +161,8 @@ export function createGlossaryEntryTabCommands(
       id: glossaryEntryTabCommandIds.openFromEditorSelection,
       title: titles.openFromEditorSelection,
       description: titles.openFromEditorSelectionDescription,
+      category: "glossary",
+      paletteOrder: 30,
       execute: (selectedText) =>
         controller.openGlossaryEntryTabFromSelection(selectedText),
       isEnabled: () => controller.canOpenGlossaryEntryTabFromSelection?.() ?? true

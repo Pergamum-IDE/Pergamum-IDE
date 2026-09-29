@@ -135,3 +135,31 @@
    - `Mod+P` が Pergamum の標準コマンドパレット起動、`Mod+Shift+P` がプレビュー表示切り替え（Toggle Preview）に割り当てられています（VSCode との意図的な相違点）。
 3. **隠しアクセラレータ (Hidden Accelerators)**
    - Electron の仕様上、単一メニューアイテムに登録できるアクセラレータは 1 つのため、`F1` (Command Palette), `F12` (Save As), `Mod+Plus` (Zoom In), `Mod+,` (Application Settings) は非表示の隠しメニューアイテム（`visible: false`, `acceleratorWorksWhenHidden: true`）として登録・維持されています。
+
+### 3.5 コマンドパレットの表示順序・ソート方針 (#617)
+
+#617 にて、Command Palette 表示時のコマンド並び順と分類順序（カテゴリ順序）を整理・確定しました。
+
+#### 空検索時 (Empty Query Order)
+コマンドパレットを開いた直後（検索文字列が空の状態）では、以下のカテゴリ順序 (`categoryOrder`) および各カテゴリ内の優先度 (`paletteOrder`) に従って一覧表示されます。
+1. **File** (`file`): プロジェクト作成・開く・閉じる・ファイル作成・保存・設定・アプリケーション終了
+2. **Edit** (`edit`): 元に戻す・やり直す・切り取り・コピー・貼り付け・すべて選択・インデント・アウトデント
+3. **Formatting** (`formatting`): 太字・斜体・打消線・見出し・リンク・水平線・コードブロック・表・コールアウト・ルビ・傍点・画像挿入
+4. **Navigation** (`navigation`): コマンドパレット・エクスプローラー・語彙集・文書マップ・文書統計表示
+5. **Search** (`search`): 検索を表示
+6. **View** (`view`): プレビュー切替・構文チェッカー切替・ズームイン/アウト/リセット
+7. **Assist** (`assist`): 改行コード分布・段落字下げ挿入/削除
+8. **Glossary** (`glossary`): 語彙集タグ管理・語彙管理・選択範囲から語彙を開く
+9. **Recovery** (`recovery`): 未保存編集内容の復元
+10. **Help** (`help`): 作業再開画面・Pergamum について
+
+同一定義カテゴリ・同順序内では、表示言語に応じた表示タイトル（または Canonical Label）の `localeCompare` 昇順、次いで Command ID 文字列順により決定論的かつ安定したソートが行われます。
+
+#### 検索時 (Search Query Order)
+検索キーワードが入力されている場合、ユーザー入力との関連度・検索品質を最重視します。
+1. **一致度スコア (`matchScore`)**: 完全一致 > 前方一致 > 単語境界一致 > 部分一致（タイトル/Canonical Label を最優先、説明文・Command ID の順に評価）
+2. **カテゴリ順序 (`categoryOrder`)**: スコア同等の場合
+3. **カテゴリ内表示順 (`paletteOrder`)**: スコア・カテゴリ同等の場合
+4. **表示タイトル (`localeCompare`)**: スコア・カテゴリ・順序同等の場合
+5. **Command ID**: 最終タイブレーカー
+

@@ -125,6 +125,8 @@ export function createFileExplorerCommands(
       title: titles.createMarkdownFile,
       description: titles.createMarkdownFileDescription,
       when: fileExplorerCreateCommandWhen,
+      category: "file",
+      paletteOrder: 42,
       execute: () => {
         controller.requestFileExplorerCreate("file");
       }
@@ -134,6 +136,8 @@ export function createFileExplorerCommands(
       title: titles.createFolder,
       description: titles.createFolderDescription,
       when: fileExplorerCreateCommandWhen,
+      category: "file",
+      paletteOrder: 44,
       execute: () => {
         controller.requestFileExplorerCreate("folder");
       }
@@ -143,6 +147,8 @@ export function createFileExplorerCommands(
       title: titles.rename,
       description: titles.renameDescription,
       when: fileExplorerRenameCommandWhen,
+      category: "file",
+      paletteOrder: 95,
       execute: () => {
         controller.requestRenameActiveEditorFile();
       }

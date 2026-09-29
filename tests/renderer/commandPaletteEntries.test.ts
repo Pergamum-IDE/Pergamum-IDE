@@ -210,6 +210,84 @@ describe("filterCommandPaletteEntries", () => {
     });
   });
 
+  it("sorts empty query entries by category order, then palette order, then label, then id", () => {
+    const unorderedEntries: CommandPaletteEntry[] = [
+      {
+        id: defineCommandId("test.help.about"),
+        title: "Pergamum について",
+        category: "help",
+        paletteOrder: 20,
+        enabled: true
+      },
+      {
+        id: defineCommandId("test.file.save"),
+        title: "保存",
+        category: "file",
+        paletteOrder: 60,
+        enabled: true
+      },
+      {
+        id: defineCommandId("test.file.create"),
+        title: "プロジェクトを作成",
+        category: "file",
+        paletteOrder: 10,
+        enabled: true
+      },
+      {
+        id: defineCommandId("test.edit.undo"),
+        title: "元に戻す",
+        category: "edit",
+        paletteOrder: 10,
+        enabled: true
+      }
+    ];
+
+    const results = filterCommandPaletteEntries(unorderedEntries, "");
+
+    expect(results.map((entry) => entry.id)).toEqual([
+      "test.file.create",
+      "test.file.save",
+      "test.edit.undo",
+      "test.help.about"
+    ]);
+  });
+
+  it("prioritizes match score on non-empty query and uses category/order as tie-breaker", () => {
+    const searchEntries: CommandPaletteEntry[] = [
+      {
+        id: defineCommandId("test.formatting.bold"),
+        title: "太字",
+        canonicalLabel: "Bold",
+        category: "formatting",
+        paletteOrder: 10,
+        enabled: true
+      },
+      {
+        id: defineCommandId("test.file.save"),
+        title: "現在の文書を保存",
+        canonicalLabel: "Save Current Document",
+        category: "file",
+        paletteOrder: 60,
+        enabled: true
+      },
+      {
+        id: defineCommandId("test.file.saveAll"),
+        title: "すべて保存",
+        canonicalLabel: "Save All",
+        category: "file",
+        paletteOrder: 70,
+        enabled: true
+      }
+    ];
+
+    const results = filterCommandPaletteEntries(searchEntries, "save");
+
+    expect(results.map((entry) => entry.id)).toEqual([
+      "test.file.save",
+      "test.file.saveAll"
+    ]);
+  });
+
   it("matches by id case-insensitively and reports the id ranges from the filtering result", () => {
     const results = filterCommandPaletteEntries(entries, "command.save");
 

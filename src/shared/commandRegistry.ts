@@ -10,6 +10,8 @@ import type {
   DebugLogReason
 } from "./debugLog";
 
+import type { CommandCategory } from "./commandCategory";
+
 declare const commandIdBrand: unique symbol;
 
 export type CommandId<
@@ -23,7 +25,9 @@ export type CommandId<
 };
 
 export interface CommandPaletteVisibility {
-  readonly visible: boolean;
+  readonly visible?: boolean;
+  readonly category?: CommandCategory;
+  readonly order?: number;
 }
 
 export interface Command<
@@ -34,7 +38,9 @@ export interface Command<
   readonly title: string;
   readonly description?: string;
   readonly canonicalLabel?: string;
+  readonly category?: CommandCategory;
   readonly palette?: CommandPaletteVisibility;
+  readonly paletteOrder?: number;
   /**
    * Declarative execution enablement, distinct from Palette/menu visibility.
    * Omitted means enabled. See commandEnablement.ts for evaluation rules.

@@ -57,6 +57,8 @@ export function createRecoveryCommands(
       title: titles.showRecoveryDocuments,
       description: titles.showRecoveryDocumentsDescription,
       when: showRecoveryDocumentsCommandWhen,
+      category: "recovery",
+      paletteOrder: 10,
       execute: () => controller.showRecoveryDocuments()
     }
   ];
