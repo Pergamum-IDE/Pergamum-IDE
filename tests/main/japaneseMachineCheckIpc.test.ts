@@ -295,6 +295,73 @@ describe("prepare (#625 P2a)", () => {
     expect(resolveInsideProject(root, "C:\\x.md")).toBeNull();
   });
 
+  it("rejects POSIX, Windows drive and UNC absolute paths on every platform", () => {
+    for (const absolute of [
+      "/x.md",
+      "/etc/passwd.md",
+      "C:\\x.md",
+      "C:/x.md",
+      "c:x.md",
+      "\\\\server\\share\\x.md",
+      "//server/share/x.md",
+      "\\x.md"
+    ]) {
+      expect(resolveInsideProject(root, absolute), absolute).toBeNull();
+    }
+  });
+
+  it("keeps ordinary project-relative paths working", () => {
+    expect(resolveInsideProject(root, "sub/a.md")).toBe(path.join(root, "sub", "a.md"));
+    expect(resolveInsideProject(root, "..hidden.md")).toBe(
+      path.join(root, "..hidden.md")
+    );
+    expect(resolveInsideProject(root, "日本語/章1.md")).toBe(
+      path.join(root, "日本語", "章1.md")
+    );
+  });
+
+  it("answers invalid-request without reading anything when the path is refused", async () => {
+    const ctx = setup({ "a.md": joshi });
+    const reads: string[] = [];
+    const service = createJapaneseMachineCheckService({
+      createHost: () => {
+        throw new Error("no Worker for an invalid path");
+      },
+      currentProjectRootPath: () => root,
+      settingsProvider: async () => undefined,
+      textEncodingProvider: async () => "utf8",
+      readFile: async (absolute) => {
+        reads.push(absolute);
+
+        return new TextEncoder().encode(joshi);
+      },
+      showSaveDialog: async (defaultPath) => defaultPath,
+      writeReport: async () => undefined,
+      languageProvider: async () => "ja",
+      logger: { log: () => undefined }
+    });
+
+    void ctx;
+    for (const relativePath of [
+      "/x.md",
+      "C:\\x.md",
+      "C:/x.md",
+      "\\\\server\\share\\x.md",
+      "sub/../../x.md",
+      "."
+    ]) {
+      expect(await service.prepare({ relativePath })).toEqual({
+        ok: false,
+        reason: relativePath === "." ? "unsupported-file" : "invalid-request"
+      });
+      expect(await service.run({ relativePath })).toEqual({
+        ok: false,
+        reason: relativePath === "." ? "unsupported-file" : "invalid-request"
+      });
+    }
+    expect(reads).toEqual([]);
+  });
+
   it("decodes .txt with the configured encoding, falling back to Shift_JIS", async () => {
     const sjis = iconv.encode(joshi, "shift_jis");
     const configured = setup({ "s.txt": sjis }, undefined, { encoding: "shiftJis" });

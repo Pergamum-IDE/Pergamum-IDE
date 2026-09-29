@@ -138,7 +138,15 @@ export function resolveInsideProject(
   root: string,
   relativePath: string
 ): string | null {
-  if (path.isAbsolute(relativePath)) {
+  // Platform-independent: a Windows drive / UNC path must be refused on POSIX
+  // too (and a POSIX absolute path on Windows), since path.isAbsolute() only
+  // knows the current platform's rules.
+  if (
+    path.isAbsolute(relativePath) ||
+    path.posix.isAbsolute(relativePath) ||
+    path.win32.isAbsolute(relativePath) ||
+    /^[A-Za-z]:/.test(relativePath)
+  ) {
     return null;
   }
 
@@ -147,7 +155,8 @@ export function resolveInsideProject(
 
   if (
     relative === "" ||
-    relative.startsWith("..") ||
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
     path.isAbsolute(relative)
   ) {
     return null;
