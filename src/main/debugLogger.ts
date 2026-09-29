@@ -188,6 +188,7 @@ const eventLevelCatalog: Record<DebugLogEventName, DebugLogLevel> = {
   "japaneseLint.worker.request.completed": "debug",
   "japaneseLint.worker.exited": "warn",
   "japaneseLint.worker.error": "warn",
+  "japaneseLint.worker.lint.completed": "debug",
   "app.uncaughtException": "error",
   "app.unhandledRejection": "error"
 };

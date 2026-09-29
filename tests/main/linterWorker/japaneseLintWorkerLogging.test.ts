@@ -105,7 +105,7 @@ describe("Linter Worker logging never carries text, names or paths (#625 P1a)", 
 
     const log = written();
 
-    expect(log).toContain('"linterMode":"foundation"');
+    expect(log).toContain('"linterMode":"worker-lint"');
     expect(log).toContain('"workerPid":777');
     expect(log).toContain('"workerRequestType":"ping"');
     expect(log).toContain('"exitCode":0');
@@ -178,7 +178,7 @@ describe("Linter Worker logging never carries text, names or paths (#625 P1a)", 
     expect(exited?.details).toMatchObject({
       exitCode: -1073741819,
       workerPid: 777,
-      linterMode: "foundation"
+      linterMode: "worker-lint"
     });
     for (const secret of forbidden) {
       expect(written(), secret).not.toContain(secret);
@@ -222,7 +222,7 @@ describe("debug log sanitizer: Linter Worker fields (#625 P1a)", () => {
   it("keeps the safe worker fields", () => {
     const details = sanitizeDebugLogDetails(
       {
-        linterMode: "foundation",
+        linterMode: "worker-lint",
         workerPid: 4242,
         exitCode: 1,
         exitSignal: "SIGTERM",
@@ -239,7 +239,7 @@ describe("debug log sanitizer: Linter Worker fields (#625 P1a)", () => {
     );
 
     expect(details).toMatchObject({
-      linterMode: "foundation",
+      linterMode: "worker-lint",
       workerPid: 4242,
       exitCode: 1,
       exitSignal: "SIGTERM",
@@ -266,7 +266,7 @@ describe("debug log sanitizer: Linter Worker fields (#625 P1a)", () => {
         errorCode: fakePath,
         exitSignal: fakePath,
         workerRequestId: fakePath,
-        workerRequestType: "lintDocument",
+        workerRequestType: "hackTheWorker",
         enabledRuleIds: [fakePath, "max-ten"],
         message: fakeText,
         stack: fakePath,

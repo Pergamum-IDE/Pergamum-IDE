@@ -9,6 +9,7 @@ import {
   type JapaneseLintWorkerCore,
   type JapaneseLintWorkerCoreDeps
 } from "../../../src/main/linterWorker/japaneseLintWorkerCore";
+import type { JapaneseLintDiagnostic } from "../../../src/shared/japaneseLint";
 import type { JapaneseLintWorkerResponse } from "../../../src/shared/japaneseLintWorkerProtocol";
 
 /**
@@ -18,7 +19,14 @@ import type { JapaneseLintWorkerResponse } from "../../../src/shared/japaneseLin
  * Behaviors a test can switch on:
  *   - `crash(code)`: the process dies (exit event), like a real crash.
  *   - `silent`: the Worker never answers (timeout tests).
- *   - `dictionaryExists`: false makes init answer dictionary-missing.
+ *   - `dictionaryExists`: false makes init answer dictionary-missing; a
+ *     function is asked on every check (init AND each lint job), so a test can
+ *     make the dictionary "disappear" after start.
+ *   - `lint`: what the Worker's textlint does (default: finds nothing). A
+ *     test can pass the real engine, a stub that records its arguments, or one
+ *     that never finishes (a busy Worker).
+ *   - `realDictionary`: when set, `setDictionaryPath` points the real
+ *     engine (kuromojin) at it.
  */
 
 class LinkedPort extends EventEmitter {
@@ -52,9 +60,20 @@ class LinkedPort extends EventEmitter {
   }
 }
 
+export type FakeLint = (
+  source: string,
+  options: {
+    format: "markdown" | "text";
+    ext: string;
+    rules: readonly { id: string; options: Readonly<Record<string, number>> }[];
+  }
+) => Promise<readonly JapaneseLintDiagnostic[]>;
+
 export interface FakeWorkerOptions {
   silent?: boolean;
-  dictionaryExists?: boolean;
+  dictionaryExists?: boolean | (() => boolean);
+  lint?: FakeLint;
+  realDictionary?: string;
   /** Pid reported by the fake process. */
   pid?: number;
 }
@@ -103,7 +122,20 @@ export class FakeChild extends EventEmitter implements JapaneseLintHostChild {
         // Give the last message time to be delivered, then die.
         setImmediate(() => this.die(code));
       },
-      dictionaryExists: async () => this.options.dictionaryExists ?? true
+      dictionaryExists: async () => {
+        const configured = this.options.dictionaryExists;
+
+        return typeof configured === "function"
+          ? configured()
+          : (configured ?? true);
+      },
+      setDictionaryPath: () => {
+        if (this.options.realDictionary !== undefined) {
+          process.env.KUROMOJIN_DIC_PATH = this.options.realDictionary;
+        }
+      },
+      lint: async (source, lintOptions) =>
+        (this.options.lint ?? (async () => []))(source, lintOptions)
     };
 
     this.core = createJapaneseLintWorkerCore(deps);

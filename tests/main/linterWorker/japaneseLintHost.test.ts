@@ -284,7 +284,8 @@ describe("Japanese Linter Worker Host: failures (#625 P1a)", () => {
       // The Worker swallows the ping (never replies), then crashes.
       world.children[0]!.core = {
         handleMessage: async () => undefined,
-        reportFatal: () => undefined
+        reportFatal: () => undefined,
+        reportError: () => undefined
       };
 
       const ping = host.ping();
@@ -425,7 +426,8 @@ describe("Japanese Linter Worker Host: shutdown safety (#625 P1a)", () => {
     await host.start();
     world.children[0]!.core = {
       handleMessage: async () => undefined,
-      reportFatal: () => undefined
+      reportFatal: () => undefined,
+      reportError: () => undefined
     };
     await host.shutdown();
 

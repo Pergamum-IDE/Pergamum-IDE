@@ -12,7 +12,9 @@ function makeCore(dictionaryExists = true) {
   const core = createJapaneseLintWorkerCore({
     send: (response) => sent.push(response),
     exit,
-    dictionaryExists: async () => dictionaryExists
+    dictionaryExists: async () => dictionaryExists,
+    setDictionaryPath: () => undefined,
+    lint: async () => []
   });
 
   return { core, sent, exit };
@@ -130,7 +132,9 @@ describe("japaneseLintWorkerCore (#625 P1a)", () => {
       exit: () => undefined,
       dictionaryExists: async () => {
         throw new Error("吾輩は猫である C:\\Users\\tanaka_taro\\novel.md");
-      }
+      },
+      setDictionaryPath: () => undefined,
+      lint: async () => []
     });
 
     await expect(core.handleMessage(initRequest("i9"))).resolves.toBeUndefined();
@@ -174,7 +178,9 @@ describe("japaneseLintWorkerCore (#625 P1a)", () => {
         throw new Error("port closed");
       },
       exit,
-      dictionaryExists: async () => true
+      dictionaryExists: async () => true,
+      setDictionaryPath: () => undefined,
+      lint: async () => []
     });
 
     expect(() => core.reportFatal("unhandled-rejection", new Error("x"))).toThrow();

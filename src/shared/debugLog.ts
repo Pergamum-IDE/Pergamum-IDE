@@ -138,6 +138,7 @@ export const debugLogEventNames = [
   "japaneseLint.worker.request.completed",
   "japaneseLint.worker.exited",
   "japaneseLint.worker.error",
+  "japaneseLint.worker.lint.completed",
   "app.uncaughtException",
   "app.unhandledRejection"
 ] as const;
@@ -363,6 +364,9 @@ export type DebugLogExtension = (typeof debugLogExtensions)[number];
 export const debugLogWorkerRequestTypes = [
   "init",
   "ping",
+  "updateConfig",
+  "lintDocument",
+  "cancel",
   "shutdown",
   "unknown"
 ] as const;
@@ -370,7 +374,27 @@ export const debugLogWorkerRequestTypes = [
 export type DebugLogWorkerRequestType =
   (typeof debugLogWorkerRequestTypes)[number];
 
-export const debugLogLinterModes = ["foundation", "unknown"] as const;
+export const debugLogLinterModes = [
+  "foundation",
+  "worker-lint",
+  "unknown"
+] as const;
+
+/** #625 P1b: why a Worker lint produced no result. */
+export const debugLogLintFailureReasons = [
+  "dictionary-missing",
+  "lint-failed",
+  "canceled",
+  "worker-failed",
+  "unknown"
+] as const;
+
+export type DebugLogLintFailureReason =
+  (typeof debugLogLintFailureReasons)[number];
+
+export const debugLogLintFormats = ["markdown", "text", "unknown"] as const;
+
+export type DebugLogLintFormat = (typeof debugLogLintFormats)[number];
 
 export type DebugLogLinterMode = (typeof debugLogLinterModes)[number];
 
@@ -647,6 +671,14 @@ export interface DebugLogDetails {
   exitSignal?: string;
   workerRequestType?: DebugLogWorkerRequestType;
   workerRequestId?: string;
+  /** #625 P1b: lint job id (a UUID, not derived from any document). */
+  workerJobId?: string;
+  lintFormat?: DebugLogLintFormat;
+  /** Messages textlint found / messages returned after the cap. */
+  totalMessages?: number;
+  returnedMessages?: number;
+  truncated?: boolean;
+  failureReason?: DebugLogLintFailureReason;
   enabledRuleIds?: readonly string[];
   errorName?: string;
   errorCode?: string;

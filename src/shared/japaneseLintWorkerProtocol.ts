@@ -2,15 +2,23 @@
  * #625 Linter Worker (Electron utilityProcess) message protocol.
  *
  * Host (Main Process) <-> Worker messages travel over a MessagePort. Every
- * request carries a `requestId`, and every response echoes it, so a Host can
- * match answers to questions and reject exactly the ones a dying Worker
- * leaves unanswered.
+ * request carries a `requestId` (answers are matched by it), and a lint run
+ * additionally carries a `jobId` (progress / cancel / result are matched by
+ * it). A Host can therefore reject exactly the requests a dying Worker leaves
+ * unanswered, and drop the result of a job that was canceled.
  *
- * This slice only carries lifecycle traffic (init / ping / shutdown). No
- * manuscript text is part of the protocol yet, and errors cross the boundary
- * only in sanitized form (see sanitizeErrorForLog.ts) - never a raw message.
+ * P1a: init / ping / shutdown. P1b: updateConfig / lintDocument / cancel.
+ * The manuscript text travels ONLY inside `lintDocument.source`; it is never
+ * echoed back, and errors cross the boundary only in sanitized form (see
+ * sanitizeErrorForLog.ts) - never a raw message.
  */
 
+import {
+  JAPANESE_LINT_MAX_RESULT_COUNT,
+  type JapaneseLintDiagnostic,
+  type JapaneseLintExtension,
+  type JapaneseLintFormat
+} from "./japaneseLint";
 import {
   enabledJapaneseLintRules,
   isJapaneseLintRuleId,
@@ -29,6 +37,9 @@ export interface JapaneseLintWorkerConfig {
   readonly workerRestartAttempts: number;
 }
 
+/** Longest source (UTF-16 units) the Worker accepts in one lintDocument. */
+export const JAPANESE_LINT_WORKER_MAX_SOURCE_LENGTH = 50_000_000;
+
 export type JapaneseLintWorkerRequest =
   | {
       readonly type: "init";
@@ -37,6 +48,24 @@ export type JapaneseLintWorkerRequest =
       readonly config: JapaneseLintWorkerConfig;
     }
   | { readonly type: "ping"; readonly requestId: string }
+  | {
+      readonly type: "updateConfig";
+      readonly requestId: string;
+      readonly config: JapaneseLintWorkerConfig;
+    }
+  | {
+      readonly type: "lintDocument";
+      readonly requestId: string;
+      readonly jobId: string;
+      readonly source: string;
+      readonly format: JapaneseLintFormat;
+      readonly ext: JapaneseLintExtension;
+    }
+  | {
+      readonly type: "cancel";
+      readonly requestId: string;
+      readonly jobId: string;
+    }
   | { readonly type: "shutdown"; readonly requestId: string };
 
 export type JapaneseLintWorkerRequestType =
@@ -47,6 +76,7 @@ export type JapaneseLintWorkerErrorKind =
   | "not-initialized"
   | "dictionary-missing"
   | "init-failed"
+  | "lint-failed"
   | "uncaught-exception"
   | "unhandled-rejection"
   | "internal";
@@ -58,13 +88,67 @@ export interface SanitizedWorkerError {
   readonly stack: readonly string[];
 }
 
+/** Coarse stages: there is no chunking yet, so there is no smooth progress. */
+export type JapaneseLintWorkerProgressStage =
+  | "queued"
+  | "dictionary-check"
+  | "lint-running"
+  | "completed";
+
+/** A finished lint. Failures are `error` responses, never a result. */
+export interface JapaneseLintWorkerDocumentResult {
+  readonly ok: true;
+  /** At most `maxMessages`, in position order. */
+  readonly messages: readonly JapaneseLintDiagnostic[];
+  /** How many messages textlint found before the cap. */
+  readonly totalMessages: number;
+  readonly maxMessages: number;
+  readonly truncated: boolean;
+  readonly elapsedMs: number;
+  readonly sourceChars: number;
+  readonly sourceLines: number;
+}
+
+export type JapaneseLintWorkerDocumentFailureReason =
+  | "dictionary-missing"
+  | "lint-failed"
+  | "canceled"
+  | "worker-failed";
+
+/** What a Host reports for a lint that did not produce a result. */
+export interface JapaneseLintWorkerDocumentFailure {
+  readonly ok: false;
+  readonly reason: JapaneseLintWorkerDocumentFailureReason;
+  readonly elapsedMs?: number;
+}
+
 export type JapaneseLintWorkerResponse =
   | { readonly type: "ready"; readonly requestId: string }
   | { readonly type: "pong"; readonly requestId: string }
+  | { readonly type: "config-updated"; readonly requestId: string }
+  | {
+      readonly type: "progress";
+      readonly jobId: string;
+      readonly stage: JapaneseLintWorkerProgressStage;
+      readonly processedChars: number;
+      readonly totalChars: number;
+    }
+  | {
+      readonly type: "lint-result";
+      readonly requestId: string;
+      readonly jobId: string;
+      readonly result: JapaneseLintWorkerDocumentResult;
+    }
+  | {
+      readonly type: "canceled";
+      readonly requestId?: string;
+      readonly jobId: string;
+    }
   | { readonly type: "shutdown-complete"; readonly requestId: string }
   | {
       readonly type: "error";
       readonly requestId?: string;
+      readonly jobId?: string;
       readonly error: SanitizedWorkerError;
     };
 
@@ -73,31 +157,51 @@ export const JAPANESE_LINT_WORKER_CONNECT_MESSAGE = {
   type: "connect"
 } as const;
 
-const requestIdPattern = /^[A-Za-z0-9_.-]{1,80}$/;
+const idPattern = /^[A-Za-z0-9_.-]{1,80}$/;
 const errorKinds: readonly JapaneseLintWorkerErrorKind[] = [
   "invalid-message",
   "not-initialized",
   "dictionary-missing",
   "init-failed",
+  "lint-failed",
   "uncaught-exception",
   "unhandled-rejection",
   "internal"
+];
+const progressStages: readonly JapaneseLintWorkerProgressStage[] = [
+  "queued",
+  "dictionary-check",
+  "lint-running",
+  "completed"
 ];
 const safeNamePattern = /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/;
 const safeCodePattern = /^[A-Za-z0-9_.-]{1,80}$/;
 const stackFramePattern =
   /^ {4}at [A-Za-z_$][\w$.]*(?: \[as [A-Za-z_$][\w$]*\])? \(app\.asar\/[A-Za-z0-9_.\-@+/]+:\d+:\d+\)$/;
+const allowedExtensionsByFormat: Readonly<
+  Record<JapaneseLintFormat, readonly JapaneseLintExtension[]>
+> = {
+  markdown: [".md", ".markdown"],
+  text: [".txt"]
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** Request and job ids share one safe shape. */
 export function isSafeRequestId(value: unknown): value is string {
-  return typeof value === "string" && requestIdPattern.test(value);
+  return typeof value === "string" && idPattern.test(value);
 }
+
+export const isSafeJobId = isSafeRequestId;
 
 function isFiniteInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return isFiniteInteger(value) && value >= 0;
 }
 
 export function isJapaneseLintWorkerConfig(
@@ -129,6 +233,18 @@ export function isJapaneseLintWorkerConfig(
   );
 }
 
+/** Validates a format / extension pairing (`.md` / `.markdown` / `.txt`). */
+export function isValidLintFormatAndExt(
+  format: unknown,
+  ext: unknown
+): format is JapaneseLintFormat {
+  return (
+    (format === "markdown" || format === "text") &&
+    typeof ext === "string" &&
+    (allowedExtensionsByFormat[format] as readonly string[]).includes(ext)
+  );
+}
+
 /** Validates an untrusted message on the Worker side. null = malformed. */
 export function parseJapaneseLintWorkerRequest(
   raw: unknown
@@ -153,6 +269,28 @@ export function parseJapaneseLintWorkerRequest(
             config: raw.config
           }
         : null;
+    case "updateConfig":
+      return isJapaneseLintWorkerConfig(raw.config)
+        ? { type: "updateConfig", requestId: raw.requestId, config: raw.config }
+        : null;
+    case "cancel":
+      return isSafeJobId(raw.jobId)
+        ? { type: "cancel", requestId: raw.requestId, jobId: raw.jobId }
+        : null;
+    case "lintDocument":
+      return isSafeJobId(raw.jobId) &&
+        typeof raw.source === "string" &&
+        raw.source.length <= JAPANESE_LINT_WORKER_MAX_SOURCE_LENGTH &&
+        isValidLintFormatAndExt(raw.format, raw.ext)
+        ? {
+            type: "lintDocument",
+            requestId: raw.requestId,
+            jobId: raw.jobId,
+            source: raw.source,
+            format: raw.format,
+            ext: raw.ext as JapaneseLintExtension
+          }
+        : null;
     default:
       return null;
   }
@@ -169,7 +307,10 @@ function parseSanitizedWorkerError(raw: unknown): SanitizedWorkerError | null {
     return null;
   }
 
-  if (raw.code !== undefined && !(typeof raw.code === "string" && safeCodePattern.test(raw.code))) {
+  if (
+    raw.code !== undefined &&
+    !(typeof raw.code === "string" && safeCodePattern.test(raw.code))
+  ) {
     return null;
   }
 
@@ -189,6 +330,81 @@ function parseSanitizedWorkerError(raw: unknown): SanitizedWorkerError | null {
   };
 }
 
+const diagnosticSeverities = ["info", "warning", "error"] as const;
+
+function parseDiagnostic(raw: unknown): JapaneseLintDiagnostic | null {
+  if (
+    !isRecord(raw) ||
+    typeof raw.ruleId !== "string" ||
+    !safeCodePattern.test(raw.ruleId) ||
+    !diagnosticSeverities.includes(
+      raw.severity as (typeof diagnosticSeverities)[number]
+    ) ||
+    typeof raw.message !== "string" ||
+    raw.message.length > 2000 ||
+    !isNonNegativeInteger(raw.line) ||
+    !isNonNegativeInteger(raw.column) ||
+    !isNonNegativeInteger(raw.index)
+  ) {
+    return null;
+  }
+
+  return {
+    ruleId: raw.ruleId,
+    severity: raw.severity as JapaneseLintDiagnostic["severity"],
+    message: raw.message,
+    line: raw.line,
+    column: raw.column,
+    index: raw.index
+  };
+}
+
+function parseDocumentResult(
+  raw: unknown
+): JapaneseLintWorkerDocumentResult | null {
+  if (
+    !isRecord(raw) ||
+    raw.ok !== true ||
+    !Array.isArray(raw.messages) ||
+    !isNonNegativeInteger(raw.totalMessages) ||
+    !isNonNegativeInteger(raw.maxMessages) ||
+    typeof raw.truncated !== "boolean" ||
+    !isNonNegativeInteger(raw.elapsedMs) ||
+    !isNonNegativeInteger(raw.sourceChars) ||
+    !isNonNegativeInteger(raw.sourceLines)
+  ) {
+    return null;
+  }
+
+  const messages: JapaneseLintDiagnostic[] = [];
+
+  for (const entry of raw.messages) {
+    const message = parseDiagnostic(entry);
+
+    if (message === null) {
+      return null;
+    }
+
+    messages.push(message);
+  }
+
+  // Defensive: never accept more than the cap, whatever the Worker says.
+  if (messages.length > JAPANESE_LINT_MAX_RESULT_COUNT) {
+    return null;
+  }
+
+  return {
+    ok: true,
+    messages,
+    totalMessages: raw.totalMessages,
+    maxMessages: raw.maxMessages,
+    truncated: raw.truncated,
+    elapsedMs: raw.elapsedMs,
+    sourceChars: raw.sourceChars,
+    sourceLines: raw.sourceLines
+  };
+}
+
 /** Validates an untrusted message on the Host side. null = malformed. */
 export function parseJapaneseLintWorkerResponse(
   raw: unknown
@@ -200,9 +416,49 @@ export function parseJapaneseLintWorkerResponse(
   switch (raw.type) {
     case "ready":
     case "pong":
+    case "config-updated":
     case "shutdown-complete":
       return isSafeRequestId(raw.requestId)
         ? { type: raw.type, requestId: raw.requestId }
+        : null;
+    case "progress":
+      return isSafeJobId(raw.jobId) &&
+        progressStages.includes(raw.stage as JapaneseLintWorkerProgressStage) &&
+        isNonNegativeInteger(raw.processedChars) &&
+        isNonNegativeInteger(raw.totalChars)
+        ? {
+            type: "progress",
+            jobId: raw.jobId,
+            stage: raw.stage as JapaneseLintWorkerProgressStage,
+            processedChars: raw.processedChars,
+            totalChars: raw.totalChars
+          }
+        : null;
+    case "lint-result": {
+      const result = parseDocumentResult(raw.result);
+
+      return isSafeRequestId(raw.requestId) &&
+        isSafeJobId(raw.jobId) &&
+        result !== null
+        ? {
+            type: "lint-result",
+            requestId: raw.requestId,
+            jobId: raw.jobId,
+            result
+          }
+        : null;
+    }
+    case "canceled":
+      if (!isSafeJobId(raw.jobId)) {
+        return null;
+      }
+
+      if (raw.requestId === undefined) {
+        return { type: "canceled", jobId: raw.jobId };
+      }
+
+      return isSafeRequestId(raw.requestId)
+        ? { type: "canceled", requestId: raw.requestId, jobId: raw.jobId }
         : null;
     case "error": {
       const error = parseSanitizedWorkerError(raw.error);
@@ -211,13 +467,20 @@ export function parseJapaneseLintWorkerResponse(
         return null;
       }
 
-      if (raw.requestId === undefined) {
-        return { type: "error", error };
+      if (raw.requestId !== undefined && !isSafeRequestId(raw.requestId)) {
+        return null;
       }
 
-      return isSafeRequestId(raw.requestId)
-        ? { type: "error", requestId: raw.requestId, error }
-        : null;
+      if (raw.jobId !== undefined && !isSafeJobId(raw.jobId)) {
+        return null;
+      }
+
+      return {
+        type: "error",
+        ...(raw.requestId !== undefined ? { requestId: raw.requestId } : {}),
+        ...(raw.jobId !== undefined ? { jobId: raw.jobId } : {}),
+        error
+      };
     }
     default:
       return null;
@@ -225,8 +488,8 @@ export function parseJapaneseLintWorkerResponse(
 }
 
 /**
- * The config a Host sends with `init`: the rule snapshot plus the runtime
- * settings, resolved from the stored `japaneseLint` settings section.
+ * The config a Host sends with `init` / `updateConfig`: the rule snapshot plus
+ * the runtime settings, resolved from the stored `japaneseLint` section.
  */
 export function buildJapaneseLintWorkerConfig(
   storedSettings: unknown

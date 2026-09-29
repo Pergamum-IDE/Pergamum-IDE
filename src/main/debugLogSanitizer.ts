@@ -5,6 +5,8 @@ import {
 } from "./sanitizeErrorForLog";
 import {
   debugLogArchitectures,
+  debugLogLintFailureReasons,
+  debugLogLintFormats,
   debugLogLinterModes,
   debugLogWorkerRequestTypes,
   debugLogDocumentKinds,
@@ -62,6 +64,8 @@ import {
   type DebugLogPreviewScrollLeaderTrigger,
   type DebugLogPreviewScrollSyncPane,
   type DebugLogPreviewToEditorSkippedReason,
+  type DebugLogLintFailureReason,
+  type DebugLogLintFormat,
   type DebugLogLinterMode,
   type DebugLogReason,
   type DebugLogWorkerRequestType,
@@ -954,6 +958,50 @@ export function sanitizeDebugLogDetails(
 
         if (exitSignal !== undefined) {
           sanitized.exitSignal = exitSignal;
+        }
+        break;
+      }
+      case "workerJobId": {
+        const workerJobId = sanitizeSafeCode(value);
+
+        if (workerJobId !== undefined) {
+          sanitized.workerJobId = workerJobId;
+        }
+        break;
+      }
+      case "lintFormat":
+        sanitized.lintFormat = enumOrUnknown<DebugLogLintFormat>(
+          debugLogLintFormats,
+          value
+        );
+        break;
+      case "failureReason":
+        sanitized.failureReason = enumOrUnknown<DebugLogLintFailureReason>(
+          debugLogLintFailureReasons,
+          value
+        );
+        break;
+      case "totalMessages": {
+        const totalMessages = sanitizeNonNegativeInteger(value);
+
+        if (totalMessages !== undefined) {
+          sanitized.totalMessages = totalMessages;
+        }
+        break;
+      }
+      case "returnedMessages": {
+        const returnedMessages = sanitizeNonNegativeInteger(value);
+
+        if (returnedMessages !== undefined) {
+          sanitized.returnedMessages = returnedMessages;
+        }
+        break;
+      }
+      case "truncated": {
+        const truncated = sanitizeBoolean(value);
+
+        if (truncated !== undefined) {
+          sanitized.truncated = truncated;
         }
         break;
       }
