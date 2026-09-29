@@ -15,6 +15,7 @@ import {
   parseThresholdInput
 } from "../../../src/renderer/JapaneseLintSettingsSection";
 import { SettingsPanelView } from "../../../src/renderer/SettingsPanel";
+import { resolveJapaneseLintSettings } from "../../../src/shared/japaneseLintRules";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -90,7 +91,11 @@ describe("JapaneseLintSettingsSection (#625)", () => {
       ...container.querySelectorAll(".japaneseLintRuleGroupHeading")
     ].map((heading) => heading.textContent);
 
-    expect(headings).toEqual(["文章表現", "見えない文字・紛らわしい文字"]);
+    expect(headings).toEqual([
+      "文章表現",
+      "見えない文字・紛らわしい文字",
+      "動作設定"
+    ]);
     expect(ruleRows().map((row) => row.dataset.japaneseLintRule)).toEqual([
       "max-ten",
       "no-doubled-conjunctive-particle-ga",
@@ -127,7 +132,11 @@ describe("JapaneseLintSettingsSection (#625)", () => {
       "JapaneseLinter.no-nfd",
       "JapaneseLinter.no-invalid-control-character",
       "JapaneseLinter.no-zero-width-spaces",
-      "JapaneseLinter.no-kangxi-radicals"
+      "JapaneseLinter.no-kangxi-radicals",
+      // runtime options follow the 12 rules
+      "JapaneseLinter.debounceMs",
+      "JapaneseLinter.lineCacheLimit",
+      "JapaneseLinter.workerRestartAttempts"
     ]);
     // The displayed path never leaks into the ids that are actually used.
     for (const row of ruleRows()) {
@@ -166,7 +175,11 @@ describe("JapaneseLintSettingsSection (#625)", () => {
       ...container.querySelectorAll(".japaneseLintRuleGroupHeading")
     ].map((heading) => heading.textContent);
 
-    expect(headings).toEqual(["Style", "Invisible or Confusable Characters"]);
+    expect(headings).toEqual([
+      "Style",
+      "Invisible or Confusable Characters",
+      "Behavior"
+    ]);
     expect(rowFor("no-nfd").textContent).toContain(
       "Check separated dakuten/handakuten marks"
     );
@@ -185,7 +198,8 @@ describe("JapaneseLintSettingsSection (#625)", () => {
   it("shows the two thresholds with their defaults (5 commas, 100 characters)", () => {
     mountSection(vi.fn());
 
-    expect(container.querySelectorAll("input.settingsNumberInput")).toHaveLength(2);
+    // 2 rule thresholds + 3 runtime options.
+    expect(container.querySelectorAll("input.settingsNumberInput")).toHaveLength(5);
     expect(numberFor("max-ten").value).toBe("5");
     expect(numberFor("sentence-length").value).toBe("100");
     expect(rowFor("max-ten").textContent).toContain("一文あたりの読点数");
@@ -241,11 +255,12 @@ describe("JapaneseLintSettingsSection (#625)", () => {
     mountSection(vi.fn(), {
       ...defaultApplicationSettings,
       japaneseLint: {
+        ...resolveJapaneseLintSettings(undefined),
         rules: {
-          ...(defaultApplicationSettings.japaneseLint?.rules ?? {}),
+          ...resolveJapaneseLintSettings(undefined).rules,
           "sentence-length": { enabled: true, options: { max: 60 } },
           "no-nfd": { enabled: false }
-        } as never
+        }
       }
     });
 
@@ -319,6 +334,91 @@ describe("JapaneseLintSettingsSection (#625)", () => {
     blur(numberFor("max-ten"));
 
     expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+describe("JapaneseLintSettingsSection runtime options (#625 worker foundation)", () => {
+  const runtimeInput = (key: string): HTMLInputElement =>
+    container.querySelector<HTMLInputElement>(
+      `[data-japanese-lint-runtime="${key}"] input.settingsNumberInput`
+    )!;
+  const runtimeText = (key: string): string =>
+    container.querySelector(`[data-japanese-lint-runtime="${key}"]`)
+      ?.textContent ?? "";
+
+  it("shows the three runtime options with their labels, defaults, ranges and units", () => {
+    mountSection(vi.fn());
+
+    const rows = [
+      ...container.querySelectorAll<HTMLElement>("[data-japanese-lint-runtime]")
+    ];
+
+    expect(rows.map((row) => row.dataset.japaneseLintRuntime)).toEqual([
+      "debounceMs",
+      "lineCacheLimit",
+      "workerRestartAttempts"
+    ]);
+    expect(runtimeInput("debounceMs").value).toBe("800");
+    expect(runtimeInput("lineCacheLimit").value).toBe("5000");
+    expect(runtimeInput("workerRestartAttempts").value).toBe("3");
+
+    expect(runtimeText("debounceMs")).toContain("デバウンス時間");
+    expect(runtimeText("debounceMs")).toContain(
+      "入力が止まってから日本語表現チェックを実行するまでの待ち時間です。"
+    );
+    expect(runtimeText("debounceMs")).toContain("300〜3000 ms");
+    expect(runtimeText("lineCacheLimit")).toContain("行キャッシュ上限");
+    expect(runtimeText("lineCacheLimit")).toContain("500〜50000 件");
+    expect(runtimeText("workerRestartAttempts")).toContain(
+      "Worker再起動試行回数"
+    );
+    expect(runtimeText("workerRestartAttempts")).toContain("2〜10 回");
+  });
+
+  it("saves a committed runtime value while keeping the rules", () => {
+    const onChange = vi.fn();
+
+    mountSection(onChange);
+    typeInto(runtimeInput("debounceMs"), "1500");
+    blur(runtimeInput("debounceMs"));
+
+    const request = onChange.mock.calls[0]?.[0] as SaveApplicationSettingsRequest;
+
+    expect(request.japaneseLint?.debounceMs).toBe(1500);
+    expect(request.japaneseLint?.lineCacheLimit).toBe(5000);
+    expect(request.japaneseLint?.rules["max-ten"].options).toEqual({ max: 5 });
+  });
+
+  it("clamps a runtime value into its range on commit", () => {
+    const onChange = vi.fn();
+
+    mountSection(onChange);
+    typeInto(runtimeInput("workerRestartAttempts"), "99");
+    blur(runtimeInput("workerRestartAttempts"));
+
+    expect(
+      (onChange.mock.calls[0]?.[0] as SaveApplicationSettingsRequest)
+        .japaneseLint?.workerRestartAttempts
+    ).toBe(10);
+    expect(runtimeInput("workerRestartAttempts").value).toBe("10");
+  });
+
+  it("a rule change keeps the runtime options as they are", () => {
+    const onChange = vi.fn();
+
+    mountSection(onChange, {
+      ...defaultApplicationSettings,
+      japaneseLint: {
+        ...resolveJapaneseLintSettings(undefined),
+        debounceMs: 1700
+      }
+    });
+    act(() => checkboxFor("no-nfd").click());
+
+    expect(
+      (onChange.mock.calls[0]?.[0] as SaveApplicationSettingsRequest)
+        .japaneseLint?.debounceMs
+    ).toBe(1700);
   });
 });
 

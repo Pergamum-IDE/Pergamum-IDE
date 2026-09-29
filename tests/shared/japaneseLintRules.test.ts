@@ -9,6 +9,7 @@ import {
   japaneseLintRuleCategories,
   japaneseLintRuleDisplayPath,
   japaneseLintRuleIds,
+  japaneseLintRuntimeOptionCatalog,
   parseJapaneseLintSettingsForWrite,
   resolveJapaneseLintSettings
 } from "../../src/shared/japaneseLintRules";
@@ -312,5 +313,166 @@ describe("enabledJapaneseLintRules (#625)", () => {
         })
       )
     ).toBe(false);
+  });
+});
+
+describe("japanese lint runtime settings (#625 worker foundation)", () => {
+  it("defaults: debounce 800 ms, line cache 5000, worker restarts 3", () => {
+    for (const raw of [undefined, null, {}, { rules: {} }, "x", []]) {
+      const resolved = resolveJapaneseLintSettings(raw);
+
+      expect(resolved.debounceMs).toBe(800);
+      expect(resolved.lineCacheLimit).toBe(5000);
+      expect(resolved.workerRestartAttempts).toBe(3);
+    }
+  });
+
+  it("documents each option range in the catalog", () => {
+    expect(
+      japaneseLintRuntimeOptionCatalog.map((option) => [
+        option.key,
+        option.defaultValue,
+        option.min,
+        option.max
+      ])
+    ).toEqual([
+      ["debounceMs", 800, 300, 3000],
+      ["lineCacheLimit", 5000, 500, 50000],
+      ["workerRestartAttempts", 3, 2, 10]
+    ]);
+  });
+
+  it("clamps each option into its range on read", () => {
+    const at = (
+      debounceMs: unknown,
+      lineCacheLimit: unknown,
+      attempts: unknown
+    ) =>
+      resolveJapaneseLintSettings({
+        debounceMs,
+        lineCacheLimit,
+        workerRestartAttempts: attempts
+      });
+
+    expect(at(1, 1, 1)).toMatchObject({
+      debounceMs: 300,
+      lineCacheLimit: 500,
+      workerRestartAttempts: 2
+    });
+    expect(at(99999, 999999, 99)).toMatchObject({
+      debounceMs: 3000,
+      lineCacheLimit: 50000,
+      workerRestartAttempts: 10
+    });
+    expect(at(300, 500, 2)).toMatchObject({
+      debounceMs: 300,
+      lineCacheLimit: 500,
+      workerRestartAttempts: 2
+    });
+    expect(at(3000, 50000, 10)).toMatchObject({
+      debounceMs: 3000,
+      lineCacheLimit: 50000,
+      workerRestartAttempts: 10
+    });
+    expect(at(1234, 4321, 5)).toMatchObject({
+      debounceMs: 1234,
+      lineCacheLimit: 4321,
+      workerRestartAttempts: 5
+    });
+  });
+
+  it("falls back to the default for an invalid type", () => {
+    for (const bad of ["800", null, undefined, NaN, Infinity, {}, [800], true]) {
+      const resolved = resolveJapaneseLintSettings({
+        debounceMs: bad,
+        lineCacheLimit: bad,
+        workerRestartAttempts: bad
+      });
+
+      expect(resolved.debounceMs, String(bad)).toBe(800);
+      expect(resolved.lineCacheLimit, String(bad)).toBe(5000);
+      expect(resolved.workerRestartAttempts, String(bad)).toBe(3);
+    }
+  });
+
+  it("coexists with rules: a broken runtime value does not disturb rule settings", () => {
+    const resolved = resolveJapaneseLintSettings({
+      rules: {
+        "sentence-length": { enabled: true, options: { max: 60 } },
+        "no-nfd": { enabled: false }
+      },
+      debounceMs: "broken",
+      lineCacheLimit: 1234
+    });
+
+    expect(resolved.rules["sentence-length"]).toEqual({
+      enabled: true,
+      options: { max: 60 }
+    });
+    expect(resolved.rules["no-nfd"].enabled).toBe(false);
+    expect(resolved.debounceMs).toBe(800);
+    expect(resolved.lineCacheLimit).toBe(1234);
+  });
+
+  it("an old section that only has rules still resolves, with runtime defaults", () => {
+    const resolved = resolveJapaneseLintSettings({
+      rules: { "no-nfd": { enabled: false } }
+    });
+
+    expect(resolved.rules["no-nfd"].enabled).toBe(false);
+    expect(resolved.debounceMs).toBe(800);
+  });
+
+  it("keeps runtime options and rule settings apart", () => {
+    const resolved = resolveJapaneseLintSettings({ debounceMs: 900 });
+
+    expect(Object.keys(resolved.rules)).toEqual([...japaneseLintRuleIds]);
+    expect(Object.keys(resolved).sort()).toEqual(
+      ["debounceMs", "lineCacheLimit", "rules", "workerRestartAttempts"].sort()
+    );
+  });
+
+  it("the write parser accepts valid runtime values and returns them resolved", () => {
+    const parsed = parseJapaneseLintSettingsForWrite({
+      rules: { "no-nfd": { enabled: false } },
+      debounceMs: 1500,
+      lineCacheLimit: 20000,
+      workerRestartAttempts: 6
+    });
+
+    expect(parsed).toMatchObject({
+      debounceMs: 1500,
+      lineCacheLimit: 20000,
+      workerRestartAttempts: 6
+    });
+    expect(parsed.rules["no-nfd"].enabled).toBe(false);
+  });
+
+  it("the write parser rejects out-of-range, non-integer and non-number runtime values", () => {
+    for (const bad of [
+      { debounceMs: 299 },
+      { debounceMs: 3001 },
+      { lineCacheLimit: 499 },
+      { lineCacheLimit: 50001 },
+      { workerRestartAttempts: 1 },
+      { workerRestartAttempts: 11 },
+      { debounceMs: 800.5 },
+      { debounceMs: "800" },
+      { workerRestartAttempts: null },
+      { unknownRuntimeOption: 1 }
+    ]) {
+      expect(
+        () => parseJapaneseLintSettingsForWrite(bad),
+        JSON.stringify(bad)
+      ).toThrow(JapaneseLintSettingsError);
+    }
+  });
+
+  it("the unchanged rule-only write shape is still accepted", () => {
+    expect(() =>
+      parseJapaneseLintSettingsForWrite({
+        rules: { "max-ten": { options: { max: 4 } } }
+      })
+    ).not.toThrow();
   });
 });

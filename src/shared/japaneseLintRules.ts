@@ -156,6 +156,90 @@ export function isJapaneseLintRuleId(value: unknown): value is JapaneseLintRuleI
 }
 
 // ---------------------------------------------------------------------------
+// Runtime options (how the checker runs, as opposed to which rules run)
+// ---------------------------------------------------------------------------
+
+export const japaneseLintRuntimeOptionKeys = [
+  "debounceMs",
+  "lineCacheLimit",
+  "workerRestartAttempts"
+] as const;
+
+export type JapaneseLintRuntimeOptionKey =
+  (typeof japaneseLintRuntimeOptionKeys)[number];
+
+export interface JapaneseLintRuntimeOptionDefinition {
+  readonly key: JapaneseLintRuntimeOptionKey;
+  readonly labelKey: string;
+  readonly descriptionKey: string;
+  readonly unitKey: string;
+  readonly defaultValue: number;
+  readonly min: number;
+  readonly max: number;
+  readonly step: number;
+}
+
+/**
+ * Runtime settings shared by the instant check and the Linter Worker
+ * (utilityProcess). Order is the display order in Settings.
+ *   - debounceMs: quiet time after typing stops before a check runs.
+ *   - lineCacheLimit: entries of the per-line result cache reused by the
+ *     always-on check.
+ *   - workerRestartAttempts: how often a crashed Linter Worker is restarted.
+ */
+export const japaneseLintRuntimeOptionCatalog: readonly JapaneseLintRuntimeOptionDefinition[] =
+  [
+    {
+      key: "debounceMs",
+      labelKey: "japaneseLint.runtime.debounceMs.label",
+      descriptionKey: "japaneseLint.runtime.debounceMs.description",
+      unitKey: "japaneseLint.runtime.unit.ms",
+      defaultValue: 800,
+      min: 300,
+      max: 3000,
+      step: 1
+    },
+    {
+      key: "lineCacheLimit",
+      labelKey: "japaneseLint.runtime.lineCacheLimit.label",
+      descriptionKey: "japaneseLint.runtime.lineCacheLimit.description",
+      unitKey: "japaneseLint.runtime.unit.entries",
+      defaultValue: 5000,
+      min: 500,
+      max: 50000,
+      step: 1
+    },
+    {
+      key: "workerRestartAttempts",
+      labelKey: "japaneseLint.runtime.workerRestartAttempts.label",
+      descriptionKey: "japaneseLint.runtime.workerRestartAttempts.description",
+      unitKey: "japaneseLint.runtime.unit.count",
+      defaultValue: 3,
+      min: 2,
+      max: 10,
+      step: 1
+    }
+  ];
+
+export type JapaneseLintRuntimeSettings = Readonly<
+  Record<JapaneseLintRuntimeOptionKey, number>
+>;
+
+export function getJapaneseLintRuntimeOptionDefinition(
+  key: JapaneseLintRuntimeOptionKey
+): JapaneseLintRuntimeOptionDefinition {
+  const definition = japaneseLintRuntimeOptionCatalog.find(
+    (entry) => entry.key === key
+  );
+
+  if (definition === undefined) {
+    throw new Error(`Unknown Japanese lint runtime option: ${key}`);
+  }
+
+  return definition;
+}
+
+// ---------------------------------------------------------------------------
 // Settings shape
 // ---------------------------------------------------------------------------
 
@@ -169,7 +253,7 @@ export interface JapaneseLintRuleSetting {
  * The settings, always fully resolved: every catalog rule is present with a
  * concrete `enabled` (and concrete option values where the rule has options).
  */
-export interface JapaneseLintSettings {
+export interface JapaneseLintSettings extends JapaneseLintRuntimeSettings {
   readonly rules: Readonly<Record<JapaneseLintRuleId, JapaneseLintRuleSetting>>;
 }
 
@@ -182,7 +266,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function clampOption(
-  definition: JapaneseLintRuleOptionDefinition,
+  definition: Pick<
+    JapaneseLintRuleOptionDefinition,
+    "defaultValue" | "min" | "max" | "step"
+  >,
   value: unknown
 ): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -196,7 +283,10 @@ function clampOption(
 
 /**
  * Tolerant resolution of a stored / partial value (used when reading and when
- * running a lint):
+ * running a lint). The runtime options (debounceMs, lineCacheLimit,
+ * workerRestartAttempts) sit beside `rules` and follow the same policy as a
+ * numeric rule option - rounded to their step, clamped to [min, max], a
+ * non-number falling back to the default:
  *   - missing / non-object input -> catalog defaults
  *   - unknown rule ids are ignored; catalog rules missing from the input get
  *     their defaults
@@ -231,7 +321,14 @@ export function resolveJapaneseLintSettings(raw: unknown): JapaneseLintSettings 
     rules[definition.id] = { enabled, options };
   }
 
-  return { rules };
+  const rawSection = isRecord(raw) ? raw : {};
+  const runtime = {} as Record<JapaneseLintRuntimeOptionKey, number>;
+
+  for (const option of japaneseLintRuntimeOptionCatalog) {
+    runtime[option.key] = clampOption(option, rawSection[option.key]);
+  }
+
+  return { rules, ...runtime };
 }
 
 export class JapaneseLintSettingsError extends Error {
@@ -250,8 +347,32 @@ export class JapaneseLintSettingsError extends Error {
 export function parseJapaneseLintSettingsForWrite(
   raw: unknown
 ): JapaneseLintSettings {
-  if (!isRecord(raw) || Object.keys(raw).some((key) => key !== "rules")) {
-    throw new JapaneseLintSettingsError("japaneseLint must be { rules }.");
+  const allowedTopLevelKeys: readonly string[] = [
+    "rules",
+    ...japaneseLintRuntimeOptionKeys
+  ];
+
+  if (
+    !isRecord(raw) ||
+    Object.keys(raw).some((key) => !allowedTopLevelKeys.includes(key))
+  ) {
+    throw new JapaneseLintSettingsError(
+      "japaneseLint must contain only rules and the runtime options."
+    );
+  }
+
+  for (const option of japaneseLintRuntimeOptionCatalog) {
+    const value = raw[option.key];
+
+    if (
+      value !== undefined &&
+      (typeof value !== "number" ||
+        !Number.isInteger(value) ||
+        value < option.min ||
+        value > option.max)
+    ) {
+      throw new JapaneseLintSettingsError(`${option.key} is invalid.`);
+    }
   }
 
   if (raw.rules !== undefined && !isRecord(raw.rules)) {

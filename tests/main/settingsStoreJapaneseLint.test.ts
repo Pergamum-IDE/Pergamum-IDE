@@ -216,3 +216,119 @@ describe("settingsStore japaneseLint (#625)", () => {
     ).toBeUndefined();
   });
 });
+
+describe("settingsStore japaneseLint runtime options (#625 worker foundation)", () => {
+  beforeEach(() => {
+    fsMock.readFile.mockReset();
+    fsMock.writeFile.mockReset();
+    fsMock.mkdir.mockReset();
+    fsMock.writeFile.mockResolvedValue(undefined);
+    fsMock.mkdir.mockResolvedValue(undefined);
+  });
+
+  it("reads stored runtime options next to the rules", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        japaneseLint: {
+          rules: { "no-nfd": { enabled: false } },
+          debounceMs: 1200,
+          lineCacheLimit: 8000,
+          workerRestartAttempts: 4
+        }
+      })
+    );
+
+    const { japaneseLint } = await loadSettings();
+
+    expect(japaneseLint).toMatchObject({
+      debounceMs: 1200,
+      lineCacheLimit: 8000,
+      workerRestartAttempts: 4
+    });
+    expect(japaneseLint?.rules["no-nfd"].enabled).toBe(false);
+  });
+
+  it("resolves broken runtime options by default / clamp without touching rules", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        japaneseLint: {
+          rules: { "no-nfd": { enabled: false } },
+          debounceMs: "fast",
+          lineCacheLimit: 10,
+          workerRestartAttempts: 999
+        }
+      })
+    );
+
+    const { japaneseLint } = await loadSettings();
+
+    expect(japaneseLint).toMatchObject({
+      debounceMs: 800,
+      lineCacheLimit: 500,
+      workerRestartAttempts: 10
+    });
+    expect(japaneseLint?.rules["no-nfd"].enabled).toBe(false);
+  });
+
+  it("a section written before runtime options existed reads with defaults", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        japaneseLint: { rules: { "no-nfd": { enabled: false } } }
+      })
+    );
+
+    expect((await loadSettings()).japaneseLint).toMatchObject({
+      debounceMs: 800,
+      lineCacheLimit: 5000,
+      workerRestartAttempts: 3
+    });
+  });
+
+  it("persists a saved runtime change, keeps the rules, and restores it on the next load", async () => {
+    fsMock.readFile.mockResolvedValue(
+      onDiskSettings({
+        japaneseLint: { rules: { "no-nfd": { enabled: false } } }
+      })
+    );
+
+    await saveApplicationSettings(
+      saveRequest({
+        rules: { "no-nfd": { enabled: false } },
+        debounceMs: 2000,
+        lineCacheLimit: 12000,
+        workerRestartAttempts: 5
+      }) as never
+    );
+
+    const written = lastWritten();
+
+    expect(written.japaneseLint).toMatchObject({
+      debounceMs: 2000,
+      lineCacheLimit: 12000,
+      workerRestartAttempts: 5
+    });
+
+    fsMock.readFile.mockResolvedValue(JSON.stringify(written));
+
+    const restored = (await loadSettings()).japaneseLint;
+
+    expect(restored).toMatchObject({
+      debounceMs: 2000,
+      workerRestartAttempts: 5
+    });
+    expect(restored?.rules["no-nfd"].enabled).toBe(false);
+  });
+
+  it("rejects a save request with an invalid runtime option", () => {
+    for (const bad of [
+      { debounceMs: 10 },
+      { lineCacheLimit: 1e9 },
+      { workerRestartAttempts: 1.5 },
+      { debounceMs: "800" }
+    ]) {
+      expect(() =>
+        parseSaveApplicationSettingsRequest(saveRequest(bad))
+      ).toThrow("Invalid application settings.");
+    }
+  });
+});

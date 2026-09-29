@@ -64,7 +64,11 @@ function toPackageRelativePath(file) {
 
 module.exports = {
   packagerConfig: {
-    asar: true,
+    // kuromoji's dictionary is read from disk at runtime by the Japanese
+    // Linter (in the Linter Worker utilityProcess), so it ships unpacked at
+    // resources/app.asar.unpacked/node_modules/kuromoji/dict (#625).
+    // AutoUnpackNatives merges its own pattern into this one.
+    asar: { unpack: '**/node_modules/kuromoji/dict/**' },
     icon: appIcon,
     ignore: (file) => (file ? !shouldPackageFile(file) : false),
   },
@@ -96,6 +100,13 @@ module.exports = {
         build: [
           {
             entry: 'src/main/main.ts',
+            config: 'vite.main.config.mts',
+            target: 'main',
+          },
+          {
+            // #625: the Japanese Linter Worker, run by utilityProcess.fork().
+            // Its own bundle next to main.js (.vite/build/japaneseLintWorker.js).
+            entry: 'src/main/linterWorker/japaneseLintWorker.ts',
             config: 'vite.main.config.mts',
             target: 'main',
           },

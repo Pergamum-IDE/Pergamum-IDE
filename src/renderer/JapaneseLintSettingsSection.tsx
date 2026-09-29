@@ -8,9 +8,10 @@ import {
   japaneseLintRuleCatalog,
   japaneseLintRuleCategories,
   japaneseLintRuleDisplayPath,
+  japaneseLintRuntimeOptionCatalog,
   resolveJapaneseLintSettings,
   type JapaneseLintRuleDefinition,
-  type JapaneseLintRuleOptionDefinition,
+  type JapaneseLintRuntimeOptionKey,
   type JapaneseLintSettings
 } from "../shared/japaneseLintRules";
 
@@ -57,11 +58,22 @@ export function parseThresholdInput(text: string): number | null {
   return Number(trimmed);
 }
 
+/** The parts of a numeric option definition the input needs. */
+interface ThresholdOption {
+  readonly key: string;
+  readonly labelKey: string;
+  readonly min: number;
+  readonly max: number;
+}
+
 interface ThresholdInputProps {
-  readonly option: JapaneseLintRuleOptionDefinition;
-  readonly ruleId: string;
+  readonly option: ThresholdOption;
+  /** Makes the input id unique (a rule id, or "runtime"). */
+  readonly ownerId: string;
   readonly value: number;
   readonly translate: Translate;
+  /** Text after the range, e.g. "ms". */
+  readonly unit?: string;
   readonly onCommit: (value: number) => void;
 }
 
@@ -73,9 +85,10 @@ interface ThresholdInputProps {
  */
 function ThresholdInput({
   option,
-  ruleId,
+  ownerId,
   value,
   translate,
+  unit,
   onCommit
 }: ThresholdInputProps): JSX.Element {
   const [text, setText] = useState(String(value));
@@ -101,7 +114,7 @@ function ThresholdInput({
       onCommit(clamped);
     }
   };
-  const inputId = `japaneseLintOption-${ruleId}-${option.key}`;
+  const inputId = `japaneseLintOption-${ownerId}-${option.key}`;
 
   return (
     <div className="japaneseLintRuleOption">
@@ -128,6 +141,7 @@ function ThresholdInput({
           min: String(option.min),
           max: String(option.max)
         })}
+        {unit ? ` ${unit}` : ""}
       </span>
     </div>
   );
@@ -162,6 +176,7 @@ export function JapaneseLintSettingsSection({
         : current.options;
 
     return {
+      ...resolved,
       rules: {
         ...resolved.rules,
         [definition.id]: {
@@ -171,6 +186,11 @@ export function JapaneseLintSettingsSection({
       }
     };
   };
+
+  const withRuntime = (
+    key: JapaneseLintRuntimeOptionKey,
+    value: number
+  ): JapaneseLintSettings => ({ ...resolved, [key]: value });
 
   return (
     <div className="japaneseLintSettings">
@@ -230,7 +250,7 @@ export function JapaneseLintSettingsSection({
                       <ThresholdInput
                         key={option.key}
                         option={option}
-                        ruleId={definition.id}
+                        ownerId={definition.id}
                         value={setting.options?.[option.key] ?? option.defaultValue}
                         translate={translate}
                         onCommit={(value) =>
@@ -251,6 +271,41 @@ export function JapaneseLintSettingsSection({
           </div>
         </section>
       ))}
+      <section
+        className="japaneseLintRuleGroup"
+        aria-labelledby="japaneseLintGroup-runtime"
+      >
+        <h3
+          id="japaneseLintGroup-runtime"
+          className="japaneseLintRuleGroupHeading"
+        >
+          {translate("japaneseLint.category.runtime")}
+        </h3>
+        <div className="settingsItemList">
+          {japaneseLintRuntimeOptionCatalog.map((option) => (
+            <div
+              key={option.key}
+              className="settingsItemRow"
+              data-japanese-lint-runtime={option.key}
+            >
+              <ThresholdInput
+                option={option}
+                ownerId="runtime"
+                value={resolved[option.key]}
+                translate={translate}
+                unit={translate(option.unitKey as TranslationKey)}
+                onCommit={(value) => save(withRuntime(option.key, value))}
+              />
+              <p className="settingsDescription">
+                {translate(option.descriptionKey as TranslationKey)}
+              </p>
+              <code className="settingsItemKey">
+                {"JapaneseLinter." + option.key}
+              </code>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

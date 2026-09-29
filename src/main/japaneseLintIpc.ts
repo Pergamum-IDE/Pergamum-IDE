@@ -12,6 +12,7 @@ import {
 import { enabledJapaneseLintRules } from "../shared/japaneseLintRules";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import { loadSettings } from "./settingsStore";
+import { resolveJapaneseLintDictionaryPath } from "./linterWorker/japaneseLintDictionary";
 import { withJapaneseLintRejectionGuard } from "./japaneseLintRejectionGuard";
 import { lintJapanese } from "./textlint/japaneseLintEngine";
 
@@ -48,7 +49,11 @@ export interface JapaneseLintDictionary {
 export function resolveJapaneseLintDictionaryDirectory(
   appPath: string = app.getAppPath()
 ): string {
-  return path.join(appPath, "node_modules", "kuromoji", "dict");
+  return resolveJapaneseLintDictionaryPath({
+    isPackaged: app.isPackaged === true,
+    resourcesPath: process.resourcesPath,
+    appPath
+  });
 }
 
 let dictionaryCheck: Promise<boolean> | null = null;

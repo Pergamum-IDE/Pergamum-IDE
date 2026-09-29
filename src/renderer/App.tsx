@@ -2155,7 +2155,8 @@ export function App(): JSX.Element {
   // user changes a rule or threshold it changes, which makes the open
   // editor re-run the instant check with the new rules right away.
   const japaneseLintSettingsRevision = useMemo(
-    () => JSON.stringify(resolveJapaneseLintSettings(settings.japaneseLint)),
+    () =>
+      JSON.stringify(resolveJapaneseLintSettings(settings.japaneseLint).rules),
     [settings.japaneseLint]
   );
   const imeCompositionSaveGuard = useMemo(

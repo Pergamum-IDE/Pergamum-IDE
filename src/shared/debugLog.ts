@@ -133,6 +133,11 @@ export const debugLogEventNames = [
   "japaneseLint.markers.built",
   "japaneseLint.markers.applied",
   "japaneseLint.run.completed",
+  "japaneseLint.worker.started",
+  "japaneseLint.worker.ready",
+  "japaneseLint.worker.request.completed",
+  "japaneseLint.worker.exited",
+  "japaneseLint.worker.error",
   "app.uncaughtException",
   "app.unhandledRejection"
 ] as const;
@@ -353,6 +358,21 @@ export const debugLogExtensions = [
 ] as const;
 
 export type DebugLogExtension = (typeof debugLogExtensions)[number];
+
+/** #625 Linter Worker request types (lifecycle only in the foundation). */
+export const debugLogWorkerRequestTypes = [
+  "init",
+  "ping",
+  "shutdown",
+  "unknown"
+] as const;
+
+export type DebugLogWorkerRequestType =
+  (typeof debugLogWorkerRequestTypes)[number];
+
+export const debugLogLinterModes = ["foundation", "unknown"] as const;
+
+export type DebugLogLinterMode = (typeof debugLogLinterModes)[number];
 
 export const debugLogSizeBuckets = [
   "empty",
@@ -613,6 +633,25 @@ export interface DebugLogDetails {
 
   durationMs?: number;
   count?: number;
+
+  /**
+   * #625 Linter Worker (utilityProcess) diagnostics. Privacy: NEVER carries
+   * manuscript text, a line, a file name / path, a hash of any of those, a
+   * raw `error.message`, a raw stack or raw stderr. `errorName` / `errorCode`
+   * are strict identifiers and `sanitizedStack` holds allow-listed
+   * "at fn (app.asar/...:line:col)" frames only (see sanitizeErrorForLog.ts).
+   */
+  linterMode?: DebugLogLinterMode;
+  workerPid?: number;
+  exitCode?: number;
+  exitSignal?: string;
+  workerRequestType?: DebugLogWorkerRequestType;
+  workerRequestId?: string;
+  enabledRuleIds?: readonly string[];
+  errorName?: string;
+  errorCode?: string;
+  sanitizedStack?: readonly string[];
+  workerErrorKind?: string;
 
   /** Direct children of the preview container right after DOM commit (#154). */
   previewNodeCount?: number;
