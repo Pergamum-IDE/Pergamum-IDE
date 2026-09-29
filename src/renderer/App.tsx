@@ -142,6 +142,7 @@ import {
   applyWorkbenchFontFamily,
   applyWorkbenchUiFontFamilyList
 } from "./workbenchFontFamily";
+import { applyColorThemeById } from "./colorTheme";
 import { CommandPalette } from "./CommandPalette";
 import {
   createCommandPaletteCommandTitles,
@@ -2799,6 +2800,10 @@ export function App(): JSX.Element {
     effectiveSettings.workbench.notification.durationMs;
   const notificationOutputEnabled =
     effectiveSettings.notification.output.enabled;
+  // #621: theme is a class on <html>; switching never re-mounts the editor.
+  useEffect(() => {
+    applyColorThemeById(effectiveSettings.workbench.colorTheme);
+  }, [effectiveSettings.workbench.colorTheme]);
   useEffect(() => {
     applyWorkbenchFontFamily(effectiveSettings.workbench.fontFamily);
   }, [effectiveSettings.workbench.fontFamily]);

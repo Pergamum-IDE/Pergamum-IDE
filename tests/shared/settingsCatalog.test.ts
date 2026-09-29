@@ -277,7 +277,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toEqualTypeOf<string>();
       expectTypeOf(
         getCatalogDefaultValue("workbench.colorTheme")
-      ).toEqualTypeOf<string>();
+      ).toEqualTypeOf<"pergamum-light">();
       expectTypeOf(
         getCatalogDefaultValue("workbench.sound.enabled")
       ).toEqualTypeOf<boolean>();
@@ -439,34 +439,26 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toEqual({ ok: false, failure: "disallowedCharacters" });
     });
 
-    it("accepts a theme name containing spaces", () => {
+    // #621: workbench.colorTheme is an enum of built-in theme ids, so
+    // free-form names (and anything path-like) are rejected wholesale.
+    it("accepts a built-in theme id", () => {
       expect(
-        validateCatalogValue("workbench.colorTheme", "Pergamum Light")
+        validateCatalogValue("workbench.colorTheme", "pergamum-light")
       ).toEqual({ ok: true });
     });
 
-    it("rejects a comma in a theme name (unlike fontFamilyName)", () => {
-      expect(
-        validateCatalogValue("workbench.colorTheme", "Pergamum, Light")
-      ).toEqual({ ok: false, failure: "disallowedCharacters" });
-    });
-
-    it("rejects a path separator in a theme name", () => {
-      expect(
-        validateCatalogValue("workbench.colorTheme", "themes/dark")
-      ).toEqual({ ok: false, failure: "disallowedCharacters" });
-    });
-
-    it("rejects a path traversal sequence in a theme name", () => {
-      expect(
-        validateCatalogValue("workbench.colorTheme", "../../etc/passwd")
-      ).toEqual({ ok: false, failure: "disallowedCharacters" });
-    });
-
-    it("rejects control characters in a theme name", () => {
-      expect(
-        validateCatalogValue("workbench.colorTheme", "Pergamum\u0007Light")
-      ).toEqual({ ok: false, failure: "disallowedCharacters" });
+    it("rejects the pre-#621 display name and other non-id values", () => {
+      for (const value of [
+        "Pergamum Light",
+        "themes/dark",
+        "../../etc/passwd",
+        "Pergamum\u0007Light",
+        ""
+      ]) {
+        expect(validateCatalogValue("workbench.colorTheme", value).ok).toBe(
+          false
+        );
+      }
     });
   });
 
@@ -1410,9 +1402,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
 
-    it("workbench.colorTheme's default value is 'Pergamum Light'", () => {
+    it("workbench.colorTheme's default value is the 'pergamum-light' theme id", () => {
       expect(getCatalogDefaultValue("workbench.colorTheme")).toBe(
-        "Pergamum Light"
+        "pergamum-light"
       );
     });
 
@@ -1725,33 +1717,29 @@ describe("Settings Catalog Foundation (#150)", () => {
     });
   });
 
-  describe("existing implementation alignment: workbench.colorTheme (#150)", () => {
-    // Investigation finding (see the #150 PR description): unlike
-    // preview.renderer and editor.fontFamily, workbench.colorTheme /
-    // appearance.uiTheme still has no runtime consumer in #195 — no
-    // settings.json/pergamum.json read path, no CSS application, and no
-    // theme-switching mechanism.
-    it("workbench.colorTheme is registered in the catalog but no store file calls a catalog helper with it (no wired consumer)", () => {
+  describe("workbench.colorTheme wiring (#150 -> #621)", () => {
+    // #621 wires workbench.colorTheme as an applicationOnly setting: shared
+    // settings + settingsStore read/write it, and the renderer applies the
+    // resolved theme class. It is never a Project Settings key.
+    it("workbench.colorTheme is consumed by the application settings path only, not by projectConfigStore", () => {
       expect(Object.keys(settingsCatalog)).toContain("workbench.colorTheme");
 
-      for (const path of [
-        "src/main/settingsStore.ts",
-        "src/main/projectConfigStore.ts",
-        "src/shared/settings.ts"
-      ]) {
-        const source = readFileSync(path, "utf8");
-
-        expect(source).not.toMatch(/CatalogValue\("workbench\.colorTheme"/);
-        expect(source).not.toMatch(
-          /CatalogDefaultValue\("workbench\.colorTheme"/
-        );
-      }
+      expect(readFileSync("src/shared/settings.ts", "utf8")).toContain(
+        'getCatalogDefaultValue("workbench.colorTheme")'
+      );
+      expect(
+        readFileSync("src/main/projectConfigStore.ts", "utf8")
+      ).not.toContain("colorTheme");
     });
 
-    it("styles.css still has no workbench color theme CSS custom property application", () => {
+    it("styles.css defines the semantic --pg-color-* tokens on the Pergamum Light theme class", () => {
       const stylesSource = readFileSync("src/renderer/styles.css", "utf8");
 
-      expect(stylesSource).not.toContain("--workbench-color-theme");
+      expect(stylesSource).toContain(".theme-pergamum-light {");
+      expect(stylesSource).toContain("--pg-color-editor-background");
+      expect(stylesSource).toContain(
+        "--pg-color-preview-table-header-background"
+      );
     });
   });
 
@@ -1836,7 +1824,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(editorBlock).not.toContain("--pergamum-preview-font-family-list");
       expect(previewBlock).toContain("--pergamum-preview-font-family-list");
       expect(stylesSource).toContain(
-        '.preview code {\n  border-radius: 4px;\n  background: #eef3f8;\n  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;'
+        '.preview code {\n  border-radius: 4px;\n  background: var(--pg-color-preview-code-background);\n  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;'
       );
     });
 
@@ -1925,7 +1913,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
 
-    it("workbench.colorTheme remains unwired and #195 does not add Project Settings/pergamum.json consumers for Application Settings-only controls", () => {
+    it("workbench.colorTheme (wired in #621) and #195 does not add Project Settings/pergamum.json consumers for Application Settings-only controls", () => {
       expect(Object.keys(settingsCatalog)).toEqual(
         expect.arrayContaining([
           "editor.fontFamily",
@@ -1952,19 +1940,13 @@ describe("Settings Catalog Foundation (#150)", () => {
         ])
       );
 
-      for (const path of [
-        "src/main/projectConfigStore.ts",
-        "src/shared/settings.ts"
-      ]) {
-        const source = readFileSync(path, "utf8");
+// #621: colorTheme is now read by shared settings, but is still not a
+      // Project Settings consumer.
+      expect(
+        readFileSync("src/main/projectConfigStore.ts", "utf8")
+      ).not.toContain("colorTheme");
 
-        expect(source).not.toMatch(/CatalogValue\("workbench\.colorTheme"/);
-        expect(source).not.toMatch(
-          /CatalogDefaultValue\("workbench\.colorTheme"/
-        );
-      }
-
-      const projectConfigStoreSource = readFileSync(
+            const projectConfigStoreSource = readFileSync(
         "src/main/projectConfigStore.ts",
         "utf8"
       );

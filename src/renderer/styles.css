@@ -1,6 +1,102 @@
-:root {
-  color: #1f2933;
-  background: #f7f8fa;
+/* #621: application color themes.
+   Every themable color is a semantic `--pg-color-*` custom property (named
+   by role, not by hue). A built-in theme is one `.theme-<id>` rule that
+   redefines them; src/shared/colorTheme.ts is the registry and
+   src/renderer/colorTheme.ts puts the class on <html>. `:root` is also
+   listed so the app is fully styled before/without the class (fallback =
+   Pergamum Light). To add a theme: copy this block under a new
+   `.theme-<id>` selector and adjust the values. */
+:root,
+.theme-pergamum-light {
+  /* ---- App / surface ---- */
+  --pg-color-app-background: #f7f8fa;
+  --pg-color-app-foreground: #1f2933;
+  --pg-color-surface-background: #ffffff;
+  --pg-color-surface-foreground: #1f2933;
+  --pg-color-surface-muted: #52616f;
+  --pg-color-surface-hover: #eef3f8;
+  --pg-color-surface-active: #dfe8f1;
+  --pg-color-panel-background: #f2f5f8;
+  --pg-color-panel-foreground: #52616f;
+  --pg-color-panel-header-background: #fbfcfd;
+  --pg-color-panel-border: #d3dae2;
+  --pg-color-panel-divider: #e3e8ee;
+  --pg-color-accent-primary: #2563a8;
+  --pg-color-accent-secondary: #326da8;
+  --pg-color-status-info: #2563a8;
+  --pg-color-status-warning: #8a4c0f;
+  --pg-color-status-error: #a32929;
+  --pg-color-status-success: #1a7f37;
+
+  /* ---- Activity bar ---- */
+  --pg-color-activitybar-background: #edf2f7;
+  --pg-color-activitybar-foreground: #647486;
+  --pg-color-activitybar-border: #c8d2dc;
+  --pg-color-activitybar-hover-background: #dfe8f1;
+  --pg-color-activitybar-hover-foreground: #25313d;
+  --pg-color-activitybar-active-background: #ffffff;
+  --pg-color-activitybar-active-foreground: #0f2438;
+  --pg-color-activitybar-active-indicator: #326da8;
+
+  /* ---- Document tabs ---- */
+  --pg-color-tab-bar-background: #edf2f7;
+  --pg-color-tab-background: transparent;
+  --pg-color-tab-hover-background: #e2eaf2;
+  --pg-color-tab-active-background: #ffffff;
+  --pg-color-tab-foreground: #52616f;
+  --pg-color-tab-active-foreground: #17212b;
+  --pg-color-tab-border: #d3dae2;
+
+  /* ---- Controls ---- */
+  --pg-color-button-background: #ffffff;
+  --pg-color-button-foreground: #182531;
+  --pg-color-button-border: #a9b4c0;
+  --pg-color-button-hover-background: #eef3f8;
+  --pg-color-button-active-background: #dfe8f1;
+  --pg-color-input-background: #ffffff;
+  --pg-color-input-foreground: #1f2933;
+  --pg-color-input-border: #a9b4c0;
+
+  /* ---- Preview (screen) ---- */
+  --pg-color-preview-background: #ffffff;
+  --pg-color-preview-foreground: #17212b;
+  --pg-color-preview-muted: #52616f;
+  --pg-color-preview-border: #e3e8ee;
+  --pg-color-preview-link: #0000ee;
+  --pg-color-preview-link-hover: #0000ee;
+  --pg-color-preview-link-visited: #551a8b;
+  --pg-color-preview-accent: #326da8;
+  --pg-color-preview-code-background: #eef3f8;
+  --pg-color-preview-code-foreground: #17212b;
+  --pg-color-preview-code-block-background: #182531;
+  --pg-color-preview-code-block-foreground: #f7f8fa;
+  --pg-color-preview-blockquote-border: #9bb5d1;
+  --pg-color-preview-table-border: #d0d7de;
+  --pg-color-preview-table-header-background: #f6f8fa;
+  --pg-color-preview-table-header-foreground: #17212b;
+
+  /* ---- CodeMirror editor surface ---- */
+  --pg-color-editor-background: #ffffff;
+  --pg-color-editor-foreground: #1f2933;
+  --pg-color-editor-caret: #000000;
+  --pg-color-editor-selection: #d7d4f0;
+  --pg-color-editor-selection-inactive: #d9d9d9;
+  --pg-color-editor-selection-match: rgba(92, 141, 190, 0.22);
+  --pg-color-editor-line-highlight: #cceeff44;
+  --pg-color-editor-gutter-background: #f5f5f5;
+  --pg-color-editor-gutter-foreground: #6c6c6c;
+  --pg-color-editor-gutter-border: #dddddd;
+  --pg-color-editor-gutter-marker: #52616f;
+  --pg-color-editor-active-line-gutter-background: #e2f2ff;
+  --pg-color-editor-search-match-background: rgba(255, 214, 102, 0.45);
+  --pg-color-editor-search-match-active-background: rgba(255, 179, 71, 0.75);
+  --pg-color-editor-search-match-border: #e08600;
+  --pg-color-editor-diagnostic-error: #d11111;
+  --pg-color-editor-diagnostic-warning: #e0a000;
+  --pg-color-editor-diagnostic-info: #999999;
+
+  /* Pre-#621 feature-scoped color variables (callouts, sidebar, dialogs,
+     toasts) live with the theme too so a theme can redefine them. */
   /* #568 / #570: per-type callout accents, shared by the preview callouts
      and the toolbar callout dropdown items. */
   --markdown-callout-note-accent: #0969da;
@@ -26,7 +122,6 @@
   --app-dialog-header-foreground: #16222c;
   --app-dialog-warning-header-background: #f7e4e8;
   --app-dialog-warning-header-foreground: #25313d;
-  --app-dialog-title-font-weight: 700;
   --app-dialog-icon-info: #2563a8;
   --app-dialog-icon-warning: #8a4c0f;
   --app-dialog-icon-error: #a32929;
@@ -52,6 +147,12 @@
   --notification-toast-shadow: rgba(15, 36, 56, 0.24);
   --notification-toast-close-foreground: #52616f;
   --notification-toast-focus-ring: #7aa7d9;
+}
+
+:root {
+  color: var(--pg-color-app-foreground);
+  background: var(--pg-color-app-background);
+  --app-dialog-title-font-weight: 700;
   --pergamum-workbench-ui-font-family-list: sans-serif;
   --pergamum-editor-font-family-list: monospace;
   --pergamum-preview-font-family-list: serif;
@@ -77,20 +178,20 @@ textarea {
 
 button {
   height: 32px;
-  border: 1px solid #a9b4c0;
+  border: 1px solid var(--pg-color-button-border);
   border-radius: 6px;
-  background: #ffffff;
-  color: #182531;
+  background: var(--pg-color-button-background);
+  color: var(--pg-color-button-foreground);
   font: inherit;
   padding: 0 14px;
 }
 
 button:hover {
-  background: #eef3f8;
+  background: var(--pg-color-button-hover-background);
 }
 
 button:active {
-  background: #dfe8f1;
+  background: var(--pg-color-button-active-background);
 }
 
 .appShell {
@@ -98,8 +199,8 @@ button:active {
   flex-direction: column;
   height: 100vh;
   min-width: 0;
-  color: #1f2933;
-  background: #f7f8fa;
+  color: var(--pg-color-app-foreground);
+  background: var(--pg-color-app-background);
 }
 
 .appBody {
@@ -123,8 +224,8 @@ button:active {
   gap: 8px;
   min-height: 48px;
   padding: 8px 12px;
-  border-bottom: 1px solid #d3dae2;
-  background: #f2f5f8;
+  border-bottom: 1px solid var(--pg-color-panel-border);
+  background: var(--pg-color-panel-background);
   font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
 }
 
@@ -183,8 +284,8 @@ button:active {
   min-height: 0;
   flex: 0 0 auto;
   flex-direction: column;
-  border-right: 1px solid #c8d2dc;
-  background: #edf2f7;
+  border-right: 1px solid var(--pg-color-activitybar-border);
+  background: var(--pg-color-activitybar-background);
   /* UI chrome only. Editor/preview body text read their own slot variables. */
   font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
 }
@@ -211,14 +312,14 @@ button:active {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #647486;
+  color: var(--pg-color-activitybar-foreground);
   padding: 0;
 }
 
 .activityBarItem:hover {
   width: 44px;
-  background: #dfe8f1;
-  color: #25313d;
+  background: var(--pg-color-activitybar-hover-background);
+  color: var(--pg-color-activitybar-hover-foreground);
 }
 
 .activityBarItem:focus-visible {
@@ -229,8 +330,8 @@ button:active {
 .activityBarItem.isActive,
 .activityBarItem.isActive:hover {
   width: 44px;
-  background: #ffffff;
-  color: #0f2438;
+  background: var(--pg-color-activitybar-active-background);
+  color: var(--pg-color-activitybar-active-foreground);
 }
 
 .activityBarItem.isActive::before {
@@ -240,7 +341,7 @@ button:active {
   left: 0;
   width: 3px;
   border-radius: 0 2px 2px 0;
-  background: #326da8;
+  background: var(--pg-color-activitybar-active-indicator);
   content: "";
 }
 
@@ -1111,8 +1212,8 @@ label.settingsItemHeader {
   min-height: 36px;
   min-width: 0;
   align-items: stretch;
-  border-bottom: 1px solid #d3dae2;
-  background: #edf2f7;
+  border-bottom: 1px solid var(--pg-color-tab-border);
+  background: var(--pg-color-tab-bar-background);
   font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
 }
 
@@ -1165,10 +1266,10 @@ label.settingsItemHeader {
   gap: 6px;
   overflow: hidden;
   border: 0;
-  border-right: 1px solid #d3dae2;
+  border-right: 1px solid var(--pg-color-tab-border);
   border-radius: 10px 10px 0 0;
-  background: transparent;
-  color: #52616f;
+  background: var(--pg-color-tab-background);
+  color: var(--pg-color-tab-foreground);
   font-size: 13px;
   padding: 0 5px;
   text-align: left;
@@ -1176,13 +1277,13 @@ label.settingsItemHeader {
 }
 
 .documentTab:hover {
-  background: #e2eaf2;
+  background: var(--pg-color-tab-hover-background);
 }
 
 .documentTab.isActive,
 .documentTab.isActive:hover {
-  background: #ffffff;
-  color: #17212b;
+  background: var(--pg-color-tab-active-background);
+  color: var(--pg-color-tab-active-foreground);
 }
 
 /* #342: the active tab's label is bold (visual weight only — `aria-selected`
@@ -4341,11 +4442,11 @@ label.settingsItemHeader {
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--pg-color-surface-background);
 }
 
 .pane + .pane {
-  border-left: 1px solid #d3dae2;
+  border-left: 1px solid var(--pg-color-panel-border);
 }
 
 .markdownWorkspaceResizeHandle {
@@ -4364,9 +4465,9 @@ label.settingsItemHeader {
 .paneHeader {
   min-height: 34px;
   padding: 8px 12px;
-  border-bottom: 1px solid #e3e8ee;
-  color: #52616f;
-  background: #fbfcfd;
+  border-bottom: 1px solid var(--pg-color-panel-divider);
+  color: var(--pg-color-surface-muted);
+  background: var(--pg-color-panel-header-background);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -4412,7 +4513,7 @@ label.settingsItemHeader {
   justify-content: center;
   width: 14px;
   height: 14px;
-  color: #52616f;
+  color: var(--pg-color-editor-gutter-marker);
   opacity: 0.86;
 }
 
@@ -4423,7 +4524,7 @@ label.settingsItemHeader {
 }
 
 .cm-pergamum-selectionMatch {
-  background: rgba(92, 141, 190, 0.22);
+  background: var(--pg-color-editor-selection-match);
   border-radius: 2px;
 }
 
@@ -4913,13 +5014,13 @@ label.settingsItemHeader {
 }
 
 .cm-pergamum-findMatch {
-  background: rgba(255, 214, 102, 0.45);
+  background: var(--pg-color-editor-search-match-background);
   border-radius: 2px;
 }
 
 .cm-pergamum-findMatch-active {
-  background: rgba(255, 179, 71, 0.75);
-  outline: 1px solid #e08600;
+  background: var(--pg-color-editor-search-match-active-background);
+  outline: 1px solid var(--pg-color-editor-search-match-border);
 }
 
 .editorHost .cm-focused {
@@ -5076,7 +5177,8 @@ label.settingsItemHeader {
   min-height: 0;
   overflow: auto;
   padding: 24px;
-  color: #17212b;
+  background: var(--pg-color-preview-background);
+  color: var(--pg-color-preview-foreground);
   font-family: var(--pergamum-preview-font-family-list, serif);
   line-height: 1.65;
   /* #160: isolate the preview subtree's layout/paint from the rest of the
@@ -5087,6 +5189,35 @@ label.settingsItemHeader {
   contain: layout paint;
 }
 
+/* #621: paper is always print-safe. When the Preview is printed, the
+   preview tokens are pinned to their Pergamum Light values, so a dark
+   application theme never paints the page black, and the structural colors
+   (table header / border, code background, blockquote border) stay readable
+   on white paper. (The standalone HTML/PDF export builds its own document in
+   exportHtml.ts and never inherits application theme classes.) */
+@media print {
+  .preview {
+    --pg-color-preview-background: #ffffff;
+    --pg-color-preview-foreground: #17212b;
+    --pg-color-preview-muted: #52616f;
+    --pg-color-preview-border: #e3e8ee;
+    --pg-color-preview-link: #0000ee;
+    --pg-color-preview-link-hover: #0000ee;
+    --pg-color-preview-link-visited: #551a8b;
+    --pg-color-preview-accent: #326da8;
+    --pg-color-preview-code-background: #eef3f8;
+    --pg-color-preview-code-foreground: #17212b;
+    --pg-color-preview-code-block-background: #182531;
+    --pg-color-preview-code-block-foreground: #f7f8fa;
+    --pg-color-preview-blockquote-border: #9bb5d1;
+    --pg-color-preview-table-border: #d0d7de;
+    --pg-color-preview-table-header-background: #f6f8fa;
+    --pg-color-preview-table-header-foreground: #17212b;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+
 .preview > :first-child {
   margin-top: 0;
 }
@@ -5094,7 +5225,7 @@ label.settingsItemHeader {
 .preview h1 {
   margin: 0 0 16px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #e3e8ee;
+  border-bottom: 1px solid var(--pg-color-preview-border);
   font-size: 28px;
   line-height: 1.2;
 }
@@ -5111,7 +5242,7 @@ label.settingsItemHeader {
 
 .preview code {
   border-radius: 4px;
-  background: #eef3f8;
+  background: var(--pg-color-preview-code-background);
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   padding: 2px 5px;
 }
@@ -5119,8 +5250,8 @@ label.settingsItemHeader {
 .preview pre {
   overflow: auto;
   border-radius: 6px;
-  background: #182531;
-  color: #f7f8fa;
+  background: var(--pg-color-preview-code-block-background);
+  color: var(--pg-color-preview-code-block-foreground);
   padding: 14px;
 }
 
@@ -5311,8 +5442,8 @@ label.settingsItemHeader {
 
 .preview blockquote {
   margin: 0 0 14px;
-  border-left: 3px solid #9bb5d1;
-  color: #52616f;
+  border-left: 3px solid var(--pg-color-preview-blockquote-border);
+  color: var(--pg-color-preview-muted);
   padding-left: 12px;
 }
 
@@ -5325,13 +5456,26 @@ label.settingsItemHeader {
 
 .preview th,
 .preview td {
-  border: 1px solid #d0d7de;
+  border: 1px solid var(--pg-color-preview-table-border);
   padding: 6px 10px;
 }
 
 .preview th {
   font-weight: 600;
-  background-color: #f6f8fa;
+  background-color: var(--pg-color-preview-table-header-background);
+  color: var(--pg-color-preview-table-header-foreground);
+}
+
+.preview a:link {
+  color: var(--pg-color-preview-link);
+}
+
+.preview a:link:hover {
+  color: var(--pg-color-preview-link-hover);
+}
+
+.preview a:visited {
+  color: var(--pg-color-preview-link-visited);
 }
 
 /* #568: GitHub Alert-style callouts — Markdown horizontal preview only (the
@@ -7060,9 +7204,9 @@ label.settingsItemHeader {
   align-items: center;
   gap: 12px;
   min-height: 28px;
-  border-top: 1px solid #d3dae2;
-  background: #f2f5f8;
-  color: #52616f;
+  border-top: 1px solid var(--pg-color-panel-border);
+  background: var(--pg-color-panel-background);
+  color: var(--pg-color-panel-foreground);
   font-size: 12px;
   padding: 6px 12px;
   font-family: var(--pergamum-workbench-ui-font-family-list, sans-serif);
