@@ -1766,6 +1766,7 @@ export const enTranslations = {
   "settings.workbench.colorTheme.option.sakuraPink.label": "Sakura Pink",
   "settings.workbench.colorTheme.option.noblePurple.label": "Noble Purple",
   "settings.workbench.colorTheme.option.skyCyan.label": "Sky Cyan",
+  "settings.workbench.colorTheme.option.parchmentSheep.label": "Parchment Sheep",
   "settings.workbench.colorTheme.optionAria": "Change color theme to {theme}",
   "fontCache.status.notScanned": "Not scanned",
   "fontCache.status.loaded": "Last scanned: {date}",

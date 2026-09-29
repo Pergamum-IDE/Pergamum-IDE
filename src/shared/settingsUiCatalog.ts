@@ -380,7 +380,8 @@ const colorThemeOptionLabelKeys: Record<BuiltInThemeId, I18nKey> = {
   "banana-yellow": "settings.workbench.colorTheme.option.bananaYellow.label",
   "sakura-pink": "settings.workbench.colorTheme.option.sakuraPink.label",
   "noble-purple": "settings.workbench.colorTheme.option.noblePurple.label",
-  "sky-cyan": "settings.workbench.colorTheme.option.skyCyan.label"
+  "sky-cyan": "settings.workbench.colorTheme.option.skyCyan.label",
+  "parchment-sheep": "settings.workbench.colorTheme.option.parchmentSheep.label"
 };
 
 const workbenchColorThemeOptions: readonly SettingSelectOption[] =

@@ -61,6 +61,10 @@ describe("theme tokens in styles.css (#621, #623)", () => {
   const sakuraBlock = blockAt(".theme-sakura-pink {", `${newline}}${newline}`);
   const purpleBlock = blockAt(".theme-noble-purple {", `${newline}}${newline}`);
   const cyanBlock = blockAt(".theme-sky-cyan {", `${newline}}${newline}`);
+  const parchmentBlock = blockAt(
+    ".theme-parchment-sheep {",
+    `${newline}}${newline}`
+  );
   const printBlock = blockAt(
     `@media print {${newline}  .preview {`,
     `${newline}  }${newline}}`
@@ -84,7 +88,8 @@ describe("theme tokens in styles.css (#621, #623)", () => {
       { name: "Banana Yellow", tokens: tokenNames(bananaBlock) },
       { name: "Sakura Pink", tokens: tokenNames(sakuraBlock) },
       { name: "Noble Purple", tokens: tokenNames(purpleBlock) },
-      { name: "Sky Cyan", tokens: tokenNames(cyanBlock) }
+      { name: "Sky Cyan", tokens: tokenNames(cyanBlock) },
+      { name: "Parchment Sheep", tokens: tokenNames(parchmentBlock) }
     ];
 
     for (const { name, tokens } of themeBlocks) {

@@ -24,7 +24,8 @@ export const builtInThemeIds = [
   "banana-yellow",
   "sakura-pink",
   "noble-purple",
-  "sky-cyan"
+  "sky-cyan",
+  "parchment-sheep"
 ] as const;
 
 export type BuiltInThemeId = (typeof builtInThemeIds)[number];
@@ -165,6 +166,19 @@ const builtInThemeById: Record<BuiltInThemeId, BuiltInTheme> = {
       foreground: "#102a34",
       border: "#b9dbe5",
       accent: "#007a94"
+    }
+  },
+  "parchment-sheep": {
+    id: "parchment-sheep",
+    label: "Parchment Sheep",
+    kind: "light",
+    cssClassName: "theme-parchment-sheep",
+    accentColor: "#6b4f2a",
+    preview: {
+      background: "#ececd6",
+      foreground: "#1f1f16",
+      border: "#cdcdaa",
+      accent: "#6b4f2a"
     }
   }
 };

@@ -2034,6 +2034,258 @@
   --notification-toast-focus-ring: #4bb3c9;
 }
 
+.theme-parchment-sheep {
+  /* ---- App / surface ---- */
+  --pg-color-app-background: #e0e0c6;
+  --pg-color-app-foreground: #1f1f16;
+  --pg-color-surface-background: #ececd6;
+  --pg-color-surface-foreground: #1f1f16;
+  --pg-color-surface-muted: #60604b;
+  --pg-color-surface-hover: #dfdfbe;
+  --pg-color-surface-active: #d5d5ad;
+  --pg-color-panel-background: #e6e6cd;
+  --pg-color-panel-foreground: #60604b;
+  --pg-color-panel-header-background: #ededd9;
+  --pg-color-panel-border: #cdcdaa;
+  --pg-color-panel-divider: #dbdbba;
+  --pg-color-accent-primary: #6b4f2a;
+  --pg-color-accent-secondary: #7d5d33;
+  --pg-color-status-info: #2563a8;
+  --pg-color-status-warning: #8a4c0f;
+  --pg-color-status-error: #a32929;
+  --pg-color-status-success: #1f6d3a;
+
+  /* ---- Activity bar ---- */
+  --pg-color-activitybar-background: #dcdcc0;
+  --pg-color-activitybar-foreground: #626247;
+  --pg-color-activitybar-border: #c3c39c;
+  --pg-color-activitybar-hover-background: #d5d5ad;
+  --pg-color-activitybar-hover-foreground: #1c1c11;
+  --pg-color-activitybar-active-background: #ededdc;
+  --pg-color-activitybar-active-foreground: #1a1a0f;
+  --pg-color-activitybar-active-indicator: #9a6f2e;
+
+  /* ---- Document tabs ---- */
+  --pg-color-tab-bar-background: #dcdcc0;
+  --pg-color-tab-background: transparent;
+  --pg-color-tab-hover-background: #dadab0;
+  --pg-color-tab-active-background: #ededdc;
+  --pg-color-tab-foreground: #60604b;
+  --pg-color-tab-active-foreground: #1c1c11;
+  --pg-color-tab-border: #cdcdaa;
+
+  /* ---- Controls ---- */
+  --pg-color-button-background: #f3f3e4;
+  --pg-color-button-foreground: #25251a;
+  --pg-color-button-border: #aeae88;
+  --pg-color-button-hover-background: #e9e9d1;
+  --pg-color-button-active-background: #dfdfbe;
+  --pg-color-input-background: #f3f3e4;
+  --pg-color-input-foreground: #25251a;
+  --pg-color-input-border: #aeae88;
+
+  /* ---- Preview (screen) ---- */
+  --pg-color-preview-background: #ececd6;
+  --pg-color-preview-foreground: #14140d;
+  --pg-color-preview-muted: #60604b;
+  --pg-color-preview-border: #dbdbba;
+  --pg-color-preview-link: #5e4522;
+  --pg-color-preview-link-hover: #46330f;
+  --pg-color-preview-link-visited: #583988;
+  --pg-color-preview-accent: #9a6f2e;
+  --pg-color-preview-code-background: #e9e9d1;
+  --pg-color-preview-code-foreground: #1a1a0f;
+  --pg-color-preview-code-block-background: #1d1d13;
+  --pg-color-preview-code-block-foreground: #ededd9;
+  --pg-color-preview-blockquote-border: #a08a5a;
+  --pg-color-preview-table-border: #cdcdaa;
+  --pg-color-preview-table-header-background: #e9e9d1;
+  --pg-color-preview-table-header-foreground: #1a1a0f;
+
+  /* ---- CodeMirror editor surface ---- */
+  --pg-color-editor-background: #ececd6;
+  --pg-color-editor-foreground: #1f1f16;
+  --pg-color-editor-caret: #19190e;
+  --pg-color-editor-selection: #d3d2a6;
+  --pg-color-editor-selection-inactive: #e5e5c7;
+  --pg-color-editor-selection-match: rgba(105, 105, 45, 0.22);
+  --pg-color-editor-line-highlight: rgba(105, 105, 45, 0.06);
+  --pg-color-editor-gutter-background: #e9e9d1;
+  --pg-color-editor-gutter-foreground: #74745a;
+  --pg-color-editor-gutter-border: #cdcdaa;
+  --pg-color-editor-gutter-marker: #60604b;
+  --pg-color-editor-active-line-gutter-background: #e5e5c7;
+  --pg-color-editor-search-match-background: rgba(255, 214, 102, 0.45);
+  --pg-color-editor-search-match-active-background: rgba(255, 179, 71, 0.75);
+  --pg-color-editor-search-match-border: #e08600;
+  --pg-color-editor-diagnostic-error: #d11111;
+  --pg-color-editor-diagnostic-warning: #e0a000;
+  --pg-color-editor-diagnostic-info: #999999;
+  --pg-color-editor-tooltip-background: #e9e9d1;
+  --pg-color-editor-tooltip-foreground: #25251a;
+  --pg-color-editor-tooltip-border: #c3c39c;
+
+  /* ---- Role tokens ---- */
+  --pg-color-surface-subtle: #ececd7;
+  --pg-color-surface-inset: #e5e5cb;
+  --pg-color-surface-sunken: #eeeedb;
+  --pg-color-surface-tint: #e5e5cd;
+  --pg-color-surface-hover-strong: #dbdbba;
+  --pg-color-surface-faint: #74745a;
+  --pg-color-text-body: #1f1f16;
+  --pg-color-text-strong: #1a1a0f;
+  --pg-color-text-emphasis: #1c1c11;
+  --pg-color-accent-interactive: #6b4f2a;
+  --pg-color-accent-foreground: #ffffff;
+  --pg-color-link: #6b4f2a;
+  --pg-color-status-error-text: #b4232a;
+  --pg-color-border-default: #cdcdaa;
+  --pg-color-border-soft: #dbdbba;
+  --pg-color-focus-ring: #a8823f;
+  /* ---- Welcome screen / Tips card ---- */
+  --pg-color-welcome-card-background: #f1f1de;
+  --pg-color-welcome-card-foreground: #1a1a0f;
+  --pg-color-welcome-card-muted: #60604b;
+  --pg-color-welcome-card-counter: #a5a57c;
+  --pg-color-welcome-card-border: #cdcdaa;
+  --pg-color-welcome-card-divider: #dbdbba;
+  --pg-color-welcome-card-button-background: #f6f6e8;
+  --pg-color-welcome-card-button-foreground: #60604b;
+  --pg-color-welcome-card-button-border: #c3c39c;
+  --pg-color-welcome-card-button-hover-background: #e5e5cd;
+  --pg-color-welcome-card-link: #6b4f2a;
+  --pg-color-welcome-card-link-hover: #46330f;
+  --pg-color-welcome-tip-icon: #7d5d33;
+  --pg-color-logo-foreground: #1a1a0f;
+  --pg-color-preview-callout-foreground: #1a1a0f;
+  /* ---- Editor toolbar / icons ---- */
+  --pg-color-toolbar-button-foreground: #25251a;
+  --pg-color-toolbar-button-hover-background: #dfdfbe;
+  --pg-color-toolbar-button-hover-border: #cdcdaa;
+  --pg-color-toolbar-button-active-background: #d5d5ad;
+  --pg-color-toolbar-button-pressed-background: #d2d2a3;
+  --pg-color-toolbar-button-pressed-hover-background: #c7c794;
+  --pg-color-toolbar-button-pressed-border: #b2b27a;
+  --pg-color-toolbar-button-pressed-foreground: #5a4020;
+  --pg-color-toolbar-button-disabled-foreground: #8a8a66;
+  --pg-opacity-disabled: 0.6;
+  --pg-color-icon-foreground: #1a1a0f;
+  --pg-color-icon-muted: #60604b;
+  --pg-color-icon-disabled: #a5a57c;
+  /* ---- Tail role tokens ---- */
+  --pg-color-surface-hover-soft: #e5e5cd;
+  --pg-color-surface-hover-soft-alt: #e5e5cd;
+  --pg-color-surface-pressed-alt: #d5d5ad;
+  --pg-color-surface-pressed-strong: #c3c39c;
+  --pg-color-accent-muted: #b2b27a;
+  --pg-color-surface-selected-strong: #cece98;
+  --pg-color-status-error-background: #fbeaea;
+  --pg-color-status-error-background-alt: #ffebe9;
+  --pg-color-status-warning-background: #fffbeb;
+  --pg-color-status-warning-background-alt: #fff8c5;
+  --pg-color-highlight-background: #fff0a8;
+  --pg-color-highlight-background-strong: #ffe27a;
+  --pg-color-status-info-background: #eff6ff;
+  --pg-color-status-info-background-alt: #f1f8ff;
+  --pg-color-status-success-background: #dafbe1;
+  --pg-color-surface-tone-a: #ececd7;
+  --pg-color-surface-tone-b: #ededd9;
+  --pg-color-surface-tone-c: #ececd9;
+  --pg-color-surface-tone-d: #e5e5cd;
+  --pg-color-surface-tone-e: #eeeedb;
+  --pg-color-surface-tone-f: #eeeedb;
+  --pg-color-surface-tone-g: #e9e9d1;
+  --pg-color-surface-tone-h: #e5e5cd;
+  --pg-color-surface-tone-i: #e5e5cd;
+  --pg-color-surface-tone-j: #ececd7;
+  --pg-color-surface-tone-k: #ededd9;
+  --pg-color-surface-selected-soft-a: #dfdfbe;
+  --pg-color-surface-selected-soft-b: #dfdfbe;
+  --pg-color-surface-selected-soft-c: #dfdfbe;
+  --pg-color-surface-selected-soft-d: #ddddb6;
+  --pg-color-text-neutral-dark: #25251a;
+  --pg-color-status-error-text-alt: #8f1b21;
+  --pg-color-status-error-text-alt-2: #b0403a;
+  --pg-color-status-error-text-alt-3: #c0392b;
+  --pg-color-status-error-text-alt-4: #cf222e;
+  --pg-color-status-error-text-alt-5: #dc2626;
+  --pg-color-status-warning-text: #6f4d00;
+  --pg-color-status-warning-text-alt: #573600;
+  --pg-color-status-warning-text-alt-2: #9a3412;
+  --pg-color-accent-text-alt: #6b4f2a;
+  --pg-color-accent-text-alt-2: #6b4f2a;
+  --pg-color-accent-text-alt-3: #6b4f2a;
+  --pg-color-text-strongest-alt: #1a1a0f;
+  --pg-color-surface-soft: #e9e9d1;
+  --pg-color-surface-soft-alt: #ededd9;
+  --pg-color-surface-hover-alt: #dbdbba;
+  --pg-color-surface-hover-alt-2: #dfdfbe;
+  --pg-color-surface-selected: #ddddb6;
+  --pg-color-text-secondary: #4b4b36;
+  --pg-color-text-secondary-alt: #4b4b36;
+  --pg-color-text-tertiary: #60604b;
+  --pg-color-text-tertiary-alt: #60604b;
+  --pg-color-text-strongest: #1a1a0f;
+  --pg-color-text-disabled: #a5a57c;
+  --pg-color-text-disabled-alt: #a5a57c;
+  --pg-color-text-disabled-alt-2: #a5a57c;
+  --pg-color-preview-callout-note-background: #eff6ff;
+  --pg-color-preview-callout-tip-background: #eaf5ec;
+  --pg-color-preview-callout-important-background: #f6f1ff;
+  --pg-color-preview-callout-warning-background: #fff8e5;
+  --pg-color-preview-callout-caution-background: #fff0f0;
+
+  /* ---- Feature-scoped variables ---- */
+  --markdown-callout-note-accent: #0969da;
+  --markdown-callout-tip-accent: #1f6d3a;
+  --markdown-callout-important-accent: #8250df;
+  --markdown-callout-warning-accent: #9a6700;
+  --markdown-callout-caution-accent: #cf222e;
+  --workspace-sidebar-background: #ededd9;
+  --workspace-sidebar-border: #cdcdaa;
+  --workspace-sidebar-divider: #dbdbba;
+  --workspace-sidebar-header-foreground: #60604b;
+  --workspace-sidebar-item-foreground: #25251a;
+  --workspace-sidebar-muted-foreground: #74745a;
+  --workspace-sidebar-hover: #dfdfbe;
+  --workspace-sidebar-active-background: #ddddb6;
+  --workspace-sidebar-active-foreground: #1a1a0f;
+  --workspace-sidebar-focus-ring: #a8823f;
+  --app-dialog-backdrop: rgba(26, 26, 15, 0.45);
+  --app-dialog-background: #ececd6;
+  --app-dialog-border: #cdcdaa;
+  --app-dialog-foreground: #25251a;
+  --app-dialog-header-background: #e5e5cd;
+  --app-dialog-header-foreground: #1a1a0f;
+  --app-dialog-warning-header-background: #f7e4e8;
+  --app-dialog-warning-header-foreground: #25251a;
+  --app-dialog-icon-info: #2563a8;
+  --app-dialog-icon-warning: #8a4c0f;
+  --app-dialog-icon-error: #a32929;
+  --app-dialog-icon-question: #60604b;
+  --app-dialog-destructive-header-background: #f6dede;
+  --app-dialog-destructive-header-foreground: #7a1f1f;
+  --app-dialog-button-background: #e5e5cd;
+  --app-dialog-button-foreground: #1a1a0f;
+  --app-dialog-button-border: #cdcdaa;
+  --app-dialog-confirm-background: #6b4f2a;
+  --app-dialog-confirm-foreground: #ffffff;
+  --app-dialog-destructive-confirm-background: #a32929;
+  --app-dialog-destructive-confirm-foreground: #ffffff;
+  --app-dialog-focus-ring: #a8823f;
+  --app-dialog-copy-button-foreground: #60604b;
+  --app-dialog-copy-failure-foreground: #a32929;
+  --color-project-read-only: #6b4f2a;
+  --command-palette-status-unavailable: #60604b;
+  --command-palette-status-not-implemented: #60604b;
+  --notification-toast-background: #f1f1de;
+  --notification-toast-foreground: #25251a;
+  --notification-toast-border: #cdcdaa;
+  --notification-toast-shadow: rgba(26, 26, 15, 0.24);
+  --notification-toast-close-foreground: #60604b;
+  --notification-toast-focus-ring: #a8823f;
+}
+
 :root {
   color: var(--pg-color-app-foreground);
   background: var(--pg-color-app-background);

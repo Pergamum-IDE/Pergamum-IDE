@@ -118,6 +118,19 @@ describe("built-in color theme registry (#621)", () => {
           border: "#b9dbe5",
           accent: "#007a94"
         }
+      },
+      {
+        id: "parchment-sheep",
+        label: "Parchment Sheep",
+        kind: "light",
+        cssClassName: "theme-parchment-sheep",
+        accentColor: "#6b4f2a",
+        preview: {
+          background: "#ececd6",
+          foreground: "#1f1f16",
+          border: "#cdcdaa",
+          accent: "#6b4f2a"
+        }
       }
     ]);
     expect(defaultColorThemeId).toBe("pergamum-light");
@@ -141,6 +154,7 @@ describe("built-in color theme registry (#621)", () => {
     expect(isBuiltInThemeId("sakura-pink")).toBe(true);
     expect(isBuiltInThemeId("noble-purple")).toBe(true);
     expect(isBuiltInThemeId("sky-cyan")).toBe(true);
+    expect(isBuiltInThemeId("parchment-sheep")).toBe(true);
     for (const bad of [
       "no-such-theme",
       "Pergamum Light",

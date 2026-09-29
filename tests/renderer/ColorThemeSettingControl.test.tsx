@@ -98,11 +98,13 @@ describe("ColorThemeSettingControl (#623)", () => {
       "banana-yellow",
       "sakura-pink",
       "noble-purple",
-      "sky-cyan"
+      "sky-cyan",
+      "parchment-sheep"
     ]);
     expect(rows.map((row) => row.getAttribute("aria-selected"))).toEqual([
       "false",
       "true",
+      "false",
       "false",
       "false",
       "false",
@@ -192,6 +194,16 @@ describe("ColorThemeSettingControl (#623)", () => {
       background: "#e5f5fb",
       foreground: "#102a34"
     });
+
+    const parchment = container.querySelector<HTMLElement>(
+      '[data-theme-id="parchment-sheep"]'
+    )!;
+
+    // Parchment Sheep is based on #ececd6 with near-black text.
+    expect(previewOf(parchment)).toEqual({
+      background: "#ececd6",
+      foreground: "#1f1f16"
+    });
     expect(blue.style.getPropertyValue("--theme-preview-accent")).toBe(
       "#1b62b0"
     );
@@ -258,7 +270,7 @@ describe("ColorThemeSettingControl (#623)", () => {
     press(listbox()!, "End");
     press(listbox()!, " ");
 
-    expect(onChange).toHaveBeenCalledExactlyOnceWith("sky-cyan");
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("parchment-sheep");
   });
 
   it("an outside mouse-down closes the popup without changing the value", () => {
