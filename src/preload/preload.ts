@@ -217,7 +217,9 @@ const pergamumApi: PergamumApi = {
     saveProjectSettings: (request) =>
       ipcRenderer.invoke(PROJECT_CHANNELS.saveProjectSettings, request),
     closeCurrentProject: (request) =>
-      ipcRenderer.invoke(PROJECT_CHANNELS.closeCurrentProject, request)
+      ipcRenderer.invoke(PROJECT_CHANNELS.closeCurrentProject, request),
+    removeRecentProject: (projectId) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.removeRecentProject, projectId)
   },
   settings: {
     getSettings: () => ipcRenderer.invoke(SETTINGS_CHANNELS.getSettings),
@@ -413,7 +415,9 @@ const pergamumApi: PergamumApi = {
     getAppInfo: () => ipcRenderer.invoke(APP_INFO_CHANNELS.getAppInfo),
     openRepository: () => ipcRenderer.invoke(APP_INFO_CHANNELS.openRepository),
     openThirdPartyNotices: () =>
-      ipcRenderer.invoke(APP_INFO_CHANNELS.openThirdPartyNotices)
+      ipcRenderer.invoke(APP_INFO_CHANNELS.openThirdPartyNotices),
+    openExternalUrl: (url) =>
+      ipcRenderer.invoke(APP_INFO_CHANNELS.openExternalUrl, url)
   },
   imageAttachment: {
     save: (payload) =>

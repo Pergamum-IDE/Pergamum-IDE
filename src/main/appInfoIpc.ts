@@ -122,4 +122,10 @@ export function registerAppInfoIpc(options: {
   ipcMain.handle(APP_INFO_CHANNELS.openThirdPartyNotices, () =>
     openFixedExternalLink(externalLinkOpener, thirdPartyNoticesUrl)
   );
+  ipcMain.handle(APP_INFO_CHANNELS.openExternalUrl, (_event, url: unknown) => {
+    if (typeof url !== "string" || !url.startsWith("https://")) {
+      throw new Error("Only https URLs are allowed.");
+    }
+    return openFixedExternalLink(externalLinkOpener, url);
+  });
 }

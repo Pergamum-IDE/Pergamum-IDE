@@ -350,7 +350,8 @@ export const PROJECT_CHANNELS = {
    */
   registerProjectDocumentPath: "projects:registerProjectDocumentPath",
   saveProjectSettings: "projects:saveProjectSettings",
-  closeCurrentProject: "projects:closeCurrentProject"
+  closeCurrentProject: "projects:closeCurrentProject",
+  removeRecentProject: "projects:removeRecentProject"
 } as const;
 
 export const LIFECYCLE_CHANNELS = {
@@ -509,7 +510,8 @@ export const EDIT_CHANNELS = {
 export const APP_INFO_CHANNELS = {
   getAppInfo: "appInfo:getAppInfo",
   openRepository: "appInfo:openRepository",
-  openThirdPartyNotices: "appInfo:openThirdPartyNotices"
+  openThirdPartyNotices: "appInfo:openThirdPartyNotices",
+  openExternalUrl: "appInfo:openExternalUrl"
 } as const;
 
 export const APP_INFO_EXTERNAL_LINKS = {
@@ -1490,6 +1492,7 @@ export interface PergamumApi {
     closeCurrentProject: (
       request: CloseCurrentProjectRequest
     ) => Promise<CloseCurrentProjectResult>;
+    removeRecentProject: (projectId: string) => Promise<ApplicationSettings>;
   };
   settings: {
     getSettings: () => Promise<ApplicationSettings>;
@@ -1627,6 +1630,7 @@ export interface PergamumApi {
     getAppInfo: () => Promise<PergamumAppInfo>;
     openRepository: () => Promise<void>;
     openThirdPartyNotices: () => Promise<void>;
+    openExternalUrl: (url: string) => Promise<void>;
   };
   imageAttachment: {
     save: (

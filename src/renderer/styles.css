@@ -1280,6 +1280,13 @@ label.settingsItemHeader {
   line-height: 1.2;
 }
 
+.welcomeLogo {
+  display: block;
+  max-width: 220px;
+  height: auto;
+  margin-bottom: 12px;
+}
+
 .welcomePrimary p {
   margin: 0;
   color: #52616f;
@@ -1318,9 +1325,21 @@ label.settingsItemHeader {
   gap: 4px;
 }
 
+.welcomeRecentRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border-radius: 4px;
+}
+
+.welcomeRecentRow:hover {
+  background: #e9eef4;
+}
+
 .welcomeRecentItem {
   display: flex;
-  width: 100%;
+  flex: 1;
   height: auto;
   min-height: 44px;
   min-width: 0;
@@ -1333,15 +1352,47 @@ label.settingsItemHeader {
   background: transparent;
   padding: 6px 8px;
   text-align: left;
+  cursor: pointer;
 }
 
 .welcomeRecentItem:hover {
-  background: #e9eef4;
+  background: transparent;
 }
 
 .welcomeRecentItem:focus-visible {
   outline: 2px solid #7aa7d9;
   outline-offset: -2px;
+}
+
+.welcomeRecentRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #6b7785;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.welcomeRecentRemove:hover {
+  background: #d8e1eb;
+  color: #17212b;
+}
+
+.welcomeRecentRemove:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: -2px;
+}
+
+.welcomeRecentRemove svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
 }
 
 .welcomeRecentName,
@@ -1368,6 +1419,124 @@ label.settingsItemHeader {
   color: #6b7785;
   font-size: 13px;
   padding: 6px 0;
+}
+
+/* Welcome Tips Card */
+.welcomeTipCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.welcomeTipHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.welcomeTipIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #3182ce;
+  flex-shrink: 0;
+}
+
+.welcomeTipIcon svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.welcomeTipTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a202c;
+  line-height: 1.3;
+}
+
+.welcomeTipBody {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #4a5568;
+}
+
+.welcomeTipLinkContainer {
+  display: flex;
+  margin-top: 4px;
+}
+
+.welcomeTipLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #2b6cb0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.welcomeTipLink:hover {
+  background: #edf2f7;
+  color: #2c5282;
+}
+
+.welcomeTipFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.welcomeTipCounter {
+  font-size: 11px;
+  color: #a0aec0;
+}
+
+.welcomeTipNavButtons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.welcomeTipNavBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #4a5568;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.welcomeTipNavBtn:hover {
+  background: #edf2f7;
+  color: #1a202c;
+}
+
+.welcomeTipNavBtn svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 .mainArea {
