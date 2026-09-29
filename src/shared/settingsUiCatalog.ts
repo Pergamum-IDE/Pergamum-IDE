@@ -376,7 +376,9 @@ const colorThemeOptionLabelKeys: Record<BuiltInThemeId, I18nKey> = {
   "pergamum-light": "settings.workbench.colorTheme.option.pergamumLight.label",
   "night-dark": "settings.workbench.colorTheme.option.nightDark.label",
   "resistance-blue": "settings.workbench.colorTheme.option.resistanceBlue.label",
-  "enlightened-green": "settings.workbench.colorTheme.option.enlightenedGreen.label"
+  "enlightened-green": "settings.workbench.colorTheme.option.enlightenedGreen.label",
+  "banana-yellow": "settings.workbench.colorTheme.option.bananaYellow.label",
+  "sakura-pink": "settings.workbench.colorTheme.option.sakuraPink.label"
 };
 
 const workbenchColorThemeOptions: readonly SettingSelectOption[] =

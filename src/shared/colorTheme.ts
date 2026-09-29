@@ -20,7 +20,9 @@ export const builtInThemeIds = [
   "pergamum-light",
   "night-dark",
   "resistance-blue",
-  "enlightened-green"
+  "enlightened-green",
+  "banana-yellow",
+  "sakura-pink"
 ] as const;
 
 export type BuiltInThemeId = (typeof builtInThemeIds)[number];
@@ -109,6 +111,32 @@ const builtInThemeById: Record<BuiltInThemeId, BuiltInTheme> = {
       foreground: "#19261d",
       border: "#c3d7c7",
       accent: "#23733e"
+    }
+  },
+  "banana-yellow": {
+    id: "banana-yellow",
+    label: "Banana Yellow",
+    kind: "light",
+    cssClassName: "theme-banana-yellow",
+    accentColor: "#7a5600",
+    preview: {
+      background: "#f5f0e1",
+      foreground: "#272318",
+      border: "#e1d8b9",
+      accent: "#7a5600"
+    }
+  },
+  "sakura-pink": {
+    id: "sakura-pink",
+    label: "Sakura Pink",
+    kind: "light",
+    cssClassName: "theme-sakura-pink",
+    accentColor: "#a03a68",
+    preview: {
+      background: "#f2e4e8",
+      foreground: "#26191d",
+      border: "#dbbfc7",
+      accent: "#a03a68"
     }
   }
 };

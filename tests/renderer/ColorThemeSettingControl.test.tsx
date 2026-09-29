@@ -94,11 +94,15 @@ describe("ColorThemeSettingControl (#623)", () => {
       "pergamum-light",
       "night-dark",
       "resistance-blue",
-      "enlightened-green"
+      "enlightened-green",
+      "banana-yellow",
+      "sakura-pink"
     ]);
     expect(rows.map((row) => row.getAttribute("aria-selected"))).toEqual([
       "false",
       "true",
+      "false",
+      "false",
       "false",
       "false"
     ]);
@@ -154,6 +158,21 @@ describe("ColorThemeSettingControl (#623)", () => {
     expect(previewOf(green)).toEqual({
       background: "#e6f0e8",
       foreground: "#19261d"
+    });
+    const banana = container.querySelector<HTMLElement>(
+      '[data-theme-id="banana-yellow"]'
+    )!;
+    const sakura = container.querySelector<HTMLElement>(
+      '[data-theme-id="sakura-pink"]'
+    )!;
+
+    expect(previewOf(banana)).toEqual({
+      background: "#f5f0e1",
+      foreground: "#272318"
+    });
+    expect(previewOf(sakura)).toEqual({
+      background: "#f2e4e8",
+      foreground: "#26191d"
     });
     expect(blue.style.getPropertyValue("--theme-preview-accent")).toBe(
       "#1b62b0"
@@ -215,7 +234,7 @@ describe("ColorThemeSettingControl (#623)", () => {
     press(listbox()!, "End");
     press(listbox()!, " ");
 
-    expect(onChange).toHaveBeenCalledExactlyOnceWith("enlightened-green");
+    expect(onChange).toHaveBeenCalledExactlyOnceWith("sakura-pink");
   });
 
   it("an outside mouse-down closes the popup without changing the value", () => {

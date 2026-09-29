@@ -57,6 +57,8 @@ describe("theme tokens in styles.css (#621, #623)", () => {
   const nightBlock = blockAt(".theme-night-dark {", `${newline}}${newline}`);
   const blueBlock = blockAt(".theme-resistance-blue {", `${newline}}${newline}`);
   const greenBlock = blockAt(".theme-enlightened-green {", `${newline}}${newline}`);
+  const bananaBlock = blockAt(".theme-banana-yellow {", `${newline}}${newline}`);
+  const sakuraBlock = blockAt(".theme-sakura-pink {", `${newline}}${newline}`);
   const printBlock = blockAt(
     `@media print {${newline}  .preview {`,
     `${newline}  }${newline}}`
@@ -76,7 +78,9 @@ describe("theme tokens in styles.css (#621, #623)", () => {
     const themeBlocks = [
       { name: "Night Dark", tokens: tokenNames(nightBlock) },
       { name: "Resistance Blue", tokens: tokenNames(blueBlock) },
-      { name: "Enlightened Green", tokens: tokenNames(greenBlock) }
+      { name: "Enlightened Green", tokens: tokenNames(greenBlock) },
+      { name: "Banana Yellow", tokens: tokenNames(bananaBlock) },
+      { name: "Sakura Pink", tokens: tokenNames(sakuraBlock) }
     ];
 
     for (const { name, tokens } of themeBlocks) {

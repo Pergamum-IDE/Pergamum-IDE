@@ -1763,6 +1763,8 @@ export const jaTranslations = {
   "settings.workbench.colorTheme.option.nightDark.label": "Night Dark",
   "settings.workbench.colorTheme.option.resistanceBlue.label": "Resistance Blue",
   "settings.workbench.colorTheme.option.enlightenedGreen.label": "Enlightened Green",
+  "settings.workbench.colorTheme.option.bananaYellow.label": "Banana Yellow",
+  "settings.workbench.colorTheme.option.sakuraPink.label": "Sakura Pink",
   "settings.workbench.colorTheme.optionAria": "配色テーマを {theme} に変更",
   "fontCache.status.notScanned": "未スキャン",
   "fontCache.status.loaded": "最終スキャン: {date}",

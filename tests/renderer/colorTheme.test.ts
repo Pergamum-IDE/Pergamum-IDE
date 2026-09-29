@@ -66,6 +66,32 @@ describe("built-in color theme registry (#621)", () => {
           border: "#c3d7c7",
           accent: "#23733e"
         }
+      },
+      {
+        id: "banana-yellow",
+        label: "Banana Yellow",
+        kind: "light",
+        cssClassName: "theme-banana-yellow",
+        accentColor: "#7a5600",
+        preview: {
+          background: "#f5f0e1",
+          foreground: "#272318",
+          border: "#e1d8b9",
+          accent: "#7a5600"
+        }
+      },
+      {
+        id: "sakura-pink",
+        label: "Sakura Pink",
+        kind: "light",
+        cssClassName: "theme-sakura-pink",
+        accentColor: "#a03a68",
+        preview: {
+          background: "#f2e4e8",
+          foreground: "#26191d",
+          border: "#dbbfc7",
+          accent: "#a03a68"
+        }
       }
     ]);
     expect(defaultColorThemeId).toBe("pergamum-light");
@@ -85,8 +111,10 @@ describe("built-in color theme registry (#621)", () => {
     expect(isBuiltInThemeId("night-dark")).toBe(true);
     expect(isBuiltInThemeId("resistance-blue")).toBe(true);
     expect(isBuiltInThemeId("enlightened-green")).toBe(true);
+    expect(isBuiltInThemeId("banana-yellow")).toBe(true);
+    expect(isBuiltInThemeId("sakura-pink")).toBe(true);
     for (const bad of [
-      "banana-yellow",
+      "no-such-theme",
       "Pergamum Light",
       "",
       undefined,
@@ -100,7 +128,7 @@ describe("built-in color theme registry (#621)", () => {
   });
 
   it("resolveColorTheme falls back to Pergamum Light for unknown values", () => {
-    for (const bad of ["banana-yellow", undefined, null, 3, "constructor"]) {
+    for (const bad of ["no-such-theme", undefined, null, 3, "constructor"]) {
       expect(resolveColorTheme(bad).id).toBe("pergamum-light");
     }
   });
