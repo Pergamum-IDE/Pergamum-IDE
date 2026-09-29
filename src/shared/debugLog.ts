@@ -378,6 +378,7 @@ export const debugLogLinterModes = [
   "foundation",
   "worker-lint",
   "instant-worker",
+  "wizard",
   "unknown"
 ] as const;
 

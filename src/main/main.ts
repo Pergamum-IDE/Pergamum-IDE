@@ -43,6 +43,10 @@ import {
   registerJapaneseLintIpc,
   releaseJapaneseLintWorker
 } from "./japaneseLintIpc";
+import {
+  disposeJapaneseMachineCheck,
+  registerJapaneseMachineCheckIpc
+} from "./japaneseMachineCheckIpc";
 import { isJapaneseLintRejectionWindow } from "./japaneseLintRejectionGuard";
 import { SESSION_CHANNELS, WINDOW_CHANNELS, type ColdStartRestorePayload } from "../shared/api";
 import {
@@ -256,6 +260,7 @@ function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
     try {
       // #625: stop the Japanese lint Worker (never rejects).
       await releaseJapaneseLintWorker();
+      await disposeJapaneseMachineCheck();
       // #285: release the Recovery Store ownership lock (owner only) before
       // the project write lock, so a normal quit leaves nothing behind.
       await shutdownRecoveryStore(logger);
@@ -401,6 +406,7 @@ app.whenReady().then(async () => {
   registerSettingsIpc();
   registerFontCacheIpc();
   registerJapaneseLintIpc();
+  registerJapaneseMachineCheckIpc();
   registerImageAttachmentIpc();
   registerImageInsertionIpc();
   // #411: read-only diagnostics for broken project-local image links in the

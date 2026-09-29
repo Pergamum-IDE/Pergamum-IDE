@@ -116,6 +116,8 @@ interface WorkspaceSidebarProps {
   fileExplorerDirtyProjectDocumentRelativePaths?: readonly string[];
   onFileExplorerMoveResultMessage?: (message: string) => void;
   onFileExplorerExport?: (origin: ExportOrigin) => void;
+  /** #625 P2a: open the Japanese machine check wizard for a file. */
+  onFileExplorerJapaneseMachineCheck?: (relativePath: string) => void;
   /**
    * #436: open an existing glossary entry for editing (Glossary side pane row
    * "…"). Routes to the entry's glossary Description tab (#573 Slice 7).
@@ -251,6 +253,7 @@ export function WorkspaceSidebar({
   fileExplorerDirtyProjectDocumentRelativePaths,
   onFileExplorerMoveResultMessage,
   onFileExplorerExport,
+  onFileExplorerJapaneseMachineCheck,
   onActivateGlossaryEntry,
   onOpenNewGlossaryEntryTab,
   glossaryActiveDocumentContent,
@@ -333,6 +336,7 @@ export function WorkspaceSidebar({
               }
               onMoveResultMessage={onFileExplorerMoveResultMessage}
               onExportFromFileExplorer={onFileExplorerExport}
+              onJapaneseMachineCheck={onFileExplorerJapaneseMachineCheck}
               onActivateDocument={onActivateProjectDocument}
             />
           }

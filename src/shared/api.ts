@@ -87,6 +87,13 @@ import type {
   JapaneseLintResponse
 } from "./japaneseLint";
 import type {
+  JapaneseMachineCheckPrepareRequest,
+  JapaneseMachineCheckPrepareResult,
+  JapaneseMachineCheckProgress,
+  JapaneseMachineCheckRunResult,
+  JapaneseMachineCheckTarget
+} from "./japaneseMachineCheck";
+import type {
   RecoveryDocumentPayload,
   RecoveryDocumentWriteResult
 } from "./recoveryDocument";
@@ -477,6 +484,14 @@ export const APPLICATION_MENU_CHANNELS = {
 export const JAPANESE_LINT_CHANNELS = {
   lint: "japaneseLint:lint",
   release: "japaneseLint:release"
+} as const;
+
+export const JAPANESE_MACHINE_CHECK_CHANNELS = {
+  prepare: "japaneseMachineCheck:prepare",
+  run: "japaneseMachineCheck:run",
+  cancel: "japaneseMachineCheck:cancel",
+  /** main -> renderer: coarse stage of the run in flight */
+  progress: "japaneseMachineCheck:progress"
 } as const;
 
 export const FONT_CACHE_CHANNELS = {
@@ -1678,6 +1693,19 @@ export interface PergamumApi {
     lint: (request: JapaneseLintRequest) => Promise<JapaneseLintResponse>;
     /** Linter OFF: lets the Main Process stop the lint Worker. */
     release: () => Promise<void>;
+  };
+  japaneseMachineCheck: {
+    prepare: (
+      request: JapaneseMachineCheckPrepareRequest
+    ) => Promise<JapaneseMachineCheckPrepareResult>;
+    run: (
+      request: JapaneseMachineCheckTarget
+    ) => Promise<JapaneseMachineCheckRunResult>;
+    /** Safe to call repeatedly; a no-op when nothing runs. */
+    cancel: () => Promise<void>;
+    onProgress: (
+      callback: (progress: JapaneseMachineCheckProgress) => void
+    ) => () => void;
   };
   fontCache: {
     load: () => Promise<FontCacheState>;

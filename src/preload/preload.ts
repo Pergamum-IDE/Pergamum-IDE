@@ -9,6 +9,7 @@ import {
   FILE_CHANNELS,
   FONT_CACHE_CHANNELS,
   JAPANESE_LINT_CHANNELS,
+  JAPANESE_MACHINE_CHECK_CHANNELS,
   GLOSSARY_CHANNELS,
   IMAGE_ATTACHMENT_CHANNELS,
   IMAGE_INSERTION_CHANNELS,
@@ -457,6 +458,28 @@ const pergamumApi: PergamumApi = {
   japaneseLint: {
     lint: (request) => ipcRenderer.invoke(JAPANESE_LINT_CHANNELS.lint, request),
     release: () => ipcRenderer.invoke(JAPANESE_LINT_CHANNELS.release)
+  },
+  japaneseMachineCheck: {
+    prepare: (request) =>
+      ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.prepare, request),
+    run: (request) =>
+      ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.run, request),
+    cancel: () => ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.cancel),
+    onProgress: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        progress: Parameters<typeof callback>[0]
+      ): void => callback(progress);
+
+      ipcRenderer.on(JAPANESE_MACHINE_CHECK_CHANNELS.progress, listener);
+
+      return () => {
+        ipcRenderer.removeListener(
+          JAPANESE_MACHINE_CHECK_CHANNELS.progress,
+          listener
+        );
+      };
+    }
   },
   fontCache: {
     load: () => ipcRenderer.invoke(FONT_CACHE_CHANNELS.load),

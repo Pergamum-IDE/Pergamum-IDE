@@ -15207,3 +15207,85 @@ label.settingsItemHeader {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* #625 P2a: Japanese machine check wizard. Logical properties only (RTL). */
+.appDialog.japaneseMachineCheckDialog {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.japaneseMachineCheckBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.japaneseMachineCheckFacts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 16px;
+  row-gap: 4px;
+  margin: 0;
+}
+
+.japaneseMachineCheckFacts dt {
+  opacity: 0.75;
+}
+
+.japaneseMachineCheckFacts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.japaneseMachineCheckEstimate,
+.japaneseMachineCheckNotice,
+.japaneseMachineCheckMuted,
+.japaneseMachineCheckFile,
+.japaneseMachineCheckRunningTitle,
+.japaneseMachineCheckStatus {
+  margin: 0;
+}
+
+.japaneseMachineCheckNotice {
+  padding-block: 8px;
+  padding-inline: 10px;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 4px;
+}
+
+.japaneseMachineCheckMuted {
+  opacity: 0.7;
+}
+
+.japaneseMachineCheckFile {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.japaneseMachineCheckElapsed {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.japaneseMachineCheckRunningNote {
+  margin: 0;
+  white-space: pre-line;
+  opacity: 0.8;
+}
+
+.japaneseMachineCheckTable {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+.japaneseMachineCheckTable th,
+.japaneseMachineCheckTable td {
+  padding-block: 4px;
+  padding-inline: 8px;
+  border-block-end: 1px solid var(--app-dialog-border);
+  text-align: start;
+}
+
+.japaneseMachineCheckTable .japaneseMachineCheckCount {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}

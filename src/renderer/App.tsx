@@ -265,6 +265,7 @@ import {
   GlossaryExportWizardErrorBoundary,
   type OccurrenceCountValue
 } from "./dialog/GlossaryExportWizardDialog";
+import { JapaneseMachineCheckDialog } from "./dialog/JapaneseMachineCheckDialog";
 import type { GlossaryExportPlan } from "./glossaryExport/glossaryExportModel";
 import { renderGlossaryDescriptionForExport } from "./glossaryExport/glossaryExportHtml";
 import { countGlossaryEntryOccurrences } from "./glossaryExport/glossaryExportOccurrences";
@@ -1529,6 +1530,12 @@ export function App(): JSX.Element {
 
   // #581 Slice 1: the Glossary Export Wizard Dialog open state & occurrences map
   const [isGlossaryExportWizardOpen, setIsGlossaryExportWizardOpen] = useState(false);
+  // #625 P2a: the Japanese machine check wizard, opened from a File Explorer
+  // file's context menu. `isDirty` is captured when it opens.
+  const [japaneseMachineCheckTarget, setJapaneseMachineCheckTarget] = useState<{
+    readonly relativePath: string;
+    readonly isDirty: boolean;
+  } | null>(null);
   const [
     glossaryExportWizardOccurrenceCounts,
     setGlossaryExportWizardOccurrenceCounts
@@ -12974,6 +12981,15 @@ export function App(): JSX.Element {
                       onFileExplorerExport={(origin) => {
                         void handleFileExplorerExport(origin);
                       }}
+                      onFileExplorerJapaneseMachineCheck={(relativePath) => {
+                        setJapaneseMachineCheckTarget({
+                          relativePath,
+                          isDirty:
+                            fileExplorerDirtyProjectDocumentPaths.includes(
+                              relativePath
+                            )
+                        });
+                      }}
                       onActivateGlossaryEntry={(entryId) => {
                         executeUiCommand(
                           glossaryCommandIds.openEntry,
@@ -13496,6 +13512,18 @@ export function App(): JSX.Element {
           onExportCombined={exportCombinedGlossary}
         />
       </GlossaryExportWizardErrorBoundary>
+
+      {japaneseMachineCheckTarget ? (
+        <JapaneseMachineCheckDialog
+          key={japaneseMachineCheckTarget.relativePath}
+          relativePath={japaneseMachineCheckTarget.relativePath}
+          isDirty={japaneseMachineCheckTarget.isDirty}
+          translate={translate}
+          uiLanguage={displayLanguage}
+          platform={window.pergamum.platform}
+          onClose={() => setJapaneseMachineCheckTarget(null)}
+        />
+      ) : null}
 
       <DocumentMapPngExportDialog
         snapshot={documentMapPngExportSnapshot}
