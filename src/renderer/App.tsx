@@ -1147,6 +1147,17 @@ export function App(): JSX.Element {
     setIsJapaneseLintActive(false);
   }, [project]);
 
+  // #625 P2c: the 日本語表現チェック wizard belongs to the project it was
+  // opened in. Closing / switching the project closes it (its unmount cancels
+  // a running check; the Main Process drops the kept result on its own).
+  const japaneseStyleCheckProjectKey = project
+    ? `${project.rootPath}|${project.activeProjectFilePath}`
+    : null;
+
+  useEffect(() => {
+    setJapaneseMachineCheckTarget(null);
+  }, [japaneseStyleCheckProjectKey]);
+
   // #625: Linter OFF (toggle, project open/close, oversized document) lets the
   // Main Process stop the lint Worker. Nothing is sent while it is ON.
   useEffect(() => {

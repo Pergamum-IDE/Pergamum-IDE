@@ -117,6 +117,9 @@ export function JapaneseMachineCheckDialog({
   // A run that was canceled (or whose dialog closed) never becomes a summary,
   // even when its answer still arrives.
   const runTokenRef = useRef(0);
+  // #625 P2c: names this dialog's run so that progress and cancel are matched
+  // to it (a late event of another run is ignored / cannot cancel this one).
+  const runIdRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   // #625 P2b: the Markdown report save. Main owns the findings and the text;
@@ -160,7 +163,11 @@ export function JapaneseMachineCheckDialog({
       // Closing while a run is in flight stops it.
       if (screenRef.current.kind === "running") {
         runTokenRef.current += 1;
-        void api.cancel().catch(() => undefined);
+        void api
+          .cancel(
+            runIdRef.current !== null ? { runId: runIdRef.current } : undefined
+          )
+          .catch(() => undefined);
       }
 
       // Main may forget the finished run's findings and text.
@@ -181,6 +188,11 @@ export function JapaneseMachineCheckDialog({
     }
 
     return api.onProgress((progress) => {
+      // Only this dialog's own run: a stale run's stages are ignored.
+      if (progress.runId !== runIdRef.current) {
+        return;
+      }
+
       setScreen((current) =>
         current.kind === "running" && !current.canceling
           ? { ...current, stage: progress.stage }
@@ -210,10 +222,14 @@ export function JapaneseMachineCheckDialog({
 
   const startRun = useCallback(() => {
     const token = ++runTokenRef.current;
+    const runId = `run-${Date.now().toString(36)}-${token}-${Math.floor(
+      Math.random() * 1e9
+    ).toString(36)}`;
 
+    runIdRef.current = runId;
     setScreen({ kind: "running", stage: "starting", canceling: false });
     void api
-      .run({ relativePath })
+      .run({ relativePath, runId })
       .then((result) => {
         if (token !== runTokenRef.current || !mountedRef.current) {
           return;
@@ -245,7 +261,9 @@ export function JapaneseMachineCheckDialog({
     runTokenRef.current += 1;
     setScreen({ kind: "running", stage: "starting", canceling: true });
     void api
-      .cancel()
+      .cancel(
+        runIdRef.current !== null ? { runId: runIdRef.current } : undefined
+      )
       .catch(() => undefined)
       .finally(() => {
         if (mountedRef.current) {

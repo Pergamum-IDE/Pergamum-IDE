@@ -392,6 +392,10 @@ export const debugLogLintFailureReasons = [
   "not-ready",
   "write-failed",
   "invalid-target",
+  "project-closed",
+  "project-switched",
+  "discarded",
+  "app-shutdown",
   "unknown"
 ] as const;
 
@@ -684,6 +688,9 @@ export interface DebugLogDetails {
   totalMessages?: number;
   returnedMessages?: number;
   truncated?: boolean;
+  /** #625 P2c: wizard cleanup - a job was running / a result was kept. */
+  hasRunningJob?: boolean;
+  hasStoredResult?: boolean;
   failureReason?: DebugLogLintFailureReason;
   enabledRuleIds?: readonly string[];
   errorName?: string;

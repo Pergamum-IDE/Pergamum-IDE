@@ -464,7 +464,8 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.prepare, request),
     run: (request) =>
       ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.run, request),
-    cancel: () => ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.cancel),
+    cancel: (request) =>
+      ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.cancel, request),
     saveReport: (request) =>
       ipcRenderer.invoke(JAPANESE_MACHINE_CHECK_CHANNELS.saveReport, request),
     discardResult: (request) =>

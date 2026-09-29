@@ -91,9 +91,10 @@ import type {
   JapaneseMachineCheckPrepareResult,
   JapaneseMachineCheckProgress,
   JapaneseMachineCheckRunResult,
+  JapaneseMachineCheckCancelRequest,
+  JapaneseMachineCheckRunRequest,
   JapaneseMachineCheckSaveReportRequest,
-  JapaneseMachineCheckSaveReportResult,
-  JapaneseMachineCheckTarget
+  JapaneseMachineCheckSaveReportResult
 } from "./japaneseMachineCheck";
 import type {
   RecoveryDocumentPayload,
@@ -1704,10 +1705,13 @@ export interface PergamumApi {
       request: JapaneseMachineCheckPrepareRequest
     ) => Promise<JapaneseMachineCheckPrepareResult>;
     run: (
-      request: JapaneseMachineCheckTarget
+      request: JapaneseMachineCheckRunRequest
     ) => Promise<JapaneseMachineCheckRunResult>;
-    /** Safe to call repeatedly; a no-op when nothing runs. */
-    cancel: () => Promise<void>;
+    /**
+     * Safe to call repeatedly; a no-op when nothing runs, or when `runId`
+     * names a run that is not the current one.
+     */
+    cancel: (request?: JapaneseMachineCheckCancelRequest) => Promise<void>;
     /** Main shows the save dialog and writes the report; never rejects. */
     saveReport: (
       request: JapaneseMachineCheckSaveReportRequest

@@ -5,6 +5,7 @@ import {
   type IpcMainInvokeEvent
 } from "electron";
 import { promises as fs } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { JAPANESE_MACHINE_CHECK_CHANNELS } from "../shared/api";
 import { t, type Language } from "../shared/i18n";
@@ -14,6 +15,7 @@ import {
   japaneseMachineCheckFormatForPath,
   parseJapaneseMachineCheckRequest,
   parseJapaneseMachineCheckResultId,
+  parseJapaneseMachineCheckRunId,
   type JapaneseMachineCheckFailureReason,
   type JapaneseMachineCheckPrepareResult,
   type JapaneseMachineCheckProgress,
@@ -27,7 +29,7 @@ import { isProtectedPergamumDataFilePath } from "../shared/saveTargetPolicy";
 import { writeFileAtomic } from "./atomicFileWrite";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import { decodeMarkdownBytes } from "./markdownFileIo";
-import { currentProjectRootPath } from "./projectIpc";
+import { currentProjectRootPath, onProjectBoundary } from "./projectIpc";
 import { loadSettings } from "./settingsStore";
 import { decodeTextFileBytes, type DecodeTextFileBytesResult } from "./textFileIo";
 import type { JapaneseLintHost } from "./linterWorker/japaneseLintHost";
@@ -66,6 +68,7 @@ export interface JapaneseMachineCheckDeps {
   /** UI language for the report wording. */
   languageProvider(): Promise<Language>;
   now?(): Date;
+  newRunId?(): string;
   logger: Pick<DebugLogger, "log">;
 }
 
@@ -82,9 +85,14 @@ export interface JapaneseMachineCheckService {
     rawRequest: unknown,
     onProgress?: (progress: JapaneseMachineCheckProgress) => void
   ): Promise<JapaneseMachineCheckRunResult>;
-  /** Safe to call any number of times; a no-op when nothing is running. */
-  cancel(): Promise<void>;
-  /** App quit: stops a run in flight and its Worker. */
+  /**
+   * Safe to call any number of times; a no-op when nothing is running or when
+   * `runId` (if given) is not the current run.
+   */
+  cancel(rawRequest?: unknown): Promise<void>;
+  /** #625 P2c: the project was closed / replaced. Idempotent. */
+  handleProjectBoundary(reason: "closed" | "switched"): void;
+  /** App quit: stops a run in flight and its Worker, drops kept results. */
   dispose(): Promise<void>;
 }
 
@@ -94,6 +102,8 @@ export interface JapaneseMachineCheckService {
  */
 interface FinishedRun {
   readonly resultId: string;
+  /** The project the run belonged to; a report is never saved across it. */
+  readonly projectRoot: string;
   readonly absolutePath: string;
   readonly fileName: string;
   readonly sourceText: string;
@@ -168,8 +178,13 @@ export function createJapaneseMachineCheckService(
   let active: {
     readonly host: JapaneseLintHost;
     readonly jobId: string;
+    readonly runId: string;
     canceled: boolean;
   } | null = null;
+  // The run being accepted / executed (also before `active` exists).
+  let currentRunId: string | null = null;
+  // The last run's completion incl. its Worker's disposal (for quit).
+  let settledRun: Promise<unknown> = Promise.resolve();
   // Set while a run is between "accepted" and "Worker gone".
   let running = false;
   // A cancel that arrives before the Worker exists (still reading the file).
@@ -305,7 +320,9 @@ export function createJapaneseMachineCheckService(
     }
   }
 
-  async function run(
+  let disposingWorker: Promise<unknown> = Promise.resolve();
+
+  async function runInner(
     rawRequest: unknown,
     onProgress?: (progress: JapaneseMachineCheckProgress) => void
   ): Promise<JapaneseMachineCheckRunResult> {
@@ -318,10 +335,21 @@ export function createJapaneseMachineCheckService(
     // A new run replaces the kept result of the previous one.
     lastRun = null;
 
+    const runId =
+      parseJapaneseMachineCheckRunId(rawRequest) ??
+      (deps.newRunId?.() ?? randomUUID());
+
+    currentRunId = runId;
+
     const startedAt = Date.now();
-    const notify = (progress: JapaneseMachineCheckProgress): void => {
+    const notify = (stage: JapaneseMachineCheckProgress["stage"]): void => {
+      // A canceled / superseded run says nothing more.
+      if (currentRunId !== runId || cancelRequested || active?.canceled) {
+        return;
+      }
+
       try {
-        onProgress?.(progress);
+        onProgress?.({ runId, stage });
       } catch {
         /* a progress listener must not break the run */
       }
@@ -329,7 +357,7 @@ export function createJapaneseMachineCheckService(
     let host: JapaneseLintHost | null = null;
 
     try {
-      notify({ stage: "starting" });
+      notify("starting");
 
       const loaded = await load(rawRequest);
 
@@ -337,6 +365,12 @@ export function createJapaneseMachineCheckService(
         log({ result: "failed", failureReason: "read-failed" });
 
         return loaded;
+      }
+
+      const projectRoot = deps.currentProjectRootPath();
+
+      if (cancelRequested || projectRoot === null) {
+        return { ok: false, reason: "canceled" };
       }
 
       const stored = await readSettings();
@@ -352,7 +386,7 @@ export function createJapaneseMachineCheckService(
 
       const jobId = host.createJobId();
 
-      active = { host, jobId, canceled: cancelRequested };
+      active = { host, jobId, runId, canceled: cancelRequested };
 
       const state = active;
 
@@ -376,13 +410,14 @@ export function createJapaneseMachineCheckService(
             progress.stage === "dictionary-check" ||
             progress.stage === "lint-running"
           ) {
-            notify({ stage: progress.stage });
+            notify(progress.stage);
           }
         }
       });
 
       // A canceled run never becomes a summary, whatever the Worker sent.
-      if (state.canceled) {
+      // Neither does one whose project was closed or replaced meanwhile.
+      if (state.canceled || deps.currentProjectRootPath() !== projectRoot) {
         return { ok: false, reason: "canceled" };
       }
 
@@ -407,7 +442,7 @@ export function createJapaneseMachineCheckService(
         };
       }
 
-      notify({ stage: "aggregating" });
+      notify("aggregating");
 
       const counts = new Map<string, number>();
 
@@ -438,6 +473,7 @@ export function createJapaneseMachineCheckService(
       // The findings and the checked text stay here for the report.
       lastRun = {
         resultId: jobId,
+        projectRoot,
         absolutePath: source.absolutePath,
         fileName: source.fileName,
         sourceText: source.text,
@@ -473,11 +509,29 @@ export function createJapaneseMachineCheckService(
 
       active = null;
       running = false;
+      if (currentRunId === runId) {
+        currentRunId = null;
+      }
 
       if (workerHost !== null) {
-        void workerHost.dispose().catch(() => undefined);
+        // Awaited by dispose() (app quit) through settledRun.
+        disposingWorker = workerHost.dispose().catch(() => undefined);
       }
     }
+  }
+
+  function run(
+    rawRequest: unknown,
+    onProgress?: (progress: JapaneseMachineCheckProgress) => void
+  ): Promise<JapaneseMachineCheckRunResult> {
+    const result = runInner(rawRequest, onProgress);
+
+    settledRun = result.then(
+      () => disposingWorker,
+      () => disposingWorker
+    );
+
+    return result;
   }
 
   async function saveReport(
@@ -489,7 +543,13 @@ export function createJapaneseMachineCheckService(
     const run = lastRun;
 
     // Only a finished run of this session can be saved, and only by its id.
-    if (resultId === null || run === null || run.resultId !== resultId) {
+    if (
+      resultId === null ||
+      run === null ||
+      run.resultId !== resultId ||
+      // A result never outlives its project.
+      deps.currentProjectRootPath() !== run.projectRoot
+    ) {
       reportLog({ result: "failed", failureReason: "not-ready" });
 
       return { ok: false, reason: "not-ready" };
@@ -507,6 +567,22 @@ export function createJapaneseMachineCheckService(
         `${run.fileName}.lint.md`
       );
       const chosen = await deps.showSaveDialog(defaultPath, owner);
+
+      // The project was closed / switched, or the result discarded, while the
+      // save dialog was open: nothing is written.
+      if (
+        lastRun !== run ||
+        deps.currentProjectRootPath() !== run.projectRoot
+      ) {
+        reportLog({
+          result: "failed",
+          failureReason: "not-ready",
+          workerJobId: run.resultId,
+          durationMs: Date.now() - startedAt
+        });
+
+        return { ok: false, reason: "not-ready" };
+      }
 
       if (chosen === null) {
         reportLog({
@@ -583,15 +659,43 @@ export function createJapaneseMachineCheckService(
     const resultId = parseJapaneseMachineCheckResultId(rawRequest);
 
     if (lastRun !== null && (resultId === null || lastRun.resultId === resultId)) {
+      log({
+        result: "ignored",
+        failureReason: "discarded",
+        hasRunningJob: false,
+        hasStoredResult: true,
+        workerJobId: lastRun.resultId
+      });
       lastRun = null;
     }
   }
 
-  async function cancel(): Promise<void> {
+  /**
+   * Cancels the current run. With a `runId` only that run is canceled: a late
+   * cancel from an earlier dialog cannot touch a newer run. The marking is
+   * synchronous (before the first await), so callers may fire and forget.
+   */
+  async function cancel(rawRequest?: unknown): Promise<void> {
+    const requested = parseJapaneseMachineCheckRunId(rawRequest);
+    const namesARun =
+      typeof rawRequest === "object" &&
+      rawRequest !== null &&
+      (rawRequest as { runId?: unknown }).runId !== undefined;
+
+    // A named run is canceled only if it is the current one; a malformed
+    // name cancels nothing.
+    if (
+      !running ||
+      (namesARun && (requested === null || requested !== currentRunId))
+    ) {
+      return;
+    }
+
     const current = active;
 
     if (current === null) {
-      cancelRequested = running;
+      // Still reading the file / before the Worker exists.
+      cancelRequested = true;
 
       return;
     }
@@ -611,12 +715,68 @@ export function createJapaneseMachineCheckService(
     }
   }
 
-  async function dispose(): Promise<void> {
+  const cleanupLog = (
+    failureReason: "project-closed" | "project-switched" | "app-shutdown",
+    hadRunningJob: boolean,
+    hadStoredResult: boolean,
+    workerJobId: string | undefined
+  ): void => {
+    if (!hadRunningJob && !hadStoredResult) {
+      return;
+    }
+
+    log({
+      result: "ignored",
+      failureReason,
+      hasRunningJob: hadRunningJob,
+      hasStoredResult: hadStoredResult,
+      ...(workerJobId ? { workerJobId } : {})
+    });
+  };
+
+  /**
+   * A lifecycle boundary (project closed / switched, app quit): the run in
+   * flight is canceled and its Worker disposed, and the kept findings and
+   * checked text are dropped. Idempotent; the state is cleared before any
+   * await.
+   */
+  function endEverything(
+    reason: "project-closed" | "project-switched" | "app-shutdown"
+  ): Promise<void> {
+    const hadRunningJob = running;
+    const hadStoredResult = lastRun !== null;
+    const id = active?.runId ?? currentRunId ?? lastRun?.resultId;
+
     lastRun = null;
-    await cancel();
+
+    const canceling = cancel();
+
+    cleanupLog(reason, hadRunningJob, hadStoredResult, id ?? undefined);
+
+    return canceling;
   }
 
-  return { prepare, run, cancel, dispose, saveReport, discardResult };
+  function handleProjectBoundary(reason: "closed" | "switched"): void {
+    void endEverything(
+      reason === "closed" ? "project-closed" : "project-switched"
+    ).catch(() => undefined);
+  }
+
+  async function dispose(): Promise<void> {
+    await endEverything("app-shutdown");
+    // The Worker really is gone before quit continues.
+    await settledRun.catch(() => undefined);
+  }
+
+  return {
+    prepare,
+    run,
+    cancel,
+    dispose,
+    saveReport,
+    discardResult,
+    handleProjectBoundary
+  };
 }
 
 let service: JapaneseMachineCheckService | null = null;
@@ -652,6 +812,11 @@ function getService(): JapaneseMachineCheckService {
     logger: getDebugLogger()
   });
 
+  // A finished result and a run in flight never outlive their project.
+  const created = service;
+
+  onProjectBoundary((reason) => created.handleProjectBoundary(reason));
+
   return service;
 }
 
@@ -674,9 +839,12 @@ export function registerJapaneseMachineCheckIpc(): void {
         }
       })
   );
-  ipcMain.handle(JAPANESE_MACHINE_CHECK_CHANNELS.cancel, async () => {
-    await getService().cancel();
-  });
+  ipcMain.handle(
+    JAPANESE_MACHINE_CHECK_CHANNELS.cancel,
+    async (_event, rawRequest) => {
+      await getService().cancel(rawRequest).catch(() => undefined);
+    }
+  );
   ipcMain.handle(
     JAPANESE_MACHINE_CHECK_CHANNELS.saveReport,
     async (event: IpcMainInvokeEvent, rawRequest) =>

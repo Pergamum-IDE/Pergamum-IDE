@@ -158,7 +158,35 @@ export type JapaneseMachineCheckProgressStage =
   | "aggregating";
 
 export interface JapaneseMachineCheckProgress {
+  /** The run the stage belongs to; a Renderer ignores other runs'. */
+  readonly runId: string;
   readonly stage: JapaneseMachineCheckProgressStage;
+}
+
+/**
+ * #625 P2c: the Renderer names each run so progress and cancel can be matched
+ * to it. Optional on the wire (Main makes one up when missing).
+ */
+export interface JapaneseMachineCheckRunRequest
+  extends JapaneseMachineCheckTarget {
+  readonly runId?: string;
+}
+
+export interface JapaneseMachineCheckCancelRequest {
+  /** Cancel only this run; absent = whatever is running. */
+  readonly runId?: string;
+}
+
+const runIdPattern = /^[A-Za-z0-9_.-]{1,80}$/;
+
+export function parseJapaneseMachineCheckRunId(value: unknown): string | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const { runId } = value as Record<string, unknown>;
+
+  return typeof runId === "string" && runIdPattern.test(runId) ? runId : null;
 }
 
 export function parseJapaneseMachineCheckRequest(

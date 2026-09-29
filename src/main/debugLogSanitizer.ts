@@ -1005,6 +1005,22 @@ export function sanitizeDebugLogDetails(
         }
         break;
       }
+      case "hasRunningJob": {
+        const hasRunningJob = sanitizeBoolean(value);
+
+        if (hasRunningJob !== undefined) {
+          sanitized.hasRunningJob = hasRunningJob;
+        }
+        break;
+      }
+      case "hasStoredResult": {
+        const hasStoredResult = sanitizeBoolean(value);
+
+        if (hasStoredResult !== undefined) {
+          sanitized.hasStoredResult = hasStoredResult;
+        }
+        break;
+      }
       case "workerRequestId": {
         const workerRequestId = sanitizeSafeCode(value);
 

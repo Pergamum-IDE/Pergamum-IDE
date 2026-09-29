@@ -58,7 +58,11 @@ interface Harness {
   readonly saveReport: ReturnType<typeof vi.fn>;
   readonly discardResult: ReturnType<typeof vi.fn>;
   readonly onClose: ReturnType<typeof vi.fn>;
-  emitProgress(progress: JapaneseMachineCheckProgress): void;
+  /** Emits a stage for the dialog's current run unless `runId` says otherwise. */
+  emitProgress(
+    progress: Omit<JapaneseMachineCheckProgress, "runId"> & { runId?: string }
+  ): void;
+  currentRunId(): string | undefined;
   resolveRun(result: JapaneseMachineCheckRunResult): void;
 }
 
@@ -122,7 +126,19 @@ async function mount(
     saveReport,
     discardResult,
     onClose,
-    emitProgress: (progress) => act(() => progressListener?.(progress)),
+    currentRunId: () =>
+      (run.mock.calls.at(-1) as unknown as [{ runId?: string }] | undefined)?.[0]
+        .runId,
+    emitProgress: (progress) =>
+      act(() =>
+        progressListener?.({
+          runId:
+            progress.runId ??
+            (run.mock.calls.at(-1) as unknown as [{ runId?: string }])[0].runId ??
+            "",
+          stage: progress.stage
+        })
+      ),
     resolveRun: (result) => resolveRun(result)
   };
 }
@@ -274,7 +290,10 @@ describe("Japanese machine check dialog: running screen (#625 P2a)", () => {
   it("Run starts the check and shows the file, elapsed time, a status and a note - no progress bar", async () => {
     const h = await running();
 
-    expect(h.run).toHaveBeenCalledWith({ relativePath: "Drafts/chapter1.md" });
+    expect(h.run).toHaveBeenCalledWith({
+      relativePath: "Drafts/chapter1.md",
+      runId: expect.stringMatching(/^[A-Za-z0-9_.-]{1,80}$/)
+    });
     expect(document.body.textContent).toContain("chapter1.md");
     expect(document.body.textContent).toContain("日本語を解析中です...");
     expect(q('[data-japanese-machine-check="progress"]')).toBeNull();
@@ -659,6 +678,132 @@ describe("Japanese style check dialog: Markdown report save (#625 P2b)", () => {
     expect(t("en", "japaneseMachineCheck.report.button")).toBe(
       "Save results as Markdown"
     );
+  });
+});
+
+describe("Japanese style check dialog: lifecycle (#625 P2c)", () => {
+  async function runningDialog(): Promise<Harness> {
+    const h = await mount();
+
+    act(() => (q('[data-japanese-machine-check="run"]') as HTMLButtonElement).click());
+    await flush();
+
+    return h;
+  }
+
+  it("names each run and cancels exactly that run", async () => {
+    const h = await runningDialog();
+    const runId = h.currentRunId();
+
+    expect(runId).toBeTruthy();
+    act(() => (q('[data-japanese-machine-check="cancel"]') as HTMLButtonElement).click());
+    await flush();
+
+    expect(h.cancel).toHaveBeenCalledExactlyOnceWith({ runId });
+  });
+
+  it("closing (unmount) mid-run cancels that run", async () => {
+    const h = await runningDialog();
+    const runId = h.currentRunId();
+
+    act(() => root.unmount());
+
+    expect(h.cancel).toHaveBeenCalledExactlyOnceWith({ runId });
+    root = createRoot(container);
+  });
+
+  it("ignores progress of another run", async () => {
+    const h = await runningDialog();
+    const status = () => q('[data-japanese-machine-check="status"]')?.textContent;
+
+    h.emitProgress({ stage: "lint-running", runId: "some-older-run" });
+    expect(status()).toBe("準備しています...");
+    h.emitProgress({ stage: "lint-running" });
+    expect(status()).toBe("日本語を解析しています...");
+  });
+
+  it("progress and results that arrive after the dialog closed change nothing and do not throw", async () => {
+    const h = await runningDialog();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+
+    expect(() => {
+      h.emitProgress({ stage: "aggregating" });
+      h.resolveRun({
+        ok: true,
+        summary: {
+          resultId: "late",
+          fileName: "chapter1.md",
+          totalMessages: 1,
+          returnedMessages: 1,
+          truncated: false,
+          sourceChars: 1,
+          sourceLines: 1,
+          elapsedMs: 1,
+          ruleCounts: [{ ruleId: "max-ten", count: 1 }]
+        }
+      });
+    }).not.toThrow();
+    await flush();
+
+    expect(document.body.textContent).not.toContain("総指摘数");
+    // A run that finished after the close was never shown, so nothing to
+    // discard from here (Main drops it with the canceled run).
+    expect(h.discardResult).not.toHaveBeenCalled();
+  });
+
+  it("a save that resolves after the dialog closed does not break anything", async () => {
+    const h = await mount();
+
+    act(() => (q('[data-japanese-machine-check="run"]') as HTMLButtonElement).click());
+    await flush();
+    h.resolveRun({
+      ok: true,
+      summary: {
+        resultId: "result-9",
+        fileName: "chapter1.md",
+        totalMessages: 1,
+        returnedMessages: 1,
+        truncated: false,
+        sourceChars: 1,
+        sourceLines: 1,
+        elapsedMs: 1,
+        ruleCounts: [{ ruleId: "max-ten", count: 1 }]
+      }
+    });
+    await flush();
+
+    let finishSave!: (result: JapaneseMachineCheckSaveReportResult) => void;
+
+    h.saveReport.mockImplementationOnce(
+      () =>
+        new Promise<JapaneseMachineCheckSaveReportResult>((resolve) => {
+          finishSave = resolve;
+        })
+    );
+    act(() =>
+      (q('[data-japanese-machine-check="save-report"]') as HTMLButtonElement).click()
+    );
+    act(() => root.unmount());
+    root = createRoot(container);
+
+    expect(() => finishSave({ ok: true, fileName: "x.lint.md" })).not.toThrow();
+    await flush();
+    expect(h.discardResult).toHaveBeenCalledExactlyOnceWith({ resultId: "result-9" });
+  });
+
+  it("a second dialog's run gets its own id", async () => {
+    const first = await runningDialog();
+    const firstId = first.currentRunId();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+
+    const second = await runningDialog();
+
+    expect(second.currentRunId()).toBeTruthy();
+    expect(second.currentRunId()).not.toBe(firstId);
   });
 });
 

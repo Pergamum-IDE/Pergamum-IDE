@@ -768,6 +768,38 @@ export function currentProjectRootPath(): string | null {
   return currentProjectState?.rootPath ?? null;
 }
 
+/**
+ * #625 P2c: features that keep per-project state in the Main Process (e.g. a
+ * finished 日本語表現チェック result and its text) subscribe here to drop it
+ * when the project is closed or replaced. Listeners must not throw; a throwing
+ * one is ignored so a project close/open is never affected.
+ */
+export type ProjectBoundaryReason = "closed" | "switched";
+
+const projectBoundaryListeners = new Set<
+  (reason: ProjectBoundaryReason) => void
+>();
+
+export function onProjectBoundary(
+  listener: (reason: ProjectBoundaryReason) => void
+): () => void {
+  projectBoundaryListeners.add(listener);
+
+  return () => {
+    projectBoundaryListeners.delete(listener);
+  };
+}
+
+function notifyProjectBoundary(reason: ProjectBoundaryReason): void {
+  for (const listener of [...projectBoundaryListeners]) {
+    try {
+      listener(reason);
+    } catch {
+      /* a listener must never disturb project open/close */
+    }
+  }
+}
+
 export function currentActiveProjectFilePath(): string | null {
   return currentProjectState?.activeProjectFilePath ?? null;
 }
@@ -3378,6 +3410,7 @@ export async function releaseCurrentProjectWriteOwnership(): Promise<void> {
   }
 
   currentProjectState = null;
+  notifyProjectBoundary("closed");
   forgetAllCopyPlans();
   await requestCurrentProjectWindowTitleUpdate();
   await releaseProjectWriteOwnershipBestEffort(stateToRelease);
@@ -3404,6 +3437,7 @@ export async function closeCurrentProject(): Promise<CloseCurrentProjectResult> 
     if (currentProjectState === stateToClose) {
       currentProjectState = null;
     }
+    notifyProjectBoundary("closed");
     forgetAllCopyPlans();
     await requestCurrentProjectWindowTitleUpdate();
 
@@ -3421,6 +3455,11 @@ async function activateProject(
   rawConfigSnapshot: Record<string, unknown> | null
 ): Promise<void> {
   const previousState = currentProjectState;
+
+  if (previousState) {
+    // The previous project is being replaced.
+    notifyProjectBoundary("switched");
+  }
 
   currentProjectState = {
     rootPath: project.rootPath,

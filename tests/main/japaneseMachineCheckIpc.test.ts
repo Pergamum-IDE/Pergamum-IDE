@@ -85,6 +85,8 @@ function setup(
     saveTarget?: string | null;
     writeFailure?: boolean;
     dialogFailure?: boolean;
+    /** Keeps the save dialog open until the test releases it. */
+    saveGate?: Promise<void>;
     language?: "ja" | "en";
   } = {}
 ) {
@@ -140,6 +142,8 @@ function setup(
       if (state.dialogFailure) {
         throw new Error("dialog exploded");
       }
+
+      await state.saveGate;
 
       return state.saveTarget === undefined ? defaultPath : state.saveTarget;
     },
@@ -1053,6 +1057,505 @@ describe("Markdown report save (#625 P2b)", () => {
         expect(log, forbidden).not.toContain(forbidden);
       }
     }
+  });
+});
+
+describe("lifecycle hardening (#625 P2c)", () => {
+  const stuckSetup = (
+    files: Record<string, string> = { "a.md": joshi },
+    state: Parameters<typeof setup>[2] = {}
+  ) => {
+    const stuck = gate();
+    const ctx = setup(
+      files,
+      {
+        lint: async (...args) => {
+          await stuck.opened;
+
+          return realLint(...args);
+        },
+        realDictionary
+      },
+      state
+    );
+
+    return { ...ctx, stuck };
+  };
+  const startRun = async (
+    ctx: ReturnType<typeof stuckSetup>,
+    request: Record<string, unknown> = { relativePath: "a.md" },
+    progress: (p: { runId: string; stage: string }) => void = () => undefined
+  ) => {
+    const pending = ctx.service.run(request, progress);
+
+    await vi.waitFor(() =>
+      expect(lintDocumentsReceived(ctx.world.children[0])).toBe(1)
+    );
+
+    return { pending };
+  };
+  const finishedResultId = async (
+    ctx: ReturnType<typeof setup>,
+    file = "a.md"
+  ): Promise<string> => {
+    const result = await ctx.service.run({ relativePath: file });
+
+    if (!result.ok) {
+      throw new Error(result.reason);
+    }
+
+    return result.summary.resultId;
+  };
+
+  describe.each(["closed", "switched"] as const)("project %s", (reason) => {
+    it("cancels and disposes a running check", async () => {
+      const ctx = stuckSetup();
+      const { pending } = await startRun(ctx);
+
+      await Promise.resolve();
+      await vi.waitFor(() =>
+        expect(lintDocumentsReceived(ctx.world.children[0])).toBe(1)
+      );
+      ctx.service.handleProjectBoundary(reason);
+
+      expect(await pending).toEqual({ ok: false, reason: "canceled" });
+      await vi.waitFor(() => expect(ctx.created[0]?.getState()).toBe("disposed"));
+
+      // The Worker finishing later changes nothing.
+      ctx.stuck.release();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(await ctx.service.saveReport({ resultId: "anything" })).toEqual({
+        ok: false,
+        reason: "not-ready"
+      });
+    });
+
+    it("discards a finished result and its text: the old id can no longer be saved", async () => {
+      const ctx = setup({ "a.md": joshi });
+      const resultId = await finishedResultId(ctx);
+
+      ctx.service.handleProjectBoundary(reason);
+
+      expect(await ctx.service.saveReport({ resultId })).toEqual({
+        ok: false,
+        reason: "not-ready"
+      });
+      expect(ctx.dialogs).toHaveLength(0);
+      expect(ctx.writes).toHaveLength(0);
+    });
+
+    it("is idempotent and safe with nothing to clean", async () => {
+      const ctx = setup();
+
+      expect(() => {
+        ctx.service.handleProjectBoundary(reason);
+        ctx.service.handleProjectBoundary(reason);
+      }).not.toThrow();
+      expect(ctx.created).toHaveLength(0);
+      // ... and a normal run works afterwards.
+      expect((await ctx.service.run({ relativePath: "a.md" })).ok).toBe(true);
+    });
+
+    it("a run started right after can proceed once the old one has ended", async () => {
+      const ctx = stuckSetup();
+      const { pending: first } = await startRun(ctx);
+
+      await vi.waitFor(() =>
+        expect(lintDocumentsReceived(ctx.world.children[0])).toBe(1)
+      );
+      ctx.service.handleProjectBoundary(reason);
+      await first;
+      ctx.stuck.release();
+
+      expect((await ctx.service.run({ relativePath: "a.md" })).ok).toBe(true);
+    });
+
+    it("drops a save that was waiting in the OS save dialog", async () => {
+      let openDialog!: () => void;
+      const dialogGate = new Promise<void>((resolve) => {
+        openDialog = resolve;
+      });
+      const ctx = setup({ "a.md": joshi }, undefined, { saveGate: dialogGate });
+      const resultId = await finishedResultId(ctx);
+      const saving = ctx.service.saveReport({ resultId });
+
+      await vi.waitFor(() => expect(ctx.dialogs).toHaveLength(1));
+      ctx.service.handleProjectBoundary(reason);
+      openDialog();
+
+      expect(await saving).toEqual({ ok: false, reason: "not-ready" });
+      expect(ctx.writes).toHaveLength(0);
+    });
+  });
+
+  it("stops reporting progress once the project boundary was hit", async () => {
+    const ctx = stuckSetup();
+    const seen: { runId: string; stage: string }[] = [];
+    const { pending } = await startRun(ctx, { relativePath: "a.md", runId: "run-a" }, (p) =>
+      seen.push(p)
+    );
+
+    await vi.waitFor(() =>
+      expect(lintDocumentsReceived(ctx.world.children[0])).toBe(1)
+    );
+
+    const before = seen.length;
+
+    ctx.service.handleProjectBoundary("switched");
+    ctx.stuck.release();
+    await pending;
+
+    expect(seen.length).toBe(before);
+    expect(seen.every((p) => p.runId === "run-a")).toBe(true);
+  });
+
+  it("a result that only arrives after the project changed is never adopted (even without a notification)", async () => {
+    const ctx = stuckSetup();
+    const { pending } = await startRun(ctx);
+
+    ctx.state.projectRoot = path.resolve("C:\\Other");
+    ctx.stuck.release();
+
+    expect(await pending).toEqual({ ok: false, reason: "canceled" });
+    expect(await ctx.service.saveReport({ resultId: "x" })).toEqual({
+      ok: false,
+      reason: "not-ready"
+    });
+  });
+
+  it("a stored result is not saved into another project even if no notification arrived", async () => {
+    const ctx = setup({ "a.md": joshi });
+    const resultId = await finishedResultId(ctx);
+
+    ctx.state.projectRoot = path.resolve("C:\\Other");
+
+    expect(await ctx.service.saveReport({ resultId })).toEqual({
+      ok: false,
+      reason: "not-ready"
+    });
+    expect(ctx.dialogs).toHaveLength(0);
+  });
+
+  describe("run ids", () => {
+    it("tags progress with the caller's run id, or makes one up", async () => {
+      const ctx = setup();
+      const named: string[] = [];
+      const anonymous: string[] = [];
+
+      await ctx.service.run({ relativePath: "a.md", runId: "run-1" }, (p) =>
+        named.push(p.runId)
+      );
+      await ctx.service.run({ relativePath: "a.md" }, (p) => anonymous.push(p.runId));
+
+      expect(new Set(named)).toEqual(new Set(["run-1"]));
+      expect(named.length).toBeGreaterThan(0);
+      expect(new Set(anonymous).size).toBe(1);
+      expect([...anonymous][0]).toMatch(/^[A-Za-z0-9_.-]{1,80}$/);
+      expect([...anonymous][0]).not.toBe("run-1");
+    });
+
+    it("cancel({runId}) of another run does nothing; of the current run cancels it", async () => {
+      const ctx = stuckSetup();
+      const { pending } = await startRun(ctx, { relativePath: "a.md", runId: "run-now" });
+
+      await ctx.service.cancel({ runId: "run-old" });
+      await ctx.service.cancel({ runId: "bad id!" });
+      ctx.stuck.release();
+
+      expect((await pending).ok).toBe(true);
+
+      const second = stuckSetup();
+      const { pending: running } = await startRun(second, { relativePath: "a.md", runId: "run-now" });
+
+      await second.service.cancel({ runId: "run-now" });
+      expect(await running).toEqual({ ok: false, reason: "canceled" });
+      second.stuck.release();
+    });
+
+    it("a late cancel of an earlier run cannot cancel the next run", async () => {
+      const ctx = setup({ "a.md": joshi });
+
+      await ctx.service.run({ relativePath: "a.md", runId: "run-1" });
+
+      const stuck = gate();
+      const second = setup(
+        { "a.md": joshi },
+        {
+          lint: async (...args) => {
+            await stuck.opened;
+
+            return realLint(...args);
+          },
+          realDictionary
+        }
+      );
+      const running = second.service.run({ relativePath: "a.md", runId: "run-2" });
+
+      await vi.waitFor(() =>
+        expect(lintDocumentsReceived(second.world.children[0])).toBe(1)
+      );
+      await second.service.cancel({ runId: "run-1" });
+      stuck.release();
+
+      expect((await running).ok).toBe(true);
+    });
+
+    it("a cancel that arrives while the file is still being read cancels that run", async () => {
+      const ctx = setup({ "a.md": joshi });
+      const pending = ctx.service.run({ relativePath: "a.md", runId: "run-early" });
+
+      await ctx.service.cancel({ runId: "run-early" });
+
+      expect(await pending).toEqual({ ok: false, reason: "canceled" });
+    });
+
+    it("cancel never rejects, whatever it is given", async () => {
+      const ctx = setup();
+
+      for (const bad of [undefined, null, 5, "x", {}, { runId: 1 }, []]) {
+        await expect(ctx.service.cancel(bad)).resolves.toBeUndefined();
+      }
+    });
+  });
+
+  describe("cancel and dialog close", () => {
+    it("cancel disposes the Worker and keeps no result", async () => {
+      const ctx = stuckSetup();
+      const { pending } = await startRun(ctx);
+
+      await ctx.service.cancel();
+      await ctx.service.cancel();
+      expect(await pending).toEqual({ ok: false, reason: "canceled" });
+      ctx.stuck.release();
+      await vi.waitFor(() => expect(ctx.created[0]?.getState()).toBe("disposed"));
+      expect(await ctx.service.saveReport({ resultId: "x" })).toEqual({
+        ok: false,
+        reason: "not-ready"
+      });
+    });
+
+    it("discardResult (dialog closed) drops the text; saving the discarded id is not-ready; discarding twice is fine", async () => {
+      const ctx = setup({ "a.md": joshi });
+      const resultId = await finishedResultId(ctx);
+
+      await ctx.service.discardResult({ resultId });
+      await ctx.service.discardResult({ resultId });
+      await ctx.service.discardResult(undefined);
+
+      expect(await ctx.service.saveReport({ resultId })).toEqual({
+        ok: false,
+        reason: "not-ready"
+      });
+    });
+
+    it("discarding an older id does not drop a newer result", async () => {
+      const ctx = setup({ "a.md": joshi });
+      const first = await finishedResultId(ctx);
+      const second = await finishedResultId(ctx);
+
+      await ctx.service.discardResult({ resultId: first });
+
+      expect((await ctx.service.saveReport({ resultId: second })).ok).toBe(true);
+      // ... and the first id (superseded by the second run) is not-ready.
+      expect(await ctx.service.saveReport({ resultId: first })).toEqual({
+        ok: false,
+        reason: "not-ready"
+      });
+    });
+  });
+
+  describe("app shutdown", () => {
+    it("cancels a running check and waits until its Worker is gone", async () => {
+      const ctx = stuckSetup();
+      const { pending } = await startRun(ctx);
+
+      await ctx.service.dispose();
+
+      expect(ctx.created[0]?.getState()).toBe("disposed");
+      expect(await pending).toEqual({ ok: false, reason: "canceled" });
+      ctx.stuck.release();
+    });
+
+    it("drops a finished result and its text", async () => {
+      const ctx = setup({ "a.md": joshi });
+      const resultId = await finishedResultId(ctx);
+
+      await ctx.service.dispose();
+
+      expect(await ctx.service.saveReport({ resultId })).toEqual({
+        ok: false,
+        reason: "not-ready"
+      });
+    });
+
+    it("is safe to call repeatedly, at any time, and never rejects", async () => {
+      const ctx = setup();
+
+      await expect(ctx.service.dispose()).resolves.toBeUndefined();
+      await expect(ctx.service.dispose()).resolves.toBeUndefined();
+      await ctx.service.run({ relativePath: "a.md" });
+      await expect(
+        Promise.all([ctx.service.dispose(), ctx.service.dispose()])
+      ).resolves.toBeDefined();
+    });
+  });
+
+  describe("independence from the Instant Linter", () => {
+    const instantOver = (world: ReturnType<typeof createFakeWorkerWorld>) =>
+      createInstantJapaneseLintService({
+        createHost: (getSettings) => {
+          const host = createJapaneseLintHost({
+            ...world.deps,
+            getSettings,
+            logger: { log: () => undefined }
+          });
+
+          hosts.push(host);
+
+          return host;
+        },
+        settingsProvider: async () => undefined,
+        logger: { log: () => undefined }
+      });
+
+    it("wizard cleanup (project boundary / quit) leaves the instant Worker running", async () => {
+      const instantWorld = createFakeWorkerWorld({ lint: realLint, realDictionary });
+      const instant = instantOver(instantWorld);
+      const ctx = stuckSetup();
+
+      await instant.lint({ text: joshi, format: "text", ext: ".txt" });
+
+      const { pending } = await startRun(ctx);
+
+      ctx.service.handleProjectBoundary("closed");
+      await ctx.service.dispose();
+      await pending;
+
+      expect(instantWorld.children).toHaveLength(1);
+      expect(instantWorld.children[0]?.exited).toBe(false);
+      expect(
+        (await instant.lint({ text: joshi, format: "text", ext: ".txt" })).ok
+      ).toBe(true);
+      expect(instantWorld.children).toHaveLength(1);
+      ctx.stuck.release();
+    });
+
+    it("an instant release does not touch a running wizard check or a kept result", async () => {
+      const instantWorld = createFakeWorkerWorld({ lint: realLint, realDictionary });
+      const instant = instantOver(instantWorld);
+      const kept = setup({ "a.md": joshi });
+      const resultId = await finishedResultId(kept);
+      const ctx = stuckSetup();
+      const { pending } = await startRun(ctx);
+
+      await instant.lint({ text: joshi, format: "text", ext: ".txt" });
+      await instant.release();
+
+      expect(ctx.created[0]?.getState()).toBe("ready");
+      ctx.stuck.release();
+      expect((await pending).ok).toBe(true);
+      expect((await kept.service.saveReport({ resultId })).ok).toBe(true);
+    });
+  });
+
+  describe("cleanup logging", () => {
+    const runtime = {
+      appVersion: "0.1.0",
+      platform: "win32",
+      arch: "x64",
+      locale: "ja",
+      electronVersion: "43.4.0",
+      nodeVersion: "24.19.0",
+      debugMode: true
+    } as const;
+
+    it("records only the reason and two flags - no text, names, paths or raw errors", async () => {
+      const files = { [secretFile]: `${secretText}\n${joshi}` };
+      const running = stuckSetup(files, {
+        saveTarget: path.join(root, "very-secret-folder", "out.md")
+      });
+      const { pending } = await startRun(running, { relativePath: secretFile });
+
+      running.service.handleProjectBoundary("switched");
+      await pending;
+      running.stuck.release();
+
+      const stored = setup(files);
+      const id = await finishedResultId(stored, secretFile);
+
+      stored.service.handleProjectBoundary("closed");
+      await stored.service.saveReport({ resultId: id });
+
+      const finished = setup(files);
+
+      await finishedResultId(finished, secretFile);
+      await finished.service.dispose();
+
+      const cleanup = [...running.events, ...stored.events, ...finished.events].filter(
+        (e) => e.details?.hasStoredResult !== undefined || e.details?.hasRunningJob !== undefined
+      );
+
+      expect(cleanup.map((e) => e.details?.failureReason)).toEqual([
+        "project-switched",
+        "project-closed",
+        "app-shutdown"
+      ]);
+      expect(cleanup[0]?.details).toMatchObject({
+        linterMode: "wizard",
+        hasRunningJob: true,
+        hasStoredResult: false
+      });
+      expect(cleanup[1]?.details).toMatchObject({
+        hasRunningJob: false,
+        hasStoredResult: true
+      });
+
+      for (const ctx of [running, stored, finished]) {
+        const log = JSON.stringify(
+          ctx.events.map((event) => ({
+            event: event.event,
+            details: sanitizeDebugLogDetails(event.details ?? {}, {
+              runtime,
+              isKnownProjectRef: () => false,
+              isKnownDocumentRef: () => false
+            } as never)
+          }))
+        );
+
+        for (const forbidden of [
+          "秘密",
+          "私は彼",
+          secretFile,
+          "very-secret-folder",
+          "out.md",
+          "Novel",
+          "ENOENT"
+        ]) {
+          expect(log, forbidden).not.toContain(forbidden);
+        }
+        expect(log).toContain('"failureReason"');
+      }
+    });
+
+    it("a boundary with nothing to clean logs nothing", async () => {
+      const ctx = setup();
+
+      ctx.service.handleProjectBoundary("closed");
+      await ctx.service.dispose();
+
+      expect(ctx.events).toHaveLength(0);
+    });
+  });
+
+  it("projectIpc tells the wizard about every close / switch", async () => {
+    const { readFileSync } = await import("node:fs");
+    const project = readFileSync("src/main/projectIpc.ts", "utf8");
+    const wizard = readFileSync("src/main/japaneseMachineCheckIpc.ts", "utf8");
+
+    expect(project.match(/notifyProjectBoundary\("closed"\)/g)).toHaveLength(2);
+    expect(project.match(/notifyProjectBoundary\("switched"\)/g)).toHaveLength(1);
+    expect(wizard).toContain("onProjectBoundary(");
+    expect(wizard).toContain("handleProjectBoundary(reason)");
   });
 });
 

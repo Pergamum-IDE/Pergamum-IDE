@@ -121,6 +121,19 @@ describe("Japanese machine check wiring (#625 P2a)", () => {
     expect(preload).toContain("JAPANESE_MACHINE_CHECK_CHANNELS.saveReport");
   });
 
+  it("App closes the wizard when the project is closed or switched", () => {
+    const app = read("src/renderer/App.tsx");
+
+    expect(app).toContain("japaneseStyleCheckProjectKey");
+    expect(app).toMatch(
+      /useEffect\(\(\) => \{\s*setJapaneseMachineCheckTarget\(null\);\s*\}, \[japaneseStyleCheckProjectKey\]\);/
+    );
+  });
+
+  it("app quit disposes the wizard (main.ts shutdown cleanup)", () => {
+    expect(read("src/main/main.ts")).toContain("await disposeJapaneseMachineCheck();");
+  });
+
   it("the save dialog offers Markdown Files and All Files", () => {
     const ipc = read("src/main/japaneseMachineCheckIpc.ts");
 
