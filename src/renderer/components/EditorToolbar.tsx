@@ -22,6 +22,7 @@ import imageIconRaw from "../../../assets/icons/feather/toolbar/image.svg?raw";
 import tableIconRaw from "../../../assets/icons/codicons/toolbar/table.svg?raw";
 import rubyIconRaw from "../../../assets/icons/pergamum/toolbar/ruby.svg?raw";
 import emphasisIconRaw from "../../../assets/icons/pergamum/toolbar/emphasis.svg?raw";
+import japaneseLintIconRaw from "../../../assets/icons/pergamum/toolbar/jp-check.svg?raw";
 import markdownCheckIconRaw from "../../../assets/icons/pergamum/toolbar/markdown-check.svg?raw";
 import listUnorderedIconRaw from "../../../assets/icons/codicons/toolbar/list-unordered.svg?raw";
 import listOrderedIconRaw from "../../../assets/icons/codicons/toolbar/list-ordered.svg?raw";
@@ -76,6 +77,10 @@ export interface EditorToolbarProps {
   canUseMarkdownSyntaxChecker?: boolean;
   isMarkdownSyntaxCheckerActive?: boolean;
   onToggleMarkdownSyntaxChecker?: () => void;
+  /** #625: Japanese linter state & toggle (Markdown / plain text body editor). */
+  canUseJapaneseLint?: boolean;
+  isJapaneseLintActive?: boolean;
+  onToggleJapaneseLint?: () => void;
   /** #541: whether Preview is applicable at all for the current
    *  document/renderer — independent of `isPreviewVisible`, since the
    *  button must stay clickable while Preview is currently hidden. */
@@ -138,6 +143,9 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   canUseMarkdownSyntaxChecker = false,
   isMarkdownSyntaxCheckerActive = false,
   onToggleMarkdownSyntaxChecker,
+  canUseJapaneseLint = false,
+  isJapaneseLintActive = false,
+  onToggleJapaneseLint,
   canTogglePreview,
   isPreviewVisible,
   onTogglePreview,
@@ -566,6 +574,22 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             <span
               className="editorToolbarButtonIcon"
               dangerouslySetInnerHTML={{ __html: markdownCheckIconRaw }}
+            />
+          </button>
+        </div>
+        <div className="editorToolbarItem">
+          <button
+            type="button"
+            className="editorToolbarButton"
+            disabled={!canUseJapaneseLint}
+            aria-pressed={isJapaneseLintActive}
+            onClick={onToggleJapaneseLint}
+            aria-label={translate("toolbar.japaneseLint")}
+            title={translate("toolbar.japaneseLint")}
+          >
+            <span
+              className="editorToolbarButtonIcon"
+              dangerouslySetInnerHTML={{ __html: japaneseLintIconRaw }}
             />
           </button>
         </div>

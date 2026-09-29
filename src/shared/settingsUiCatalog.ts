@@ -58,6 +58,7 @@ export type SettingCategory =
   | "imageAttachment"
   | "preview"
   | "documentMap"
+  | "japaneseLint"
   | "markdownFiles"
   | "textFiles"
   | "project"
@@ -127,6 +128,13 @@ export const settingCategoryCatalog = defineSettingCategoryCatalog([
     id: "imageAttachment",
     order: 350,
     labelKey: "settings.category.imageAttachment.label"
+  },
+  {
+    // #625: Japanese style check rule switches. Like documentMap it has no
+    // scalar catalog items - it owns a bespoke section - and is always shown.
+    id: "japaneseLint",
+    order: 360,
+    labelKey: "settings.category.japaneseLint.label"
   },
   {
     id: "preview",

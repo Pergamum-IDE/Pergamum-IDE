@@ -240,6 +240,7 @@ const BUTTON_ORDER = [
   "ルビ",
   "傍点",
   "Markdown構文チェック",
+  "インスタント日本語表現チェック",
   "プレビューを切り替え",
   "フルスクリーン切り替え"
 ];
@@ -255,6 +256,63 @@ describe("EditorToolbar", () => {
     );
   });
 
+  describe("Japanese lint toggle (#625)", () => {
+    const japaneseButton = (): HTMLButtonElement =>
+      toolbarButtons().find(
+        (b) => b.getAttribute("aria-label") === "インスタント日本語表現チェック"
+      )!;
+
+    it("sits right after the Markdown syntax checker, is icon-only, and is OFF / disabled by default", () => {
+      renderToolbar();
+
+      const labels = toolbarButtons().map((b) => b.getAttribute("aria-label"));
+
+      expect(labels.indexOf("インスタント日本語表現チェック")).toBe(
+        labels.indexOf("Markdown構文チェック") + 1
+      );
+      expect(japaneseButton().textContent?.trim()).toBe("");
+      expect(japaneseButton().getAttribute("aria-pressed")).toBe("false");
+      expect(japaneseButton().disabled).toBe(true);
+    });
+
+    it("is enabled on a supported document and reflects the active state", () => {
+      renderToolbar({ canUseJapaneseLint: true, isJapaneseLintActive: true });
+
+      expect(japaneseButton().disabled).toBe(false);
+      expect(japaneseButton().getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("calls onToggleJapaneseLint when clicked, independent of the syntax checker", () => {
+      const onToggleJapaneseLint = vi.fn();
+      const onToggleMarkdownSyntaxChecker = vi.fn();
+
+      renderToolbar({
+        canUseJapaneseLint: true,
+        onToggleJapaneseLint,
+        canUseMarkdownSyntaxChecker: false,
+        onToggleMarkdownSyntaxChecker
+      });
+      act(() => japaneseButton().click());
+
+      expect(onToggleJapaneseLint).toHaveBeenCalledTimes(1);
+      expect(onToggleMarkdownSyntaxChecker).not.toHaveBeenCalled();
+    });
+
+    it("stays enabled for plain text where the syntax checker is disabled", () => {
+      renderToolbar({
+        canUseJapaneseLint: true,
+        canUseMarkdownSyntaxChecker: false
+      });
+
+      const syntax = toolbarButtons().find(
+        (b) => b.getAttribute("aria-label") === "Markdown構文チェック"
+      )!;
+
+      expect(syntax.disabled).toBe(true);
+      expect(japaneseButton().disabled).toBe(false);
+    });
+  });
+
   it("renders separators between command groups and keeps the right-end separator", () => {
     renderToolbar();
     expect(
@@ -266,7 +324,7 @@ describe("EditorToolbar", () => {
     renderToolbar();
 
     const toolbar = container.querySelector(".editorToolbar")!;
-    const previewButton = toolbarButtons()[19];
+    const previewButton = toolbarButtons()[20];
     const trigger = previewRendererTrigger();
     const previewGroup = previewButton.closest(".editorToolbarGroup")!;
     const groupItems = Array.from(previewGroup.children) as HTMLElement[];
@@ -373,7 +431,7 @@ describe("EditorToolbar", () => {
     expect(trigger.disabled).toBe(true);
     expect(trigger.textContent).toContain("Markdown");
 
-    const previewToggleBtn = toolbarButtons()[19];
+    const previewToggleBtn = toolbarButtons()[20];
     expect(previewToggleBtn.disabled).toBe(false);
     act(() => previewToggleBtn.click());
     expect(props.onTogglePreview).toHaveBeenCalledOnce();
@@ -899,7 +957,7 @@ describe("EditorToolbar", () => {
   it("Preview button calls onTogglePreview when clicked", () => {
     const props = renderToolbar();
     const buttons = toolbarButtons();
-    const preview = buttons[19];
+    const preview = buttons[20];
 
     act(() => preview.click());
     expect(props.onTogglePreview).toHaveBeenCalledOnce();
@@ -907,16 +965,16 @@ describe("EditorToolbar", () => {
 
   it("Preview button reflects isPreviewVisible via aria-pressed", () => {
     renderToolbar({ isPreviewVisible: true });
-    expect(toolbarButtons()[19].getAttribute("aria-pressed")).toBe("true");
+    expect(toolbarButtons()[20].getAttribute("aria-pressed")).toBe("true");
 
     renderToolbar({ isPreviewVisible: false });
-    expect(toolbarButtons()[19].getAttribute("aria-pressed")).toBe("false");
+    expect(toolbarButtons()[20].getAttribute("aria-pressed")).toBe("false");
   });
 
   it("Preview button is disabled when canTogglePreview is false, independent of other gates", () => {
     renderToolbar({ canTogglePreview: false });
     const buttons = toolbarButtons();
-    expect(buttons[19].disabled).toBe(true);
+    expect(buttons[20].disabled).toBe(true);
     // Other commands stay enabled (still passed as true here).
     expect(buttons[1].disabled).toBe(false);
   });

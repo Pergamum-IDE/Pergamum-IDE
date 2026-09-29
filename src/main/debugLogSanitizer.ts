@@ -1,6 +1,14 @@
 import path from "node:path";
 import {
+  SANITIZED_STACK_MAX_FRAMES,
+  sanitizeStackFrame
+} from "./sanitizeErrorForLog";
+import {
   debugLogArchitectures,
+  debugLogLintFailureReasons,
+  debugLogLintFormats,
+  debugLogLinterModes,
+  debugLogWorkerRequestTypes,
   debugLogDocumentKinds,
   debugLogEditorIdKinds,
   debugLogEditorKinds,
@@ -56,7 +64,11 @@ import {
   type DebugLogPreviewScrollLeaderTrigger,
   type DebugLogPreviewScrollSyncPane,
   type DebugLogPreviewToEditorSkippedReason,
+  type DebugLogLintFailureReason,
+  type DebugLogLintFormat,
+  type DebugLogLinterMode,
   type DebugLogReason,
+  type DebugLogWorkerRequestType,
   type DebugLogGlossarySearchRelationMode,
   type DebugLogRecoveryJournalMode,
   type DebugLogRecoverySynchronousLevel,
@@ -910,6 +922,153 @@ export function sanitizeDebugLogDetails(
 
         if (searchAppliedToUi !== undefined) {
           sanitized.searchAppliedToUi = searchAppliedToUi;
+        }
+        break;
+      }
+      case "linterMode":
+        sanitized.linterMode = enumOrUnknown<DebugLogLinterMode>(
+          debugLogLinterModes,
+          value
+        );
+        break;
+      case "workerRequestType":
+        sanitized.workerRequestType = enumOrUnknown<DebugLogWorkerRequestType>(
+          debugLogWorkerRequestTypes,
+          value
+        );
+        break;
+      case "workerPid": {
+        const workerPid = sanitizeNonNegativeInteger(value);
+
+        if (workerPid !== undefined) {
+          sanitized.workerPid = workerPid;
+        }
+        break;
+      }
+      case "exitCode": {
+        const exitCode = sanitizeFiniteNumber(value);
+
+        if (exitCode !== undefined) {
+          sanitized.exitCode = exitCode;
+        }
+        break;
+      }
+      case "exitSignal": {
+        const exitSignal = sanitizeSafeIdentifier(value);
+
+        if (exitSignal !== undefined) {
+          sanitized.exitSignal = exitSignal;
+        }
+        break;
+      }
+      case "workerJobId": {
+        const workerJobId = sanitizeSafeCode(value);
+
+        if (workerJobId !== undefined) {
+          sanitized.workerJobId = workerJobId;
+        }
+        break;
+      }
+      case "lintFormat":
+        sanitized.lintFormat = enumOrUnknown<DebugLogLintFormat>(
+          debugLogLintFormats,
+          value
+        );
+        break;
+      case "failureReason":
+        sanitized.failureReason = enumOrUnknown<DebugLogLintFailureReason>(
+          debugLogLintFailureReasons,
+          value
+        );
+        break;
+      case "totalMessages": {
+        const totalMessages = sanitizeNonNegativeInteger(value);
+
+        if (totalMessages !== undefined) {
+          sanitized.totalMessages = totalMessages;
+        }
+        break;
+      }
+      case "returnedMessages": {
+        const returnedMessages = sanitizeNonNegativeInteger(value);
+
+        if (returnedMessages !== undefined) {
+          sanitized.returnedMessages = returnedMessages;
+        }
+        break;
+      }
+      case "truncated": {
+        const truncated = sanitizeBoolean(value);
+
+        if (truncated !== undefined) {
+          sanitized.truncated = truncated;
+        }
+        break;
+      }
+      case "hasRunningJob": {
+        const hasRunningJob = sanitizeBoolean(value);
+
+        if (hasRunningJob !== undefined) {
+          sanitized.hasRunningJob = hasRunningJob;
+        }
+        break;
+      }
+      case "hasStoredResult": {
+        const hasStoredResult = sanitizeBoolean(value);
+
+        if (hasStoredResult !== undefined) {
+          sanitized.hasStoredResult = hasStoredResult;
+        }
+        break;
+      }
+      case "workerRequestId": {
+        const workerRequestId = sanitizeSafeCode(value);
+
+        if (workerRequestId !== undefined) {
+          sanitized.workerRequestId = workerRequestId;
+        }
+        break;
+      }
+      case "workerErrorKind": {
+        const workerErrorKind = sanitizeSafeIdentifier(value);
+
+        if (workerErrorKind !== undefined) {
+          sanitized.workerErrorKind = workerErrorKind;
+        }
+        break;
+      }
+      case "enabledRuleIds": {
+        const enabledRuleIds = sanitizeSafeCodeArray(value, 50);
+
+        if (enabledRuleIds !== undefined) {
+          sanitized.enabledRuleIds = enabledRuleIds;
+        }
+        break;
+      }
+      case "errorName": {
+        const errorName = sanitizeSafeIdentifier(value);
+
+        if (errorName !== undefined) {
+          sanitized.errorName = errorName;
+        }
+        break;
+      }
+      case "errorCode": {
+        const errorCode = sanitizeSafeCode(value);
+
+        if (errorCode !== undefined) {
+          sanitized.errorCode = errorCode;
+        }
+        break;
+      }
+      case "sanitizedStack": {
+        if (Array.isArray(value)) {
+          // Re-filtered even though callers pass sanitized frames: this is the
+          // last gate before the log file, so only allow-listed frames pass.
+          sanitized.sanitizedStack = value
+            .map((frame) => sanitizeStackFrame(frame))
+            .filter((frame): frame is string => frame !== null)
+            .slice(0, SANITIZED_STACK_MAX_FRAMES);
         }
         break;
       }

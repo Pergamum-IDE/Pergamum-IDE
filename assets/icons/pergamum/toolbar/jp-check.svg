@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+  <g fill="currentColor">
+    <path d="M3.55 4.25h3.1v8.35c0 2.95-1.72 4.85-4.45 4.85-.61 0-1.17-.08-1.7-.25v-2.7c.42.14.86.21 1.32.21 1.12 0 1.73-.72 1.73-2.11V4.25Z"/>
+    <path fill-rule="evenodd" d="M8.2 4.25h5.1c3.05 0 4.93 1.65 4.93 4.36 0 2.72-1.88 4.38-4.93 4.38h-2v4.21H8.2V4.25Zm3.1 2.68v3.41h1.77c1.28 0 1.98-.6 1.98-1.73 0-1.11-.7-1.68-1.98-1.68H11.3Z" clip-rule="evenodd"/>
+  </g>
+  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="17.25" cy="17.25" r="5.15" stroke-width="1.8"/>
+    <path d="m14.75 17.25 1.72 1.75 3.45-3.78" stroke-width="2.1"/>
+  </g>
+</svg>

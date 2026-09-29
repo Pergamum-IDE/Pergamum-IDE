@@ -143,6 +143,14 @@ import {
   applyWorkbenchUiFontFamilyList
 } from "./workbenchFontFamily";
 import { applyColorThemeById } from "./colorTheme";
+import {
+  decideJapaneseLintToggle,
+  japaneseLintSourceForPath
+} from "../shared/japaneseLint";
+import {
+  resolveJapaneseLintDebounceMs,
+  resolveJapaneseLintSettings
+} from "../shared/japaneseLintRules";
 import { CommandPalette } from "./CommandPalette";
 import {
   createCommandPaletteCommandTitles,
@@ -257,6 +265,7 @@ import {
   GlossaryExportWizardErrorBoundary,
   type OccurrenceCountValue
 } from "./dialog/GlossaryExportWizardDialog";
+import { JapaneseMachineCheckDialog } from "./dialog/JapaneseMachineCheckDialog";
 import type { GlossaryExportPlan } from "./glossaryExport/glossaryExportModel";
 import { renderGlossaryDescriptionForExport } from "./glossaryExport/glossaryExportHtml";
 import { countGlossaryEntryOccurrences } from "./glossaryExport/glossaryExportOccurrences";
@@ -1127,9 +1136,41 @@ export function App(): JSX.Element {
     readonly opener: Element | null;
   } | null>(null);
 
+  // #625: Japanese linter ON/OFF. Same scope as the Markdown syntax checker
+  // above: one App-level flag (not per document), OFF at startup and reset
+  // whenever a project is opened/closed, never persisted.
+  const [isJapaneseLintActive, setIsJapaneseLintActive] =
+    useState<boolean>(false);
+
   useEffect(() => {
     setIsMarkdownSyntaxCheckerActive(false);
+    setIsJapaneseLintActive(false);
   }, [project]);
+
+  // #625 P2c: the 日本語表現チェック wizard belongs to the project it was
+  // opened in. Closing / switching the project closes it (its unmount cancels
+  // a running check; the Main Process drops the kept result on its own).
+  const japaneseStyleCheckProjectKey = project
+    ? `${project.rootPath}|${project.activeProjectFilePath}`
+    : null;
+
+  useEffect(() => {
+    setJapaneseMachineCheckTarget(null);
+  }, [japaneseStyleCheckProjectKey]);
+
+  // #625: Linter OFF (toggle, project open/close, oversized document) lets the
+  // Main Process stop the lint Worker. Nothing is sent while it is ON.
+  useEffect(() => {
+    if (isJapaneseLintActive) {
+      return;
+    }
+
+    try {
+      void window.pergamum.japaneseLint.release().catch(() => undefined);
+    } catch {
+      /* the Worker is only an optimization to stop */
+    }
+  }, [isJapaneseLintActive]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -1500,6 +1541,12 @@ export function App(): JSX.Element {
 
   // #581 Slice 1: the Glossary Export Wizard Dialog open state & occurrences map
   const [isGlossaryExportWizardOpen, setIsGlossaryExportWizardOpen] = useState(false);
+  // #625 P2a: the Japanese machine check wizard, opened from a File Explorer
+  // file's context menu. `isDirty` is captured when it opens.
+  const [japaneseMachineCheckTarget, setJapaneseMachineCheckTarget] = useState<{
+    readonly relativePath: string;
+    readonly isDirty: boolean;
+  } | null>(null);
   const [
     glossaryExportWizardOccurrenceCounts,
     setGlossaryExportWizardOccurrenceCounts
@@ -2138,6 +2185,20 @@ export function App(): JSX.Element {
   } = useApplicationSettings();
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  // #625: a stable fingerprint of the Japanese lint rule settings. When the
+  // user changes a rule or threshold it changes, which makes the open
+  // editor re-run the instant check with the new rules right away.
+  const japaneseLintSettingsRevision = useMemo(
+    () =>
+      JSON.stringify(resolveJapaneseLintSettings(settings.japaneseLint).rules),
+    [settings.japaneseLint]
+  );
+  // #625: quiet time before the instant check re-runs after an edit. Read by
+  // the lint driver at each scheduling, so a change applies to the next edit.
+  const japaneseLintDebounceMs = useMemo(
+    () => resolveJapaneseLintDebounceMs(settings.japaneseLint),
+    [settings.japaneseLint]
+  );
   const imeCompositionSaveGuard = useMemo(
     () =>
       createImeCompositionSaveGuard({
@@ -3029,6 +3090,40 @@ export function App(): JSX.Element {
     activeEditorIsMarkdownEditingTarget && !isReadOnlyProjectOwnedEditor;
   /** #606: Markdown syntax checker enable gate (active Markdown document only, excluding .txt / glossary description / special tabs) */
   const canUseMarkdownSyntaxChecker = activeEditorIsMarkdown;
+  // #625: the Japanese linter supports the body editor of Markdown (.md /
+  // .markdown) and plain text (.txt) documents only - not special tabs, the
+  // Glossary Description editor, or other file types.
+  const japaneseLintDocumentSource = useMemo(() => {
+    if (isEditorAreaSpecialTabActive || currentEditor?.kind !== "markdown") {
+      return null;
+    }
+
+    const document = currentEditor.document;
+
+    if (document.kind === "untitled") {
+      return { format: "markdown", ext: ".md" } as const;
+    }
+
+    return japaneseLintSourceForPath(
+      document.kind === "file" ? document.path : document.relativePath,
+      isMarkdownPath
+    );
+  }, [isEditorAreaSpecialTabActive, currentEditor]);
+  const canUseJapaneseLint = japaneseLintDocumentSource !== null;
+  // #625: the instant check runs in the Worker process, so a document of any
+  // length may be turned ON.
+  const handleToggleJapaneseLint = () => {
+    const decision = decideJapaneseLintToggle({
+      canUse: canUseJapaneseLint,
+      isActive: isJapaneseLintActive
+    });
+
+    if (decision === "turn-on") {
+      setIsJapaneseLintActive(true);
+    } else if (decision === "turn-off") {
+      setIsJapaneseLintActive(false);
+    }
+  };
   // #531: shared enable gate for the Ruby / Emphasis Mark toolbar buttons —
   // deliberately looser than `canUseMarkdownToolbarCommands` above, since the
   // existing Ctrl+R / Ctrl+. shortcuts already work on `.txt` documents
@@ -3470,6 +3565,15 @@ export function App(): JSX.Element {
     },
     [emphasisMarkDialogState, notifyEmphasisMarkNoSelection]
   );
+
+  // #625: a lint pass whose result was cut at the cap stays a light toast.
+  function notifyJapaneseLint(notice: "truncated"): void {
+    void notice;
+
+    notificationController.notify({
+      message: translate("japaneseLint.toast.truncated")
+    });
+  }
 
   const notifyRubyNoSelection = useCallback(() => {
     notificationController.notify({
@@ -12752,6 +12856,9 @@ export function App(): JSX.Element {
         canUseMarkdownSyntaxChecker={canUseMarkdownSyntaxChecker}
         isMarkdownSyntaxCheckerActive={isMarkdownSyntaxCheckerActive}
         onToggleMarkdownSyntaxChecker={handleToggleMarkdownSyntaxChecker}
+        canUseJapaneseLint={canUseJapaneseLint}
+        isJapaneseLintActive={isJapaneseLintActive}
+        onToggleJapaneseLint={handleToggleJapaneseLint}
         isFullscreen={isFullscreen}
         onToggleFullscreen={handleToggleFullscreen}
         translate={translate}
@@ -12884,6 +12991,15 @@ export function App(): JSX.Element {
                       }}
                       onFileExplorerExport={(origin) => {
                         void handleFileExplorerExport(origin);
+                      }}
+                      onFileExplorerJapaneseMachineCheck={(relativePath) => {
+                        setJapaneseMachineCheckTarget({
+                          relativePath,
+                          isDirty:
+                            fileExplorerDirtyProjectDocumentPaths.includes(
+                              relativePath
+                            )
+                        });
                       }}
                       onActivateGlossaryEntry={(entryId) => {
                         executeUiCommand(
@@ -13159,6 +13275,14 @@ export function App(): JSX.Element {
                         isMarkdownSyntaxCheckerActive={
                           canUseMarkdownSyntaxChecker && isMarkdownSyntaxCheckerActive
                         }
+                        japaneseLintSource={
+                          isJapaneseLintActive ? japaneseLintDocumentSource : null
+                        }
+                        japaneseLintSettingsRevision={
+                          japaneseLintSettingsRevision
+                        }
+                        japaneseLintDebounceMs={japaneseLintDebounceMs}
+                        onJapaneseLintNotice={notifyJapaneseLint}
                         hasProject={Boolean(project)}
                         projectAccessMode={project?.accessMode}
                         onRequestRenameActiveDocument={
@@ -13399,6 +13523,18 @@ export function App(): JSX.Element {
           onExportCombined={exportCombinedGlossary}
         />
       </GlossaryExportWizardErrorBoundary>
+
+      {japaneseMachineCheckTarget ? (
+        <JapaneseMachineCheckDialog
+          key={japaneseMachineCheckTarget.relativePath}
+          relativePath={japaneseMachineCheckTarget.relativePath}
+          isDirty={japaneseMachineCheckTarget.isDirty}
+          translate={translate}
+          uiLanguage={displayLanguage}
+          platform={window.pergamum.platform}
+          onClose={() => setJapaneseMachineCheckTarget(null)}
+        />
+      ) : null}
 
       <DocumentMapPngExportDialog
         snapshot={documentMapPngExportSnapshot}

@@ -30,6 +30,7 @@ import searchIcon from "../../assets/icons/feather/global/search.svg?raw";
 import { isBuiltInThemeId } from "../shared/colorTheme";
 import { isPreviewRendererId } from "../shared/settings";
 import { DocumentMapSettingsSection } from "./DocumentMapSettingsSection";
+import { JapaneseLintSettingsSection } from "./JapaneseLintSettingsSection";
 import { readSettingValue } from "./settingsValueByKey";
 import {
   SaveDestinationDialog,
@@ -1148,6 +1149,7 @@ export function SettingsPanelView({
   ).filter(
     (category) =>
       category.id === "documentMap" ||
+      category.id === "japaneseLint" ||
       category.id === "export" ||
       settingCatalogItems.some((item) => item.category === category.id)
   );
@@ -1326,6 +1328,14 @@ export function SettingsPanelView({
               don't fit the generic control kinds. */}
           {!isSearching && selectedCategoryId === "documentMap" ? (
             <DocumentMapSettingsSection
+              settings={settings}
+              isLoading={isLoading}
+              translate={translate}
+              onChangeSettings={onChangeSettings}
+            />
+          ) : null}
+          {!isSearching && selectedCategoryId === "japaneseLint" ? (
+            <JapaneseLintSettingsSection
               settings={settings}
               isLoading={isLoading}
               translate={translate}

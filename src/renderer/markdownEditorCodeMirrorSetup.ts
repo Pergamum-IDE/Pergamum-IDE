@@ -69,6 +69,7 @@ import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 import { EditorState, type Extension } from "@codemirror/state";
 import { createEditorThemeExtension } from "./editorThemeExtension";
+import { createJapaneseLintExtension } from "./japaneseLint/japaneseLintGutterExtension";
 import { editorIndentKeymap, fencedCodeIndentUnitFacet } from "./indentCommands";
 import type { FencedCodeIndentUnit } from "../shared/settings";
 
@@ -129,6 +130,8 @@ export function createMarkdownEditorBaseSetup(
     // gutter element is on the active line regardless of their order.
     foldGutter(),
     lineNumbers(),
+    // #625: Japanese lint gutter lane (collapsed while there are no markers).
+    createJapaneseLintExtension(),
     highlightActiveLineGutter(),
     highlightSpecialChars(),
     history({ minDepth: options.undoHistoryMinDepth }),

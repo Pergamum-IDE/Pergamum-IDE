@@ -178,6 +178,17 @@ const eventLevelCatalog: Record<DebugLogEventName, DebugLogLevel> = {
   "session.manifestLock.reclaimed": "info",
   "session.persistence.suspended": "warn",
   "debug.session.failureInjected": "warn",
+  "japaneseLint.request.started": "debug",
+  "japaneseLint.request.completed": "debug",
+  "japaneseLint.markers.built": "debug",
+  "japaneseLint.markers.applied": "debug",
+  "japaneseLint.run.completed": "debug",
+  "japaneseLint.worker.started": "debug",
+  "japaneseLint.worker.ready": "debug",
+  "japaneseLint.worker.request.completed": "debug",
+  "japaneseLint.worker.exited": "warn",
+  "japaneseLint.worker.error": "warn",
+  "japaneseLint.worker.lint.completed": "debug",
   "app.uncaughtException": "error",
   "app.unhandledRejection": "error"
 };

@@ -7,6 +7,9 @@ const packagedExternalDependencies = [
   'node_modules/better-sqlite3',
   'node_modules/bindings',
   'node_modules/file-uri-to-path',
+  // #625: kuromoji's dictionary, read from disk at runtime by textlint's
+  // Japanese rules (everything else of textlint is bundled by Vite).
+  'node_modules/kuromoji/dict',
 ];
 
 function shouldPackageFile(file) {
@@ -33,7 +36,10 @@ function shouldPackageFile(file) {
 
     return (
       normalizedFile === normalizedDependencyPath ||
-      normalizedFile.startsWith(`${normalizedDependencyPath}/`)
+      normalizedFile.startsWith(`${normalizedDependencyPath}/`) ||
+      // An ancestor directory of a packaged path (e.g. /node_modules/kuromoji
+      // for /node_modules/kuromoji/dict) must be visited to reach it.
+      normalizedDependencyPath.startsWith(`${normalizedFile}/`)
     );
   });
 }
@@ -58,7 +64,11 @@ function toPackageRelativePath(file) {
 
 module.exports = {
   packagerConfig: {
-    asar: true,
+    // kuromoji's dictionary is read from disk at runtime by the Japanese
+    // Linter (in the Linter Worker utilityProcess), so it ships unpacked at
+    // resources/app.asar.unpacked/node_modules/kuromoji/dict (#625).
+    // AutoUnpackNatives merges its own pattern into this one.
+    asar: { unpack: '**/node_modules/kuromoji/dict/**' },
     icon: appIcon,
     ignore: (file) => (file ? !shouldPackageFile(file) : false),
   },
@@ -90,6 +100,13 @@ module.exports = {
         build: [
           {
             entry: 'src/main/main.ts',
+            config: 'vite.main.config.mts',
+            target: 'main',
+          },
+          {
+            // #625: the Japanese Linter Worker, run by utilityProcess.fork().
+            // Its own bundle next to main.js (.vite/build/japaneseLintWorker.js).
+            entry: 'src/main/linterWorker/japaneseLintWorker.ts',
             config: 'vite.main.config.mts',
             target: 'main',
           },

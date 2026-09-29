@@ -69,6 +69,7 @@ import {
   type MovedImageFile
 } from "./markdownImageReferenceMoveUpdate";
 import { isSupportedProjectImageFileName } from "./markdownImageReferenceMoveUpdate";
+import { isJapaneseMachineCheckPath } from "../shared/japaneseMachineCheck";
 import { isProjectDocumentPath } from "../shared/projectDocumentKind";
 import { FileOperationFailureDialog } from "./dialog/FileOperationFailureDialog";
 import { FileExplorerDeleteDialog } from "./FileExplorerDeleteDialog";
@@ -300,6 +301,9 @@ interface FileExplorerProps {
    *  rows are left intact — ADR-0011 DEL-14) and refreshes. */
   onEntriesDeleted?: (deletedRelativePaths: readonly string[]) => void;
   onExportFromFileExplorer?: (origin: ExportOrigin) => void;
+  /** #625 P2a: "日本語表現チェック..." for a right-clicked .md / .markdown /
+   *  .txt file (project-relative path). */
+  onJapaneseMachineCheck?: (relativePath: string) => void;
   onActivateDocument: (relativePath: string) => void;
 }
 
@@ -891,6 +895,7 @@ export function FileExplorer({
   onMoveResultMessage,
   onEntriesDeleted,
   onExportFromFileExplorer,
+  onJapaneseMachineCheck,
   onActivateDocument
 }: FileExplorerProps): JSX.Element {
   const [entriesByDirectoryPath, setEntriesByDirectoryPath] = useState<
@@ -3965,6 +3970,26 @@ export function FileExplorer({
             >
               {translate("explorer.contextMenu.export")}
             </button>
+            {contextMenu.exportOrigin.kind === "file" &&
+            onJapaneseMachineCheck &&
+            isJapaneseMachineCheckPath(contextMenu.exportOrigin.filePath) ? (
+              <button
+                type="button"
+                role="menuitem"
+                className="fileExplorerContextMenuItem"
+                data-file-explorer-context-command="japaneseMachineCheck"
+                onClick={() => {
+                  const target = contextMenu.exportOrigin;
+
+                  closeContextMenu();
+                  if (target.kind === "file") {
+                    onJapaneseMachineCheck(target.filePath);
+                  }
+                }}
+              >
+                {translate("explorer.contextMenu.japaneseMachineCheck")}
+              </button>
+            ) : null}
             <button
               type="button"
               role="menuitem"

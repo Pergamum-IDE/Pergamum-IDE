@@ -128,6 +128,17 @@ export const debugLogEventNames = [
   "session.manifestLock.reclaimed",
   "session.persistence.suspended",
   "debug.session.failureInjected",
+  "japaneseLint.request.started",
+  "japaneseLint.request.completed",
+  "japaneseLint.markers.built",
+  "japaneseLint.markers.applied",
+  "japaneseLint.run.completed",
+  "japaneseLint.worker.started",
+  "japaneseLint.worker.ready",
+  "japaneseLint.worker.request.completed",
+  "japaneseLint.worker.exited",
+  "japaneseLint.worker.error",
+  "japaneseLint.worker.lint.completed",
   "app.uncaughtException",
   "app.unhandledRejection"
 ] as const;
@@ -282,6 +293,8 @@ export const debugLogReasons = [
   "quotaExceeded",
   "sessionStorageDisabled",
   "writeFailed",
+  "too_large",
+  "lint_failed",
   "unknown"
 ] as const;
 
@@ -346,6 +359,54 @@ export const debugLogExtensions = [
 ] as const;
 
 export type DebugLogExtension = (typeof debugLogExtensions)[number];
+
+/** #625 Linter Worker request types (lifecycle only in the foundation). */
+export const debugLogWorkerRequestTypes = [
+  "init",
+  "ping",
+  "updateConfig",
+  "lintDocument",
+  "cancel",
+  "shutdown",
+  "unknown"
+] as const;
+
+export type DebugLogWorkerRequestType =
+  (typeof debugLogWorkerRequestTypes)[number];
+
+export const debugLogLinterModes = [
+  "foundation",
+  "worker-lint",
+  "instant-worker",
+  "wizard",
+  "wizard-report",
+  "unknown"
+] as const;
+
+/** #625 P1b: why a Worker lint produced no result. */
+export const debugLogLintFailureReasons = [
+  "dictionary-missing",
+  "lint-failed",
+  "canceled",
+  "worker-failed",
+  "not-ready",
+  "write-failed",
+  "invalid-target",
+  "project-closed",
+  "project-switched",
+  "discarded",
+  "app-shutdown",
+  "unknown"
+] as const;
+
+export type DebugLogLintFailureReason =
+  (typeof debugLogLintFailureReasons)[number];
+
+export const debugLogLintFormats = ["markdown", "text", "unknown"] as const;
+
+export type DebugLogLintFormat = (typeof debugLogLintFormats)[number];
+
+export type DebugLogLinterMode = (typeof debugLogLinterModes)[number];
 
 export const debugLogSizeBuckets = [
   "empty",
@@ -606,6 +667,36 @@ export interface DebugLogDetails {
 
   durationMs?: number;
   count?: number;
+
+  /**
+   * #625 Linter Worker (utilityProcess) diagnostics. Privacy: NEVER carries
+   * manuscript text, a line, a file name / path, a hash of any of those, a
+   * raw `error.message`, a raw stack or raw stderr. `errorName` / `errorCode`
+   * are strict identifiers and `sanitizedStack` holds allow-listed
+   * "at fn (app.asar/...:line:col)" frames only (see sanitizeErrorForLog.ts).
+   */
+  linterMode?: DebugLogLinterMode;
+  workerPid?: number;
+  exitCode?: number;
+  exitSignal?: string;
+  workerRequestType?: DebugLogWorkerRequestType;
+  workerRequestId?: string;
+  /** #625 P1b: lint job id (a UUID, not derived from any document). */
+  workerJobId?: string;
+  lintFormat?: DebugLogLintFormat;
+  /** Messages textlint found / messages returned after the cap. */
+  totalMessages?: number;
+  returnedMessages?: number;
+  truncated?: boolean;
+  /** #625 P2c: wizard cleanup - a job was running / a result was kept. */
+  hasRunningJob?: boolean;
+  hasStoredResult?: boolean;
+  failureReason?: DebugLogLintFailureReason;
+  enabledRuleIds?: readonly string[];
+  errorName?: string;
+  errorCode?: string;
+  sanitizedStack?: readonly string[];
+  workerErrorKind?: string;
 
   /** Direct children of the preview container right after DOM commit (#154). */
   previewNodeCount?: number;

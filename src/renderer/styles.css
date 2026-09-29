@@ -4617,6 +4617,79 @@ label.settingsItemHeader {
   mask: var(--masked-icon-url) center / contain no-repeat;
 }
 
+/* #625: Japanese lint gutter markers. Status colors are theme-independent
+   defaults on :root (a neutral slate for info, amber for warning, red for
+   error) with a dark-theme override; the requested "white" info icon would be
+   invisible on the light themes, so light themes use slate. */
+:root {
+  --pg-color-japanese-lint-info: #5f6b78;
+  --pg-color-japanese-lint-warning: #a37600;
+  --pg-color-japanese-lint-error: #c62828;
+}
+
+:root.theme-night-dark {
+  --pg-color-japanese-lint-info: #ffffff;
+  --pg-color-japanese-lint-warning: #f0c040;
+  --pg-color-japanese-lint-error: #ff6b6b;
+}
+
+/* #625: Settings > 日本語表現チェック (rule switches + thresholds). */
+.japaneseLintSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.japaneseLintRuleGroupHeading {
+  margin: 0 0 8px;
+  color: var(--pg-color-text-strong);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.japaneseLintRuleOption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 8px;
+}
+
+.japaneseLintRuleOptionLabel {
+  color: var(--pg-color-surface-muted);
+  font-size: 13px;
+}
+
+.japaneseLintRuleOption .settingsNumberInput {
+  width: 96px;
+}
+
+.cm-pergamum-japaneseLintGutter .cm-gutterElement {
+  display: flex;
+  min-inline-size: 18px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.cm-pergamum-japaneseLintMarker {
+  inline-size: 14px;
+  block-size: 14px;
+  margin-block-start: 3px;
+  cursor: help;
+}
+
+.cm-pergamum-japaneseLintMarker[data-severity="info"] {
+  color: var(--pg-color-japanese-lint-info);
+}
+
+.cm-pergamum-japaneseLintMarker[data-severity="warning"] {
+  color: var(--pg-color-japanese-lint-warning);
+}
+
+.cm-pergamum-japaneseLintMarker[data-severity="error"] {
+  color: var(--pg-color-japanese-lint-error);
+}
+
 .fileExplorerToolbarIcon {
   inline-size: 16px;
   block-size: 16px;
@@ -15133,4 +15206,86 @@ label.settingsItemHeader {
 .glossaryExportWizardExportButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* #625 P2a: Japanese machine check wizard. Logical properties only (RTL). */
+.appDialog.japaneseMachineCheckDialog {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.japaneseMachineCheckBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.japaneseMachineCheckFacts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 16px;
+  row-gap: 4px;
+  margin: 0;
+}
+
+.japaneseMachineCheckFacts dt {
+  opacity: 0.75;
+}
+
+.japaneseMachineCheckFacts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.japaneseMachineCheckEstimate,
+.japaneseMachineCheckNotice,
+.japaneseMachineCheckMuted,
+.japaneseMachineCheckFile,
+.japaneseMachineCheckRunningTitle,
+.japaneseMachineCheckStatus {
+  margin: 0;
+}
+
+.japaneseMachineCheckNotice {
+  padding-block: 8px;
+  padding-inline: 10px;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 4px;
+}
+
+.japaneseMachineCheckMuted {
+  opacity: 0.7;
+}
+
+.japaneseMachineCheckFile {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.japaneseMachineCheckElapsed {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.japaneseMachineCheckRunningNote {
+  margin: 0;
+  white-space: pre-line;
+  opacity: 0.8;
+}
+
+.japaneseMachineCheckTable {
+  inline-size: 100%;
+  border-collapse: collapse;
+}
+
+.japaneseMachineCheckTable th,
+.japaneseMachineCheckTable td {
+  padding-block: 4px;
+  padding-inline: 8px;
+  border-block-end: 1px solid var(--app-dialog-border);
+  text-align: start;
+}
+
+.japaneseMachineCheckTable .japaneseMachineCheckCount {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
 }

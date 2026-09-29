@@ -157,6 +157,14 @@ import {
   unregisterEditorViewSyntaxCheckerOptions,
   type MarkdownSyntaxCheckerOptions
 } from "./markdownSyntaxChecker/markdownSyntaxCheckerExtension";
+import {
+  refreshJapaneseLint,
+  registerJapaneseLintDriver,
+  unregisterJapaneseLintDriver,
+  type JapaneseLintDriverConfig,
+  type JapaneseLintNotice
+} from "./japaneseLint/japaneseLintGutterExtension";
+import type { JapaneseLintSource } from "../shared/japaneseLint";
 import { forceLinting } from "@codemirror/lint";
 import { createTabCaptureKeymapExtension } from "./tabCaptureKeymapExtension";
 import type {
@@ -261,6 +269,22 @@ interface MarkdownEditorProps {
   isMarkdownDocument?: boolean;
   /** #606: Markdown syntax checker active toggle. */
   isMarkdownSyntaxCheckerActive?: boolean;
+  /**
+   * #625: the source format/extension to run the Japanese linter as, or
+   * null/undefined while the linter is OFF or this surface is unsupported
+   * (then no lint runs and any markers are cleared). Live: changing it
+   * re-lints without rebuilding the editor state.
+   */
+  japaneseLintSource?: JapaneseLintSource | null;
+  /** #625: a lint pass was skipped (too large) or cut (too many results). */
+  onJapaneseLintNotice?: (notice: JapaneseLintNotice) => void;
+  /**
+   * #625: fingerprint of the Japanese lint rule settings. A change re-runs the
+   * check so a Settings change applies to the open document immediately.
+   */
+  japaneseLintSettingsRevision?: string;
+  /** #625: quiet time (ms) before the instant check re-runs after an edit. */
+  japaneseLintDebounceMs?: number;
   /**
    * #546 follow-up: `textFiles.indentUnit` — the configured indent unit for
    * plain text (`.txt`) documents. Live, like `fencedCodeIndentUnit` above
@@ -816,6 +840,10 @@ export function MarkdownEditor({
   fencedCodeIndentUnit = "spaces4",
   isMarkdownDocument = true,
   isMarkdownSyntaxCheckerActive = false,
+  japaneseLintSource = null,
+  onJapaneseLintNotice,
+  japaneseLintSettingsRevision = "",
+  japaneseLintDebounceMs,
   textFileIndentUnit = "tab",
   whitespaceSettings,
   pendingSelection,
@@ -968,6 +996,20 @@ export function MarkdownEditor({
   );
   isMarkdownSyntaxCheckerActiveRef.current =
     isMarkdownSyntaxCheckerActive ?? false;
+
+  // #625: latest Japanese lint source, read by the per-view lint driver.
+  const japaneseLintSourceRef = useRef(japaneseLintSource);
+  japaneseLintSourceRef.current = japaneseLintSource;
+  const onJapaneseLintNoticeRef = useRef(onJapaneseLintNotice);
+  onJapaneseLintNoticeRef.current = onJapaneseLintNotice;
+  const japaneseLintDebounceMsRef = useRef(japaneseLintDebounceMs);
+  japaneseLintDebounceMsRef.current = japaneseLintDebounceMs;
+  const japaneseLintDriverConfigRef = useRef<JapaneseLintDriverConfig>({
+    getSource: () => japaneseLintSourceRef.current,
+    getDebounceMs: () => japaneseLintDebounceMsRef.current,
+    onNotice: (notice) => onJapaneseLintNoticeRef.current?.(notice),
+    lint: (request) => window.pergamum.japaneseLint.lint(request)
+  });
 
   const currentSyntaxCheckerOptionsRef = useRef<MarkdownSyntaxCheckerOptions>({
     getIsActive: () => isMarkdownSyntaxCheckerActiveRef.current,
@@ -1503,6 +1545,16 @@ export function MarkdownEditor({
     formatImageLinkDiagnosticMessage
   ]);
 
+  // #625: toggling ON/OFF or switching the source re-lints (or clears) now.
+  const japaneseLintSourceKey = japaneseLintSource
+    ? `${japaneseLintSource.format}${japaneseLintSource.ext}`
+    : "";
+  useEffect(() => {
+    if (viewRef.current) {
+      refreshJapaneseLint(viewRef.current);
+    }
+  }, [japaneseLintSourceKey, japaneseLintSettingsRevision]);
+
   useEffect(() => {
     isMarkdownSyntaxCheckerActiveRef.current =
       isMarkdownSyntaxCheckerActive ?? false;
@@ -1568,6 +1620,7 @@ export function MarkdownEditor({
       view,
       currentSyntaxCheckerOptionsRef.current
     );
+    registerJapaneseLintDriver(view, japaneseLintDriverConfigRef.current);
     if (isMarkdownSyntaxCheckerActiveRef.current) {
       triggerMarkdownSyntaxCheckNow(
         view,
@@ -1639,6 +1692,7 @@ export function MarkdownEditor({
       unregisterEditorViewImageAttachmentPasteOptions(view);
       unregisterEditorViewImageLinkDiagnosticsOptions(view);
       unregisterEditorViewSyntaxCheckerOptions(view);
+      unregisterJapaneseLintDriver(view);
       // #272: report this editor's final View State (keyed by whatever
       // document it is currently showing) before the view is torn down, so
       // an unmount that races the persistence debounce still preserves it.

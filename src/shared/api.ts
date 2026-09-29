@@ -83,6 +83,20 @@ import type { AppPlatform } from "./platform";
 import type { RecoveryStoreStatus } from "./recovery";
 import type { FontCache, FontCacheState } from "./fontCache";
 import type {
+  JapaneseLintRequest,
+  JapaneseLintResponse
+} from "./japaneseLint";
+import type {
+  JapaneseMachineCheckPrepareRequest,
+  JapaneseMachineCheckPrepareResult,
+  JapaneseMachineCheckProgress,
+  JapaneseMachineCheckRunResult,
+  JapaneseMachineCheckCancelRequest,
+  JapaneseMachineCheckRunRequest,
+  JapaneseMachineCheckSaveReportRequest,
+  JapaneseMachineCheckSaveReportResult
+} from "./japaneseMachineCheck";
+import type {
   RecoveryDocumentPayload,
   RecoveryDocumentWriteResult
 } from "./recoveryDocument";
@@ -468,6 +482,22 @@ export const DEBUG_LOG_CHANNELS = {
 export const APPLICATION_MENU_CHANNELS = {
   command: "applicationMenu:command",
   setEnablement: "applicationMenu:setEnablement"
+} as const;
+
+export const JAPANESE_LINT_CHANNELS = {
+  lint: "japaneseLint:lint",
+  release: "japaneseLint:release"
+} as const;
+
+export const JAPANESE_MACHINE_CHECK_CHANNELS = {
+  prepare: "japaneseMachineCheck:prepare",
+  run: "japaneseMachineCheck:run",
+  cancel: "japaneseMachineCheck:cancel",
+  /** #625 P2b: save the Markdown report of the finished run */
+  saveReport: "japaneseMachineCheck:saveReport",
+  discardResult: "japaneseMachineCheck:discardResult",
+  /** main -> renderer: coarse stage of the run in flight */
+  progress: "japaneseMachineCheck:progress"
 } as const;
 
 export const FONT_CACHE_CHANNELS = {
@@ -1664,6 +1694,35 @@ export interface PergamumApi {
    */
   fileSystem: {
     getPathForFile: (file: File) => string;
+  };
+  japaneseLint: {
+    lint: (request: JapaneseLintRequest) => Promise<JapaneseLintResponse>;
+    /** Linter OFF: lets the Main Process stop the lint Worker. */
+    release: () => Promise<void>;
+  };
+  japaneseMachineCheck: {
+    prepare: (
+      request: JapaneseMachineCheckPrepareRequest
+    ) => Promise<JapaneseMachineCheckPrepareResult>;
+    run: (
+      request: JapaneseMachineCheckRunRequest
+    ) => Promise<JapaneseMachineCheckRunResult>;
+    /**
+     * Safe to call repeatedly; a no-op when nothing runs, or when `runId`
+     * names a run that is not the current one.
+     */
+    cancel: (request?: JapaneseMachineCheckCancelRequest) => Promise<void>;
+    /** Main shows the save dialog and writes the report; never rejects. */
+    saveReport: (
+      request: JapaneseMachineCheckSaveReportRequest
+    ) => Promise<JapaneseMachineCheckSaveReportResult>;
+    /** The wizard closed: Main may forget the finished run. */
+    discardResult: (
+      request: JapaneseMachineCheckSaveReportRequest
+    ) => Promise<void>;
+    onProgress: (
+      callback: (progress: JapaneseMachineCheckProgress) => void
+    ) => () => void;
   };
   fontCache: {
     load: () => Promise<FontCacheState>;

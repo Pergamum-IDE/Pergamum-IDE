@@ -39,6 +39,15 @@ import {
 } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
 import { registerFontCacheIpc } from "./fontCacheIpc";
+import {
+  registerJapaneseLintIpc,
+  releaseJapaneseLintWorker
+} from "./japaneseLintIpc";
+import {
+  disposeJapaneseMachineCheck,
+  registerJapaneseMachineCheckIpc
+} from "./japaneseMachineCheckIpc";
+import { isJapaneseLintRejectionWindow } from "./japaneseLintRejectionGuard";
 import { SESSION_CHANNELS, WINDOW_CHANNELS, type ColdStartRestorePayload } from "../shared/api";
 import {
   DEFAULT_ZOOM_FACTOR,
@@ -249,6 +258,9 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
 function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
   installAppShutdownCleanup(app, async () => {
     try {
+      // #625: stop the Japanese lint Worker (never rejects).
+      await releaseJapaneseLintWorker();
+      await disposeJapaneseMachineCheck();
       // #285: release the Recovery Store ownership lock (owner only) before
       // the project write lock, so a normal quit leaves nothing behind.
       await shutdownRecoveryStore(logger);
@@ -282,6 +294,14 @@ function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
         error: reason
       }
     });
+
+    // #625: a rejection leaking out of textlint while a Japanese lint request
+    // is running (or just finished) must not take the app down for a failed
+    // hint feature. It is logged above; every other rejection stays fatal.
+    if (isJapaneseLintRejectionWindow()) {
+      return;
+    }
+
     logger.flushAndClose();
     process.exit(1);
   });
@@ -385,6 +405,8 @@ app.whenReady().then(async () => {
   );
   registerSettingsIpc();
   registerFontCacheIpc();
+  registerJapaneseLintIpc();
+  registerJapaneseMachineCheckIpc();
   registerImageAttachmentIpc();
   registerImageInsertionIpc();
   // #411: read-only diagnostics for broken project-local image links in the
