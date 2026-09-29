@@ -354,4 +354,153 @@ describe("japaneseLintIpc (#625)", () => {
       ).resolves.toMatchObject({ ok: true });
     });
   });
+
+  describe("Application Settings rule switches (instant check)", () => {
+    const quiet = {
+      log: vi.fn()
+    } as unknown as Parameters<typeof handleJapaneseLintRequest>[1];
+    const joshi = {
+      text: "私は彼は好きだ。",
+      format: "text",
+      ext: ".txt"
+    } as const;
+    const ruleIds = async (
+      request: unknown,
+      settings: unknown
+    ): Promise<string[]> => {
+      const response = await handleJapaneseLintRequest(
+        request,
+        quiet,
+        async () => settings
+      );
+
+      return response.ok ? response.diagnostics.map((d) => d.ruleId) : [];
+    };
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("reflects a rule switched off in Settings", async () => {
+      expect(await ruleIds(joshi, undefined)).toContain("no-doubled-joshi");
+      expect(
+        await ruleIds(joshi, { rules: { "no-doubled-joshi": { enabled: false } } })
+      ).not.toContain("no-doubled-joshi");
+    });
+
+    it("keeps sentence-length off by default and applies its threshold once on", async () => {
+      const longSentence = {
+        text: `${"あ".repeat(60)}。`,
+        format: "markdown",
+        ext: ".md"
+      } as const;
+
+      expect(await ruleIds(longSentence, undefined)).not.toContain(
+        "sentence-length"
+      );
+      expect(
+        await ruleIds(longSentence, {
+          rules: { "sentence-length": { enabled: true } }
+        })
+      ).not.toContain("sentence-length");
+      expect(
+        await ruleIds(longSentence, {
+          rules: { "sentence-length": { enabled: true, options: { max: 40 } } }
+        })
+      ).toContain("sentence-length");
+    });
+
+    it("applies the max-ten threshold from Settings", async () => {
+      const commas = {
+        text: "私は、朝に、昼に、夜に、犬と散歩をした。",
+        format: "text",
+        ext: ".txt"
+      } as const;
+
+      expect(await ruleIds(commas, undefined)).not.toContain("max-ten");
+      expect(
+        await ruleIds(commas, { rules: { "max-ten": { options: { max: 3 } } } })
+      ).toContain("max-ten");
+    });
+
+    it("re-reads the settings on every request, so a change applies to the next lint", async () => {
+      let stored: unknown = undefined;
+      const lintOnce = async (): Promise<string[]> => {
+        const response = await handleJapaneseLintRequest(
+          joshi,
+          quiet,
+          async () => stored
+        );
+
+        return response.ok ? response.diagnostics.map((d) => d.ruleId) : [];
+      };
+
+      expect(await lintOnce()).toContain("no-doubled-joshi");
+      stored = { rules: { "no-doubled-joshi": { enabled: false } } };
+      expect(await lintOnce()).not.toContain("no-doubled-joshi");
+    });
+
+    it("with every rule off, answers an empty ok without touching the dictionary or textlint", async () => {
+      const lintSpy = vi.spyOn(engine, "lintJapanese");
+      const emptyAppPath = mkdtempSync(path.join(os.tmpdir(), "pergamum-nodict-"));
+
+      // A missing dictionary would normally fail the request; with nothing to
+      // run it must not even be looked at.
+      electronMock.appPath.value = emptyAppPath;
+
+      try {
+        const allOff = {
+          rules: Object.fromEntries(
+            [
+              "max-ten",
+              "no-doubled-conjunctive-particle-ga",
+              "no-doubled-conjunction",
+              "no-double-negative-ja",
+              "no-doubled-joshi",
+              "sentence-length",
+              "no-dropping-the-ra",
+              "no-mix-dearu-desumasu",
+              "no-nfd",
+              "no-invalid-control-character",
+              "no-zero-width-spaces",
+              "no-kangxi-radicals"
+            ].map((id) => [id, { enabled: false }])
+          )
+        };
+
+        expect(
+          await handleJapaneseLintRequest(joshi, quiet, async () => allOff)
+        ).toEqual({ ok: true, diagnostics: [], truncated: false });
+        expect(lintSpy).not.toHaveBeenCalled();
+      } finally {
+        rmSync(emptyAppPath, { recursive: true, force: true });
+      }
+    });
+
+    it("falls back to the defaults when the stored settings cannot be read", async () => {
+      const response = await handleJapaneseLintRequest(joshi, quiet, async () => {
+        throw new Error("settings.json unreadable");
+      });
+
+      expect(response.ok && response.diagnostics.map((d) => d.ruleId)).toContain(
+        "no-doubled-joshi"
+      );
+    });
+
+    it("hands the resolved rules (with options) to the engine", async () => {
+      const lintSpy = vi.spyOn(engine, "lintJapanese").mockResolvedValue([]);
+
+      await handleJapaneseLintRequest(joshi, quiet, async () => ({
+        rules: { "max-ten": { options: { max: 9 } } }
+      }));
+
+      const options = lintSpy.mock.calls[0]?.[1];
+      const maxTen = options?.rules?.find((rule) => rule.id === "max-ten");
+
+      expect(maxTen?.options).toEqual({ max: 9 });
+      expect(options?.rules?.some((rule) => rule.id === "sentence-length")).toBe(
+        false
+      );
+    });
+  });
 });

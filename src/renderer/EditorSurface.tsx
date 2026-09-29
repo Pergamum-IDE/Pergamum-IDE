@@ -600,6 +600,7 @@ interface EditorSurfaceProps {
   /** #625: Japanese lint source (null/undefined = OFF or unsupported). */
   japaneseLintSource?: JapaneseLintSource | null;
   onJapaneseLintNotice?: (notice: JapaneseLintNotice) => void;
+  japaneseLintSettingsRevision?: string;
   hasProject?: boolean;
   projectAccessMode?: ProjectAccessMode | null;
   onRequestRenameActiveDocument?: () => void;
@@ -744,6 +745,7 @@ export function EditorSurface({
   isMarkdownSyntaxCheckerActive,
   japaneseLintSource,
   onJapaneseLintNotice,
+  japaneseLintSettingsRevision,
   hasProject,
   projectAccessMode,
   onRequestRenameActiveDocument,
@@ -870,6 +872,7 @@ export function EditorSurface({
           isMarkdownSyntaxCheckerActive={isMarkdownSyntaxCheckerActive}
           japaneseLintSource={japaneseLintSource}
           onJapaneseLintNotice={onJapaneseLintNotice}
+          japaneseLintSettingsRevision={japaneseLintSettingsRevision}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}
@@ -977,6 +980,7 @@ interface MarkdownEditorSurfaceProps {
   /** #625: Japanese lint source (null/undefined = OFF or unsupported). */
   japaneseLintSource?: JapaneseLintSource | null;
   onJapaneseLintNotice?: (notice: JapaneseLintNotice) => void;
+  japaneseLintSettingsRevision?: string;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -1087,6 +1091,7 @@ function MarkdownEditorSurface({
   isMarkdownSyntaxCheckerActive,
   japaneseLintSource,
   onJapaneseLintNotice,
+  japaneseLintSettingsRevision,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -3412,6 +3417,7 @@ function MarkdownEditorSurface({
           isMarkdownSyntaxCheckerActive={isMarkdownSyntaxCheckerActive}
           japaneseLintSource={japaneseLintSource}
           onJapaneseLintNotice={onJapaneseLintNotice}
+          japaneseLintSettingsRevision={japaneseLintSettingsRevision}
           renameShortcut={renameShortcutConfig}
           extraPendingSelection={findExtraSelection}
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}

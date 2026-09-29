@@ -4633,6 +4633,37 @@ label.settingsItemHeader {
   --pg-color-japanese-lint-error: #ff6b6b;
 }
 
+/* #625: Settings > 日本語表現チェック (rule switches + thresholds). */
+.japaneseLintSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.japaneseLintRuleGroupHeading {
+  margin: 0 0 8px;
+  color: var(--pg-color-text-strong);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.japaneseLintRuleOption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 8px;
+}
+
+.japaneseLintRuleOptionLabel {
+  color: var(--pg-color-surface-muted);
+  font-size: 13px;
+}
+
+.japaneseLintRuleOption .settingsNumberInput {
+  width: 96px;
+}
+
 .cm-pergamum-japaneseLintGutter .cm-gutterElement {
   display: flex;
   min-inline-size: 18px;

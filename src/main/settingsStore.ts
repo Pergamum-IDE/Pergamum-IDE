@@ -6,6 +6,10 @@ import {
   readDocumentMapSettings
 } from "../shared/documentMapSettings";
 import {
+  parseJapaneseLintSettingsForWrite,
+  resolveJapaneseLintSettings
+} from "../shared/japaneseLintRules";
+import {
   createDefaultApplicationSettings,
   type ApplicationSettings,
   type RecordRecentProjectInput,
@@ -706,10 +710,17 @@ function readSettingsValue(value: unknown): ApplicationSettings {
   }
 
   const notification = readNotificationOutputSettings(value.notification);
+  // #625: sparse - only present when settings.json has the section; a
+  // malformed value resolves tolerantly to defaults for the missing pieces.
+  const japaneseLint =
+    value.japaneseLint === undefined
+      ? undefined
+      : resolveJapaneseLintSettings(value.japaneseLint);
 
   return {
     preview: readPreviewSettings(value.preview),
     ...(notification ? { notification } : {}),
+    ...(japaneseLint ? { japaneseLint } : {}),
     workbench: readWorkbenchSettings(value.workbench),
     commandPalette: readCommandPaletteSettings(value.commandPalette),
     editor: readEditorSettings(value.editor),
@@ -785,7 +796,9 @@ export function parseSaveApplicationSettingsRequest(
 
   const keys = Object.keys(value);
   const hasNotification = keys.includes("notification");
-  const expectedKeyCount = 9 + (hasNotification ? 1 : 0);
+  const hasJapaneseLint = keys.includes("japaneseLint");
+  const expectedKeyCount =
+    9 + (hasNotification ? 1 : 0) + (hasJapaneseLint ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -820,8 +833,21 @@ export function parseSaveApplicationSettingsRequest(
     imageAttachment: parseImageAttachmentSettingsForWrite(
       value.imageAttachment
     ),
-    documentMap: parseDocumentMapSettingsForWriteStore(value.documentMap)
+    documentMap: parseDocumentMapSettingsForWriteStore(value.documentMap),
+    ...(hasJapaneseLint
+      ? { japaneseLint: parseJapaneseLintSettingsForWriteStore(value.japaneseLint) }
+      : {})
   };
+}
+
+function parseJapaneseLintSettingsForWriteStore(
+  value: unknown
+): NonNullable<ApplicationSettings["japaneseLint"]> {
+  try {
+    return parseJapaneseLintSettingsForWrite(value);
+  } catch {
+    throw new Error("Invalid application settings.");
+  }
 }
 
 // #424 Slice 7: strict write parser — the renderer always sends a full,
@@ -1866,7 +1892,9 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
 
   const keys = Object.keys(value);
   const hasNotification = keys.includes("notification");
-  const expectedKeyCount = 10 + (hasNotification ? 1 : 0);
+  const hasJapaneseLint = keys.includes("japaneseLint");
+  const expectedKeyCount =
+    10 + (hasNotification ? 1 : 0) + (hasJapaneseLint ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -1903,6 +1931,9 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
       value.imageAttachment
     ),
     documentMap: parseDocumentMapSettingsForWriteStore(value.documentMap),
+    ...(hasJapaneseLint
+      ? { japaneseLint: parseJapaneseLintSettingsForWriteStore(value.japaneseLint) }
+      : {}),
     recentProjects: parseRecentProjectsForSave(value.recentProjects)
   };
 }
@@ -1984,6 +2015,11 @@ export async function saveApplicationSettings(
   // this the user's edits were silently dropped and the on-disk value kept.
   if (settingsRequest.documentMap !== undefined) {
     nextSettings.documentMap = settingsRequest.documentMap;
+  }
+
+  // #625: sparse write-through - an omitting request keeps the loaded value.
+  if (settingsRequest.japaneseLint !== undefined) {
+    nextSettings.japaneseLint = settingsRequest.japaneseLint;
   }
 
   return saveSettings(nextSettings);

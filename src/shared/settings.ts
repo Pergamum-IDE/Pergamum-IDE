@@ -4,6 +4,7 @@ import {
   type DocumentMapSettings
 } from "./documentMapSettings";
 import type { FontFamilySetting } from "./fontSettings";
+import type { JapaneseLintSettings } from "./japaneseLintRules";
 import type { BuiltInThemeId } from "./colorTheme";
 import type { Language } from "./i18n";
 import {
@@ -380,6 +381,11 @@ export interface ApplicationSettings {
   // #375: Document Map draw colours + dialogue delimiter pairs.
   // applicationOnly, always concrete (never sparse).
   documentMap: DocumentMapSettings;
+  // #625: Japanese lint rule switches + thresholds. applicationOnly. Optional
+  // and sparse like `notification`: absent means the catalog defaults, so it
+  // is only written once the user changes a rule. Always fully resolved when
+  // present (see japaneseLintRules.ts).
+  japaneseLint?: JapaneseLintSettings;
   recentProjects: RecentProject[];
 }
 
@@ -398,6 +404,7 @@ export interface SaveApplicationSettingsRequest {
   textFiles: ApplicationTextFilesSettings;
   imageAttachment: ApplicationImageAttachmentSettings;
   documentMap: DocumentMapSettings;
+  japaneseLint?: JapaneseLintSettings;
 }
 
 export interface ProjectPreviewSettings {

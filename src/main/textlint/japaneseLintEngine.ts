@@ -3,6 +3,10 @@ import { TextlintKernel } from "@textlint/kernel";
 import markdownPlugin from "@textlint/textlint-plugin-markdown";
 import textPlugin from "@textlint/textlint-plugin-text";
 import japanesePreset from "textlint-rule-preset-japanese";
+import {
+  enabledJapaneseLintRules,
+  type EnabledJapaneseLintRule
+} from "../../shared/japaneseLintRules";
 
 /**
  * PoC (#625): a thin wrapper that runs textlint-rule-preset-japanese over a
@@ -27,8 +31,12 @@ export type JapaneseLintTextExtension = ".txt";
  * `format` selects the textlint plugin; `ext` is the file extension textlint
  * is told about (it picks the processor by extension). The pair is constrained
  * by type, and `ext` defaults per format (`.md` / `.txt`).
+ *
+ * `rules` is the rule set to run (see japaneseLintRules.ts). Omitted, the
+ * catalog defaults apply; an empty array runs nothing and never starts
+ * textlint.
  */
-export type JapaneseLintOptions =
+export type JapaneseLintOptions = (
   | {
       readonly format: "markdown";
       readonly ext?: JapaneseLintMarkdownExtension;
@@ -36,7 +44,8 @@ export type JapaneseLintOptions =
   | {
       readonly format: "text";
       readonly ext?: JapaneseLintTextExtension;
-    };
+    }
+) & { readonly rules?: readonly EnabledJapaneseLintRule[] };
 
 export type JapaneseLintSeverity = "info" | "warning" | "error";
 
@@ -132,27 +141,39 @@ export function toJapaneseLintMessages(
     .sort((a, b) => a.index - b.index);
 }
 
-// Preset rules with the preset's own default options. A rule whose default
-// option is `false` is disabled, following textlint's rulesConfig convention.
-const presetRules = Object.entries(japanesePreset.rules).flatMap(
-  ([ruleId, rule]) => {
-    const options = japanesePreset.rulesConfig[ruleId];
+// Rule implementations by id. The preset's own per-rule options (e.g.
+// no-doubled-joshi's min_interval) are the base; the user's numeric options
+// from the settings win over them.
+const presetRuleImplementations = new Map(
+  Object.entries(japanesePreset.rules)
+);
 
-    if (options === false) {
+function isOptionsObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toKernelRules(rules: readonly EnabledJapaneseLintRule[]) {
+  return rules.flatMap((enabled) => {
+    const implementation = presetRuleImplementations.get(enabled.id);
+
+    if (implementation === undefined) {
       return [];
     }
 
+    const presetOptions = japanesePreset.rulesConfig[enabled.id];
+
     return [
       {
-        ruleId,
-        rule: rule as never,
-        options: (options === true || options === undefined
-          ? {}
-          : options) as Record<string, unknown>
+        ruleId: enabled.id,
+        rule: implementation as never,
+        options: {
+          ...(isOptionsObject(presetOptions) ? presetOptions : {}),
+          ...enabled.options
+        } as Record<string, unknown>
       }
     ];
-  }
-);
+  });
+}
 
 const kernel = new TextlintKernel();
 
@@ -168,10 +189,10 @@ const sourceProfiles = {
   text: { defaultExt: ".txt", pluginId: "text", plugin: textPlugin }
 } as const;
 
-/** Ids of the rules the wrapper runs (for diagnostics and tests). */
-export const japaneseLintRuleIds: readonly string[] = presetRules.map(
-  (rule) => rule.ruleId
-);
+/** Ids of every rule the wrapper is able to run (for diagnostics and tests). */
+export const japaneseLintRuleIds: readonly string[] = [
+  ...presetRuleImplementations.keys()
+];
 
 /**
  * Lints `source` with textlint-rule-preset-japanese, parsed according to
@@ -181,11 +202,19 @@ export async function lintJapanese(
   source: string,
   options: JapaneseLintOptions
 ): Promise<JapaneseLintMessage[]> {
+  const rules = toKernelRules(options.rules ?? enabledJapaneseLintRules(undefined));
+
+  // Every rule switched off: there is nothing to check, so do not start
+  // textlint at all.
+  if (rules.length === 0) {
+    return [];
+  }
+
   const profile = sourceProfiles[options.format];
   const result = await kernel.lintText(source, {
     ext: options.ext ?? profile.defaultExt,
     plugins: [{ pluginId: profile.pluginId, plugin: profile.plugin as never }],
-    rules: presetRules
+    rules
   });
 
   return toJapaneseLintMessages(result.messages);
@@ -194,14 +223,16 @@ export async function lintJapanese(
 /** Convenience wrapper: lint a Markdown document. */
 export function lintJapaneseMarkdown(
   markdown: string,
-  ext: JapaneseLintMarkdownExtension = ".md"
+  ext: JapaneseLintMarkdownExtension = ".md",
+  rules?: readonly EnabledJapaneseLintRule[]
 ): Promise<JapaneseLintMessage[]> {
-  return lintJapanese(markdown, { format: "markdown", ext });
+  return lintJapanese(markdown, { format: "markdown", ext, rules });
 }
 
 /** Convenience wrapper: lint a plain-text (`.txt`) document. */
 export function lintJapanesePlainText(
-  text: string
+  text: string,
+  rules?: readonly EnabledJapaneseLintRule[]
 ): Promise<JapaneseLintMessage[]> {
-  return lintJapanese(text, { format: "text", ext: ".txt" });
+  return lintJapanese(text, { format: "text", ext: ".txt", rules });
 }

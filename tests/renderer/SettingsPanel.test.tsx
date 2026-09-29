@@ -231,11 +231,13 @@ describe("SettingsPanelView catalog-driven rendering (#230)", () => {
     expect(labels).toContain("文書マップ");
     // #521: "エクスポート" is an action category without scalar catalog items.
     expect(labels).toContain("エクスポート");
+    // #625: "日本語表現チェック" owns a bespoke rule-switch section.
+    expect(labels).toContain("日本語表現チェック");
     // #407: "画像添付" adds a category with its own scalar catalog items.
     expect(labels).toContain("画像添付");
     // #424 Slice 7: "検索・置換" adds another with its own scalar catalog items.
     expect(labels).toContain("検索・置換");
-    expect(labels).toHaveLength(12);
+    expect(labels).toHaveLength(13);
   });
 
   it("renders the Application Settings export category and invokes the export handler", () => {
@@ -386,6 +388,7 @@ describe("SettingsPanelView category behavior (#230)", () => {
       "Editor",
       "Search & Replace",
       "Image Attachment",
+      "Japanese Style Check",
       "Preview",
       "Document Map",
       "Markdown Files",

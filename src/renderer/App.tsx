@@ -148,6 +148,7 @@ import {
   japaneseLintSourceForPath
 } from "../shared/japaneseLint";
 import { createJapaneseLintTooLargeDialogOptions } from "./japaneseLint/japaneseLintDialog";
+import { resolveJapaneseLintSettings } from "../shared/japaneseLintRules";
 import { CommandPalette } from "./CommandPalette";
 import {
   createCommandPaletteCommandTitles,
@@ -2150,6 +2151,13 @@ export function App(): JSX.Element {
   } = useApplicationSettings();
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  // #625: a stable fingerprint of the Japanese lint rule settings. When the
+  // user changes a rule or threshold it changes, which makes the open
+  // editor re-run the instant check with the new rules right away.
+  const japaneseLintSettingsRevision = useMemo(
+    () => JSON.stringify(resolveJapaneseLintSettings(settings.japaneseLint)),
+    [settings.japaneseLint]
+  );
   const imeCompositionSaveGuard = useMemo(
     () =>
       createImeCompositionSaveGuard({
@@ -13247,6 +13255,9 @@ export function App(): JSX.Element {
                         }
                         japaneseLintSource={
                           isJapaneseLintActive ? japaneseLintDocumentSource : null
+                        }
+                        japaneseLintSettingsRevision={
+                          japaneseLintSettingsRevision
                         }
                         onJapaneseLintNotice={notifyJapaneseLint}
                         hasProject={Boolean(project)}

@@ -279,6 +279,11 @@ interface MarkdownEditorProps {
   /** #625: a lint pass was skipped (too large) or cut (too many results). */
   onJapaneseLintNotice?: (notice: JapaneseLintNotice) => void;
   /**
+   * #625: fingerprint of the Japanese lint rule settings. A change re-runs the
+   * check so a Settings change applies to the open document immediately.
+   */
+  japaneseLintSettingsRevision?: string;
+  /**
    * #546 follow-up: `textFiles.indentUnit` — the configured indent unit for
    * plain text (`.txt`) documents. Live, like `fencedCodeIndentUnit` above
    * (its own compartment/ref + reconfigure effect): a Settings change takes
@@ -835,6 +840,7 @@ export function MarkdownEditor({
   isMarkdownSyntaxCheckerActive = false,
   japaneseLintSource = null,
   onJapaneseLintNotice,
+  japaneseLintSettingsRevision = "",
   textFileIndentUnit = "tab",
   whitespaceSettings,
   pendingSelection,
@@ -1541,7 +1547,7 @@ export function MarkdownEditor({
     if (viewRef.current) {
       refreshJapaneseLint(viewRef.current);
     }
-  }, [japaneseLintSourceKey]);
+  }, [japaneseLintSourceKey, japaneseLintSettingsRevision]);
 
   useEffect(() => {
     isMarkdownSyntaxCheckerActiveRef.current =

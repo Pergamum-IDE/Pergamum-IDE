@@ -9,7 +9,9 @@ import {
   type JapaneseLintRequest,
   type JapaneseLintResponse
 } from "../shared/japaneseLint";
+import { enabledJapaneseLintRules } from "../shared/japaneseLintRules";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
+import { loadSettings } from "./settingsStore";
 import { withJapaneseLintRejectionGuard } from "./japaneseLintRejectionGuard";
 import { lintJapanese } from "./textlint/japaneseLintEngine";
 
@@ -97,9 +99,20 @@ function countLines(text: string): number {
   return lines;
 }
 
+/**
+ * Supplies the stored `japaneseLint` settings (Application Settings) for a
+ * request. Read fresh on every request so a change in Settings applies to the
+ * very next lint; a failure to read falls back to the catalog defaults.
+ */
+export type JapaneseLintSettingsProvider = () => Promise<unknown>;
+
+const loadStoredJapaneseLintSettings: JapaneseLintSettingsProvider = async () =>
+  (await loadSettings()).japaneseLint;
+
 export async function handleJapaneseLintRequest(
   rawRequest: unknown,
-  logger: DebugLogger = getDebugLogger()
+  logger: DebugLogger = getDebugLogger(),
+  settingsProvider: JapaneseLintSettingsProvider = loadStoredJapaneseLintSettings
 ): Promise<JapaneseLintResponse> {
   const startedAt = Date.now();
   let request: JapaneseLintRequest | null = null;
@@ -147,6 +160,24 @@ export async function handleJapaneseLintRequest(
       return { ok: false, reason: "too-large" };
     }
 
+    let storedSettings: unknown;
+
+    try {
+      storedSettings = await settingsProvider();
+    } catch {
+      storedSettings = undefined;
+    }
+
+    const rules = enabledJapaneseLintRules(storedSettings);
+
+    // Every rule switched off: nothing to check, so textlint (and its
+    // dictionary) is not started at all.
+    if (rules.length === 0) {
+      logRun("succeeded", { count: 0 });
+
+      return { ok: true, diagnostics: [], truncated: false };
+    }
+
     // Without the dictionary textlint's rules fail deep inside promise chains
     // we cannot await, so do not enter the engine at all.
     if (!(await ensureJapaneseLintDictionary())) {
@@ -160,9 +191,10 @@ export async function handleJapaneseLintRequest(
       format === "markdown"
         ? lintJapanese(text, {
             format: "markdown",
-            ext: ext === ".markdown" ? ".markdown" : ".md"
+            ext: ext === ".markdown" ? ".markdown" : ".md",
+            rules
           })
-        : lintJapanese(text, { format: "text", ext: ".txt" })
+        : lintJapanese(text, { format: "text", ext: ".txt", rules })
     );
     const truncated = messages.length > JAPANESE_LINT_MAX_RESULT_COUNT;
 

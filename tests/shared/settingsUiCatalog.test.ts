@@ -76,6 +76,7 @@ describe("Settings UI Catalog Schema (#226)", () => {
         "editor",
         "searchReplace",
         "imageAttachment",
+        "japaneseLint",
         "preview",
         "documentMap",
         "markdownFiles",

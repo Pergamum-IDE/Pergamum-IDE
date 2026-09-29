@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { enabledJapaneseLintRules } from "../../src/shared/japaneseLintRules";
 import {
   japaneseLintRuleIds,
   lintJapanese,
@@ -7,6 +8,15 @@ import {
   toJapaneseLintMessages,
   toJapaneseLintSeverity
 } from "../../src/main/textlint/japaneseLintEngine";
+
+// Rule sets used where a test needs a rule that is off by default (or a
+// non-default threshold).
+const withSentenceLength = enabledJapaneseLintRules({
+  rules: { "sentence-length": { enabled: true } }
+});
+const withMaxTenThree = enabledJapaneseLintRules({
+  rules: { "max-ten": { options: { max: 3 } } }
+});
 
 describe("japaneseLintEngine markdown (textlint-rule-preset-japanese PoC, #625)", () => {
   it("runs the preset's rules", () => {
@@ -46,7 +56,7 @@ describe("japaneseLintEngine markdown (textlint-rule-preset-japanese PoC, #625)"
 
   it("reports too many commas (max-ten) with an index inside the text", async () => {
     const text = "私は、朝に、昼に、夜に、犬と散歩をした。";
-    const messages = await lintJapaneseMarkdown(text);
+    const messages = await lintJapaneseMarkdown(text, ".md", withMaxTenThree);
     const ten = messages.find((m) => m.ruleId === "max-ten");
 
     expect(ten).toBeDefined();
@@ -54,7 +64,11 @@ describe("japaneseLintEngine markdown (textlint-rule-preset-japanese PoC, #625)"
   });
 
   it("reports over-long sentences", async () => {
-    const messages = await lintJapaneseMarkdown(`${"あ".repeat(120)}。`);
+    const messages = await lintJapaneseMarkdown(
+      `${"あ".repeat(120)}。`,
+      ".md",
+      withSentenceLength
+    );
 
     expect(messages.map((m) => m.ruleId)).toContain("sentence-length");
   });
@@ -78,7 +92,9 @@ describe("japaneseLintEngine markdown (textlint-rule-preset-japanese PoC, #625)"
 
   it("uses 1-based line/column and reports the line of the problem in a multi-line document", async () => {
     const messages = await lintJapaneseMarkdown(
-      "# 見出し\n\n正しい文です。\n\n" + "あ".repeat(120) + "。\n"
+      "# 見出し\n\n正しい文です。\n\n" + "あ".repeat(120) + "。\n",
+      ".md",
+      withSentenceLength
     );
     const long = messages.find((m) => m.ruleId === "sentence-length");
 
@@ -106,7 +122,10 @@ describe("japaneseLintEngine plain text (#625)", () => {
     const mixed = await lintJapanesePlainText(
       "これは本です。あれはペンである。"
     );
-    const long = await lintJapanesePlainText(`${"あ".repeat(120)}。`);
+    const long = await lintJapanesePlainText(
+      `${"あ".repeat(120)}。`,
+      withSentenceLength
+    );
 
     expect(mixed.map((m) => m.ruleId)).toContain("no-mix-dearu-desumasu");
     expect(long.map((m) => m.ruleId)).toContain("sentence-length");
@@ -114,7 +133,7 @@ describe("japaneseLintEngine plain text (#625)", () => {
 
   it("returns valid line / column / index over multiple lines", async () => {
     const text = "正しい文です。\n\n" + "あ".repeat(120) + "。\n";
-    const messages = await lintJapanesePlainText(text);
+    const messages = await lintJapanesePlainText(text, withSentenceLength);
     const long = messages.find((m) => m.ruleId === "sentence-length");
     const indexes = messages.map((m) => m.index);
 
