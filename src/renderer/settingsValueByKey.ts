@@ -26,7 +26,10 @@ export function readSettingValue(
 ): unknown {
   switch (key) {
     case "workbench.colorTheme":
-      return getCatalogDefaultValue("workbench.colorTheme");
+      return (
+        settings.workbench.colorTheme ??
+        getCatalogDefaultValue("workbench.colorTheme")
+      );
     case "workbench.fontFamily":
       return (
         settings.workbench.fontFamily ??

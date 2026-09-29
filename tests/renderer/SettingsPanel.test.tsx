@@ -1876,7 +1876,7 @@ describe("SettingsPanelView language options (#230: catalog-driven, not language
   });
 });
 
-describe("SettingsPanelView unwired settings clarity (#236)", () => {
+describe("SettingsPanelView unwired settings clarity (#236, colorTheme wired in #621)", () => {
   it("keeps workbench.colorTheme visible and rendered", () => {
     for (const key of ["workbench.colorTheme"] as const) {
       const element = settingsPanelViewElement("en", {
@@ -1887,27 +1887,23 @@ describe("SettingsPanelView unwired settings clarity (#236)", () => {
     }
   });
 
-  it("keeps workbench.colorTheme control disabled", () => {
-    for (const key of ["workbench.colorTheme"] as const) {
-      const element = settingsPanelViewElement("en", {
-        searchQuery: isolate(key)
-      });
+  it("renders workbench.colorTheme as an enabled control (#621: wired)", () => {
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.colorTheme")
+    });
 
-      expect(controlElement(element, key).props.disabled).toBe(true);
-    }
+    expect(
+      controlElement(element, "workbench.colorTheme").props.disabled
+    ).toBeFalsy();
   });
 
-  it("shows the localized planned-for-future-version notice for unwired items, in ja and en", () => {
-    for (const key of ["workbench.colorTheme"] as const) {
-      const markupEn = renderSettingsPanelView("en", {
-        searchQuery: isolate(key)
-      });
-      const markupJa = renderSettingsPanelView("ja", {
-        searchQuery: isolate(key)
+  it("does not show the unwired notice for workbench.colorTheme (#621: wired), in ja and en", () => {
+    for (const language of ["en", "ja"] as const) {
+      const markup = renderSettingsPanelView(language, {
+        searchQuery: isolate("workbench.colorTheme")
       });
 
-      expect(markupEn).toContain(t("en", "settings.unwiredSettingNotice"));
-      expect(markupJa).toContain(t("ja", "settings.unwiredSettingNotice"));
+      expect(markup).not.toContain(t(language, "settings.unwiredSettingNotice"));
     }
   });
 
@@ -1938,22 +1934,27 @@ describe("SettingsPanelView unwired settings clarity (#236)", () => {
     ).toEqual(["preview.renderer"]);
   });
 
-  it("does not introduce save behavior for unwired settings even if a change handler were invoked", () => {
-    for (const key of ["workbench.colorTheme"] as const) {
-      const onChangeSettings = vi.fn();
-      const element = settingsPanelViewElement("en", {
-        searchQuery: isolate(key),
-        onChangeSettings
-      });
-      const input = controlElement(element, key);
-      const onChange = input.props.onChange as
-        | ((event: { target: { value: string; checked: boolean } }) => void)
-        | undefined;
+  it("saves workbench.colorTheme for a built-in theme id and ignores an unknown id (#621)", () => {
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelViewElement("en", {
+      searchQuery: isolate("workbench.colorTheme"),
+      onChangeSettings
+    });
+    const input = controlElement(element, "workbench.colorTheme");
+    const onChange = input.props.onChange as (event: {
+      target: { value: string };
+    }) => void;
 
-      onChange?.({ target: { value: "something-else", checked: true } });
+    onChange({ target: { value: "something-else" } });
 
-      expect(onChangeSettings).not.toHaveBeenCalled();
-    }
+    expect(onChangeSettings).not.toHaveBeenCalled();
+
+    onChange({ target: { value: "pergamum-light" } });
+
+    expect(onChangeSettings).toHaveBeenCalledTimes(1);
+    expect(onChangeSettings.mock.calls[0]?.[0].workbench.colorTheme).toBe(
+      "pergamum-light"
+    );
   });
 });
 

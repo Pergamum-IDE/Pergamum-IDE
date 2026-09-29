@@ -1759,6 +1759,7 @@ export const jaTranslations = {
   "settings.workbench.statusBar.characterCount.visible.label": "文字数表示",
   "settings.workbench.colorTheme.description": "アプリケーションUIに使用する配色テーマを選択します。",
   "settings.workbench.colorTheme.label": "配色テーマ",
+  "settings.workbench.colorTheme.option.pergamumLight.label": "Pergamum Light",
   "fontCache.status.notScanned": "未スキャン",
   "fontCache.status.loaded": "最終スキャン: {date}",
   "fontCache.status.error": "スキャンに失敗しました",

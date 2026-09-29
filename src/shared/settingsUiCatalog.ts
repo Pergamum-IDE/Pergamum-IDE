@@ -26,6 +26,7 @@ import {
   getCatalogEntry,
   type SettingKey
 } from "./settingsCatalog";
+import { builtInThemeIds, type BuiltInThemeId } from "./colorTheme";
 import { supportedLanguages, type Language } from "./i18n";
 import { COMMAND_PALETTE_LAUNCH_ANIMATION_DURATION_STEP_MS } from "./commandPaletteLaunchAnimationSettings";
 
@@ -368,6 +369,19 @@ const workbenchLanguageOptions: readonly SettingSelectOption[] =
     labelKey: languageOptionLabelKeys[language]
   }));
 
+// #621: same pattern as workbench.language — the selectable theme ids are
+// owned by src/shared/colorTheme.ts. Theme names are proper nouns, so the
+// en/ja translations for these option labels are identical text.
+const colorThemeOptionLabelKeys: Record<BuiltInThemeId, I18nKey> = {
+  "pergamum-light": "settings.workbench.colorTheme.option.pergamumLight.label"
+};
+
+const workbenchColorThemeOptions: readonly SettingSelectOption[] =
+  builtInThemeIds.map((id) => ({
+    value: id,
+    labelKey: colorThemeOptionLabelKeys[id]
+  }));
+
 const commandPaletteFooterDetailMarqueeDelayRange = getCatalogEntry(
   "commandPalette.footerDetail.marquee.delay"
 ).numericRange;
@@ -403,7 +417,7 @@ export const settingCatalogItems = defineSettingCatalog([
     order: 100,
     labelKey: "settings.workbench.colorTheme.label",
     descriptionKey: "settings.workbench.colorTheme.description",
-    control: { kind: "text" },
+    control: { kind: "select", options: workbenchColorThemeOptions },
     defaultValue: getCatalogDefaultValue("workbench.colorTheme")
   },
   {

@@ -193,6 +193,7 @@ import {
 
 // #186: workbench.language's selectable values are owned by i18n, while the
 // catalog remains the owner of the setting's default and metadata.
+import { builtInThemeIds, defaultColorThemeId } from "./colorTheme";
 import { defaultLanguage, supportedLanguages, type Language } from "./i18n";
 import {
   DEFAULT_TEXT_FILE_ENCODING,
@@ -583,14 +584,15 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
-  "workbench.colorTheme": defineStringSetting({
+  // #621: the value is a built-in theme id (src/shared/colorTheme.ts), not a
+  // display name. An unknown/missing stored value resolves to the default.
+  "workbench.colorTheme": defineEnumSetting({
     key: "workbench.colorTheme",
     scope: "applicationOnly",
-    defaultValue: "Pergamum Light",
+    enumValues: builtInThemeIds,
+    defaultValue: defaultColorThemeId,
     labelKey: "settings.workbench.colorTheme.label",
     descriptionKey: "settings.workbench.colorTheme.description",
-    maxLength: 80,
-    allowedCharacters: "themeName",
     deprecatedAliases: ["appearance.uiTheme"],
     migrationNotes: [
       "appearance.uiTheme is accepted as a deprecated read alias for workbench.colorTheme."

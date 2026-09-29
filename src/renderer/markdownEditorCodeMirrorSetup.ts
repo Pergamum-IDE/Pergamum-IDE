@@ -68,6 +68,7 @@ import { searchKeymap } from "@codemirror/search";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
 import { EditorState, type Extension } from "@codemirror/state";
+import { createEditorThemeExtension } from "./editorThemeExtension";
 import { editorIndentKeymap, fencedCodeIndentUnitFacet } from "./indentCommands";
 import type { FencedCodeIndentUnit } from "../shared/settings";
 
@@ -116,6 +117,8 @@ export function createMarkdownEditorBaseSetup(
 ): Extension[] {
   return [
     fencedCodeIndentUnitFacet.of(options.fencedCodeIndentUnit ?? "spaces4"),
+    // #621: editor surface colors from application theme tokens.
+    createEditorThemeExtension(),
     // #428: gutter display order is the left-to-right DOM order of the
     // `activeGutters` facet entries, which follows extension order here.
     // `foldGutter()` is listed BEFORE `lineNumbers()` so the marker (fold)

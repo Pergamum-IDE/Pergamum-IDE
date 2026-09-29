@@ -27,6 +27,7 @@ import {
   type SettingSearchTranslate
 } from "../shared/settingsUiCatalog";
 import searchIcon from "../../assets/icons/feather/global/search.svg?raw";
+import { isBuiltInThemeId } from "../shared/colorTheme";
 import { isPreviewRendererId } from "../shared/settings";
 import { DocumentMapSettingsSection } from "./DocumentMapSettingsSection";
 import { readSettingValue } from "./settingsValueByKey";
@@ -96,14 +97,11 @@ function normalizeSearchQuery(query: string): string {
 // persistence stays this module's job. These two functions are that bridge.
 // ---------------------------------------------------------------------------
 
-// workbench.colorTheme has no ApplicationSettings field at all (#150: never
-// wired to a store), and preview.renderer has no SaveApplicationSettingsRequest
-// field (Application Settings cannot write it today). Wiring either up is a
-// settings.json/store change outside this issue's scope, so both render
-// read-only here rather than gaining new persistence wiring.
-const unwiredKeys = new Set<SettingKey>([
-  "workbench.colorTheme"
-]);
+// preview.renderer has no SaveApplicationSettingsRequest field (Application
+// Settings cannot write it today). Wiring it up is a settings.json/store
+// change outside this issue's scope, so it renders read-only here rather than
+// gaining new persistence wiring. (workbench.colorTheme was wired in #621.)
+const unwiredKeys = new Set<SettingKey>([]);
 
 const footerDetailMarqueeKeys = new Set<SettingKey>([
   "commandPalette.footerDetail.marquee.delay",
@@ -195,7 +193,11 @@ function buildNextSettings(
 ): SaveApplicationSettingsRequest | null {
   switch (key) {
     case "workbench.colorTheme":
-      return null;
+      return isBuiltInThemeId(rawValue)
+        ? saveRequest(settings, {
+            workbench: { ...settings.workbench, colorTheme: rawValue }
+          })
+        : null;
     case "preview.renderer":
       return isPreviewRendererId(rawValue)
         ? saveRequest(settings, {

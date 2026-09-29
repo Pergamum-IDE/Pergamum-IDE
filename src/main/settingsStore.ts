@@ -12,6 +12,7 @@ import {
   type RecentProject,
   type SaveApplicationSettingsRequest
 } from "../shared/settings";
+import { isBuiltInThemeId } from "../shared/colorTheme";
 import type { FontFamilySetting } from "../shared/fontSettings";
 import {
   resolveCatalogValue,
@@ -347,6 +348,17 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
     ).ok
   ) {
     workbench.normalizeUnicodeToNfc = workbenchValue.normalizeUnicodeToNfc;
+  }
+
+  // #621: sparse like normalizeUnicodeToNfc — an unknown on-disk theme id
+  // stays absent (never crashes), and resolveEffectiveSettings falls through
+  // to the default theme.
+  if (
+    workbenchValue !== undefined &&
+    typeof workbenchValue.colorTheme === "string" &&
+    isBuiltInThemeId(workbenchValue.colorTheme)
+  ) {
+    workbench.colorTheme = workbenchValue.colorTheme;
   }
 
   return workbench;
@@ -1201,12 +1213,14 @@ function parseWorkbenchSettingsForWrite(
   const hasUiFontFamilyList = keys.includes("uiFontFamilyList");
   const hasNotification = keys.includes("notification");
   const hasNormalizeUnicodeToNfc = keys.includes("normalizeUnicodeToNfc");
+  const hasColorTheme = keys.includes("colorTheme");
   const expectedKeyCount =
     3 +
     (hasFontFamily ? 1 : 0) +
     (hasUiFontFamilyList ? 1 : 0) +
     (hasNotification ? 1 : 0) +
-    (hasNormalizeUnicodeToNfc ? 1 : 0);
+    (hasNormalizeUnicodeToNfc ? 1 : 0) +
+    (hasColorTheme ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -1254,6 +1268,16 @@ function parseWorkbenchSettingsForWrite(
     }
 
     workbench.normalizeUnicodeToNfc = normalizeUnicodeToNfcResolution.value;
+  }
+
+  // #621: sparse like normalizeUnicodeToNfc — an unknown theme id rejects the
+  // whole save request.
+  if (hasColorTheme) {
+    if (!isBuiltInThemeId(value.colorTheme)) {
+      throw new Error("Invalid application settings.");
+    }
+
+    workbench.colorTheme = value.colorTheme;
   }
 
   if (hasUiFontFamilyList) {

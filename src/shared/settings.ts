@@ -4,6 +4,7 @@ import {
   type DocumentMapSettings
 } from "./documentMapSettings";
 import type { FontFamilySetting } from "./fontSettings";
+import type { BuiltInThemeId } from "./colorTheme";
 import type { Language } from "./i18n";
 import {
   getCatalogDefaultValue,
@@ -348,6 +349,10 @@ export interface ApplicationWorkbenchSettings {
   // #446: sparse, like fontFamily/notification — absence means "use the
   // catalog default (true)"; it is never eagerly written back as the default.
   normalizeUnicodeToNfc?: boolean;
+  // #621: sparse, like fontFamily/notification — absence means "use the
+  // catalog default (pergamum-light)"; an unknown on-disk id is dropped at
+  // read time rather than stored.
+  colorTheme?: BuiltInThemeId;
 }
 
 export interface ApplicationMarkdownFilesSettings {
@@ -506,6 +511,7 @@ export interface EffectiveWorkbenchSettings {
   uiFontFamilyList: FontFamilySetting[];
   notification: WorkbenchNotificationSettings;
   normalizeUnicodeToNfc: boolean;
+  colorTheme: BuiltInThemeId;
 }
 
 export interface EffectiveCommandPaletteSettings {
@@ -651,7 +657,8 @@ export const builtInDefaultSettings: EffectiveSettings = {
     },
     normalizeUnicodeToNfc: getCatalogDefaultValue(
       "workbench.normalizeUnicodeToNfc"
-    )
+    ),
+    colorTheme: getCatalogDefaultValue("workbench.colorTheme")
   },
   commandPalette: {
     footerDetail: {
@@ -1081,7 +1088,11 @@ export function resolveEffectiveSettings(
       // omits it.
       normalizeUnicodeToNfc:
         applicationSettings.workbench.normalizeUnicodeToNfc ??
-        builtInDefaultSettings.workbench.normalizeUnicodeToNfc
+        builtInDefaultSettings.workbench.normalizeUnicodeToNfc,
+      // #621: applicationOnly, sparse — falls through to the default theme.
+      colorTheme:
+        applicationSettings.workbench.colorTheme ??
+        builtInDefaultSettings.workbench.colorTheme
     },
     commandPalette: {
       footerDetail: {

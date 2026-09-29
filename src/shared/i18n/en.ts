@@ -1758,6 +1758,7 @@ export const enTranslations = {
   "settings.workbench.statusBar.characterCount.visible.label": "Character count",
   "settings.workbench.colorTheme.description": "Selects the color theme used for the application UI.",
   "settings.workbench.colorTheme.label": "Color theme",
+  "settings.workbench.colorTheme.option.pergamumLight.label": "Pergamum Light",
   "fontCache.status.notScanned": "Not scanned",
   "fontCache.status.loaded": "Last scanned: {date}",
   "fontCache.status.error": "Scan failed",
