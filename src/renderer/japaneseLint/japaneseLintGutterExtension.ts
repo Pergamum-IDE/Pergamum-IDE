@@ -208,11 +208,30 @@ export interface JapaneseLintDriverConfig {
    */
   readonly getSource: () => JapaneseLintSource | null;
   readonly lint: (request: JapaneseLintRequest) => Promise<JapaneseLintResponse>;
-  /** Debounce for edits, ms. Matches the Markdown syntax checker (400). */
-  readonly debounceMs?: number;
+  /**
+   * Debounce for edits, ms, read at each scheduling so a Settings change
+   * applies to the next edit. Falls back to {@link JAPANESE_LINT_DEBOUNCE_MS}.
+   */
+  readonly getDebounceMs?: () => number | undefined;
 }
 
-export const JAPANESE_LINT_DEBOUNCE_MS = 400;
+/** Default quiet time; equals `japaneseLint.debounceMs`'s default. */
+export const JAPANESE_LINT_DEBOUNCE_MS = 800;
+
+const JAPANESE_LINT_DEBOUNCE_MIN_MS = 300;
+const JAPANESE_LINT_DEBOUNCE_MAX_MS = 3000;
+
+/** Defensive: whatever arrives, the delay stays inside the setting range. */
+export function clampJapaneseLintDebounceMs(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return JAPANESE_LINT_DEBOUNCE_MS;
+  }
+
+  return Math.min(
+    JAPANESE_LINT_DEBOUNCE_MAX_MS,
+    Math.max(JAPANESE_LINT_DEBOUNCE_MIN_MS, Math.round(value))
+  );
+}
 
 const driverConfigs = new WeakMap<EditorView, JapaneseLintDriverConfig>();
 
@@ -242,7 +261,9 @@ class JapaneseLintDriver {
   update(update: ViewUpdate): void {
     if (update.docChanged) {
       this.schedule(
-        driverConfigs.get(this.view)?.debounceMs ?? JAPANESE_LINT_DEBOUNCE_MS
+        clampJapaneseLintDebounceMs(
+          driverConfigs.get(this.view)?.getDebounceMs?.()
+        )
       );
     }
   }

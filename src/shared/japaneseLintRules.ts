@@ -457,3 +457,12 @@ export function enabledJapaneseLintRules(
       : [];
   });
 }
+
+/**
+ * The quiet time before an instant check runs, from a stored / partial
+ * `japaneseLint` value: rounded and clamped to the catalog range, the default
+ * for anything unusable. Safe to call with untrusted input.
+ */
+export function resolveJapaneseLintDebounceMs(storedSettings: unknown): number {
+  return resolveJapaneseLintSettings(storedSettings).debounceMs;
+}

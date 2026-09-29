@@ -148,7 +148,10 @@ import {
   japaneseLintSourceForPath
 } from "../shared/japaneseLint";
 import { createJapaneseLintTooLargeDialogOptions } from "./japaneseLint/japaneseLintDialog";
-import { resolveJapaneseLintSettings } from "../shared/japaneseLintRules";
+import {
+  resolveJapaneseLintDebounceMs,
+  resolveJapaneseLintSettings
+} from "../shared/japaneseLintRules";
 import { CommandPalette } from "./CommandPalette";
 import {
   createCommandPaletteCommandTitles,
@@ -2171,6 +2174,12 @@ export function App(): JSX.Element {
   const japaneseLintSettingsRevision = useMemo(
     () =>
       JSON.stringify(resolveJapaneseLintSettings(settings.japaneseLint).rules),
+    [settings.japaneseLint]
+  );
+  // #625: quiet time before the instant check re-runs after an edit. Read by
+  // the lint driver at each scheduling, so a change applies to the next edit.
+  const japaneseLintDebounceMs = useMemo(
+    () => resolveJapaneseLintDebounceMs(settings.japaneseLint),
     [settings.japaneseLint]
   );
   const imeCompositionSaveGuard = useMemo(
@@ -13274,6 +13283,7 @@ export function App(): JSX.Element {
                         japaneseLintSettingsRevision={
                           japaneseLintSettingsRevision
                         }
+                        japaneseLintDebounceMs={japaneseLintDebounceMs}
                         onJapaneseLintNotice={notifyJapaneseLint}
                         hasProject={Boolean(project)}
                         projectAccessMode={project?.accessMode}

@@ -283,6 +283,8 @@ interface MarkdownEditorProps {
    * check so a Settings change applies to the open document immediately.
    */
   japaneseLintSettingsRevision?: string;
+  /** #625: quiet time (ms) before the instant check re-runs after an edit. */
+  japaneseLintDebounceMs?: number;
   /**
    * #546 follow-up: `textFiles.indentUnit` — the configured indent unit for
    * plain text (`.txt`) documents. Live, like `fencedCodeIndentUnit` above
@@ -841,6 +843,7 @@ export function MarkdownEditor({
   japaneseLintSource = null,
   onJapaneseLintNotice,
   japaneseLintSettingsRevision = "",
+  japaneseLintDebounceMs,
   textFileIndentUnit = "tab",
   whitespaceSettings,
   pendingSelection,
@@ -999,8 +1002,11 @@ export function MarkdownEditor({
   japaneseLintSourceRef.current = japaneseLintSource;
   const onJapaneseLintNoticeRef = useRef(onJapaneseLintNotice);
   onJapaneseLintNoticeRef.current = onJapaneseLintNotice;
+  const japaneseLintDebounceMsRef = useRef(japaneseLintDebounceMs);
+  japaneseLintDebounceMsRef.current = japaneseLintDebounceMs;
   const japaneseLintDriverConfigRef = useRef<JapaneseLintDriverConfig>({
     getSource: () => japaneseLintSourceRef.current,
+    getDebounceMs: () => japaneseLintDebounceMsRef.current,
     onNotice: (notice) => onJapaneseLintNoticeRef.current?.(notice),
     lint: (request) => window.pergamum.japaneseLint.lint(request)
   });

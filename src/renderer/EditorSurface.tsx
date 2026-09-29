@@ -601,6 +601,7 @@ interface EditorSurfaceProps {
   japaneseLintSource?: JapaneseLintSource | null;
   onJapaneseLintNotice?: (notice: JapaneseLintNotice) => void;
   japaneseLintSettingsRevision?: string;
+  japaneseLintDebounceMs?: number;
   hasProject?: boolean;
   projectAccessMode?: ProjectAccessMode | null;
   onRequestRenameActiveDocument?: () => void;
@@ -746,6 +747,7 @@ export function EditorSurface({
   japaneseLintSource,
   onJapaneseLintNotice,
   japaneseLintSettingsRevision,
+  japaneseLintDebounceMs,
   hasProject,
   projectAccessMode,
   onRequestRenameActiveDocument,
@@ -873,6 +875,7 @@ export function EditorSurface({
           japaneseLintSource={japaneseLintSource}
           onJapaneseLintNotice={onJapaneseLintNotice}
           japaneseLintSettingsRevision={japaneseLintSettingsRevision}
+          japaneseLintDebounceMs={japaneseLintDebounceMs}
           onParagraphIndentControllerChange={onParagraphIndentControllerChange}
           onViewStateControllerChange={onViewStateControllerChange}
           onImageAttachmentPaste={onImageAttachmentPaste}
@@ -981,6 +984,7 @@ interface MarkdownEditorSurfaceProps {
   japaneseLintSource?: JapaneseLintSource | null;
   onJapaneseLintNotice?: (notice: JapaneseLintNotice) => void;
   japaneseLintSettingsRevision?: string;
+  japaneseLintDebounceMs?: number;
   onParagraphIndentControllerChange: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -1092,6 +1096,7 @@ function MarkdownEditorSurface({
   japaneseLintSource,
   onJapaneseLintNotice,
   japaneseLintSettingsRevision,
+  japaneseLintDebounceMs,
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onImageAttachmentPaste,
@@ -3418,6 +3423,7 @@ function MarkdownEditorSurface({
           japaneseLintSource={japaneseLintSource}
           onJapaneseLintNotice={onJapaneseLintNotice}
           japaneseLintSettingsRevision={japaneseLintSettingsRevision}
+          japaneseLintDebounceMs={japaneseLintDebounceMs}
           renameShortcut={renameShortcutConfig}
           extraPendingSelection={findExtraSelection}
           onExtraPendingSelectionApplied={handleFindExtraSelectionApplied}
