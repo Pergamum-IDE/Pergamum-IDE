@@ -23,7 +23,8 @@ import {
   createProjectDatabase,
   currentProjectDatabaseSchemaVersion,
   openProjectDatabase,
-  readProjectMetadata
+  readProjectMetadata,
+  resolveProjectFilePath
 } from "../../src/main/projectDatabase";
 import type { Mock } from "vitest";
 
@@ -70,6 +71,7 @@ import {
   ProjectWriteLockOwnershipManager,
   projectWriteLockDirectoryPath,
   releaseCurrentProjectWriteOwnership,
+  resolveCreateProjectFilePathFromDialog,
   setProjectWindowTitleTargetProvider,
   updateCurrentProjectWindowTitle,
   type ProjectWriteLockFileHandle,
@@ -986,6 +988,69 @@ describe("project file IPC foundation", () => {
       "Wrong Secret.txt",
       "Wrong Secret"
     ]);
+  });
+
+  describe("Issue #656: create-project save dialog path resolution", () => {
+    it("resolveCreateProjectFilePathFromDialog appends .pergamum for extensionless paths", () => {
+      const extensionlessPath = path.join(projectRootPath, "test");
+      const expectedPath = path.join(projectRootPath, "test.pergamum");
+      expect(resolveCreateProjectFilePathFromDialog(extensionlessPath)).toBe(expectedPath);
+    });
+
+    it("resolveCreateProjectFilePathFromDialog leaves .pergamum paths unchanged", () => {
+      const pergamumPath = path.join(projectRootPath, "test.pergamum");
+      expect(resolveCreateProjectFilePathFromDialog(pergamumPath)).toBe(pergamumPath);
+    });
+
+    it("resolveCreateProjectFilePathFromDialog rejects wrong extension like .txt", () => {
+      const wrongExtensionPath = path.join(projectRootPath, "test.txt");
+      expect(() => resolveCreateProjectFilePathFromDialog(wrongExtensionPath)).toThrowError(
+        expect.objectContaining({ code: "PROJECT_DATABASE_PATH_ERROR" })
+      );
+    });
+
+    it("resolveProjectFilePath remains strict and rejects extensionless open paths", () => {
+      const extensionlessPath = path.join(projectRootPath, "test");
+      expect(() => resolveProjectFilePath(extensionlessPath)).toThrowError(
+        expect.objectContaining({ code: "PROJECT_DATABASE_PATH_ERROR" })
+      );
+    });
+
+    it("createProject appends .pergamum when Linux save dialog returns extensionless path", async () => {
+      const extensionlessPath = path.join(projectRootPath, "LinuxProject");
+      const expectedFilePath = path.join(projectRootPath, "LinuxProject.pergamum");
+
+      electronMock.showSaveDialog.mockResolvedValue({
+        canceled: false,
+        filePath: extensionlessPath
+      });
+
+      const createProjectHandler = registeredHandler(
+        PROJECT_CHANNELS.createProject
+      );
+      const project = await createProjectHandler({ sender: {} });
+
+      expect(project).toMatchObject({
+        rootPath: projectRootPath,
+        activeProjectFilePath: expectedFilePath,
+        name: "LinuxProject"
+      });
+
+      expect(electronMock.showSaveDialog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Create Pergamum Project",
+          defaultPath: "Untitled.pergamum"
+        })
+      );
+
+      const database = await openProjectDatabase(expectedFilePath);
+      try {
+        const metadata = await readProjectMetadata(database);
+        expect(metadata.projectName).toBe("LinuxProject");
+      } finally {
+        await database.close();
+      }
+    });
   });
 
   it("createProject creates a .pergamum DB, writes metadata, and activates the selected file", async () => {

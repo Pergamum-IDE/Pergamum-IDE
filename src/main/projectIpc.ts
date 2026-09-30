@@ -4076,6 +4076,17 @@ async function openProjectFromProjectFile(
   }
 }
 
+export function resolveCreateProjectFilePathFromDialog(filePath: string): string {
+  const resolvedPath = path.resolve(filePath);
+  const extension = path.extname(resolvedPath);
+
+  if (extension === "") {
+    return resolveProjectFilePath(`${resolvedPath}${projectFileExtension}`);
+  }
+
+  return resolveProjectFilePath(resolvedPath);
+}
+
 export async function createProject(
   event: IpcMainInvokeEvent,
   logger: DebugLogger = getDebugLogger(),
@@ -4090,6 +4101,7 @@ export async function createProject(
     const owner = parentWindow(event);
     const options: SaveDialogOptions = {
       title: "Create Pergamum Project",
+      defaultPath: `Untitled${projectFileExtension}`,
       filters: projectFileDialogFilters()
     };
     const result = owner
@@ -4102,7 +4114,7 @@ export async function createProject(
 
     let projectFilePath: string;
     try {
-      projectFilePath = resolveProjectFilePath(result.filePath);
+      projectFilePath = resolveCreateProjectFilePathFromDialog(result.filePath);
     } catch {
       await showInvalidProjectFileDialog(event);
       return null;
