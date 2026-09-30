@@ -89,6 +89,12 @@ export const defaultKeybindings: readonly DefaultKeybinding[] = [
   bind("workspace.glossary.toggle", "Mod-Shift-g"),
   bind("workspace.documentMap.toggle", "Mod-Shift-m"),
   bind("workspace.documentMetrics.toggle", "Mod-Shift-t"),
+  // File Explorer pane (#643). `Delete` is strict: no Shift / Alt variants.
+  bind("workspace.files.rename", "F2"),
+  bind("workspace.files.copy", "Mod-c"),
+  bind("workspace.files.cut", "Mod-x"),
+  bind("workspace.files.paste", "Mod-v"),
+  bind("workspace.files.delete", "Delete"),
   bind("editor.preview.toggle", "Mod-Shift-p"),
   bind("editor.image.insert", "Mod-Shift-i"),
   bind("workspace.applicationSettings.open", "Mod-,"),

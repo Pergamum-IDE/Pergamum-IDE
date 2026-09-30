@@ -213,6 +213,7 @@ import { DEFAULT_ZOOM_FACTOR } from "../shared/zoom";
 import { StatusBarZoomControls } from "./components/StatusBarZoomControls";
 import { useTabSwitchShortcuts } from "./editorTabShortcuts";
 import { useGlobalKeyboardShortcuts } from "./globalKeyboardShortcuts";
+import { rendererShortcutCommandIds } from "./keybindings/rendererShortcuts";
 import {
   publishTabCaptureToggle,
   unpublishTabCaptureToggle
@@ -5346,7 +5347,7 @@ export function App(): JSX.Element {
   useGlobalKeyboardShortcuts([
     {
       id: "toggleMarkdownSyntaxChecker",
-      match: { key: "c", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.toggleSyntaxChecker,
       handler: () => {
         if (canUseMarkdownSyntaxChecker) {
           handleToggleMarkdownSyntaxChecker();
@@ -5355,7 +5356,7 @@ export function App(): JSX.Element {
     },
     {
       id: "insertImage",
-      match: { key: "i", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.imageInsert,
       handler: () => {
         if (canInsertImage) {
           void handleInsertImage(null);
@@ -5364,7 +5365,7 @@ export function App(): JSX.Element {
     },
     {
       id: "togglePreview",
-      match: { key: "p", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.previewToggle,
       handler: () => {
         if (isPreviewEligible) {
           handleTogglePreviewVisible();
@@ -5373,37 +5374,27 @@ export function App(): JSX.Element {
     },
     {
       id: "openCommandPaletteFileMode",
-      match: { key: "o", ctrlOrCmd: true },
+      commandId: rendererShortcutCommandIds.commandPaletteFile,
       handler: () => openCommandPaletteWithPrefix("")
     },
     {
       id: "openCommandPaletteHeadingJump",
-      match: {
-        key: "#",
-        ctrlOrCmd: true,
-        ignoreShiftAndAltState: true,
-        excludePlatforms: ["darwin"]
-      },
+      commandId: rendererShortcutCommandIds.commandPaletteHeading,
       handler: () => openCommandPaletteWithPrefix("#")
     },
     {
       id: "openCommandPaletteGlossaryJump",
-      match: { key: "@", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      commandId: rendererShortcutCommandIds.commandPaletteGlossary,
       handler: () => openCommandPaletteWithPrefix("@")
     },
     {
       id: "openCommandPaletteLineJump",
-      match: { key: ":", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      commandId: rendererShortcutCommandIds.commandPaletteLine,
       handler: () => openCommandPaletteWithPrefix(":")
     },
     {
       id: "openCommandPaletteProjectSearch",
-      match: {
-        key: "%",
-        ctrlOrCmd: true,
-        ignoreShiftAndAltState: true,
-        excludePlatforms: ["darwin"]
-      },
+      commandId: rendererShortcutCommandIds.commandPaletteProjectSearch,
       handler: () => openCommandPaletteWithPrefix("%")
     },
     // #558: pane toggle shortcuts. Each calls `handleActivityBarModeClick`
@@ -5414,22 +5405,22 @@ export function App(): JSX.Element {
     // in the shortcut handler itself.
     {
       id: "toggleFileExplorer",
-      match: { key: "e", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.toggleFiles,
       handler: () => handleActivityBarModeClick("files")
     },
     {
       id: "toggleGlossaryPane",
-      match: { key: "g", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.toggleGlossary,
       handler: () => handleActivityBarModeClick("glossary")
     },
     {
       id: "toggleDocumentMap",
-      match: { key: "m", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.toggleDocumentMap,
       handler: () => handleActivityBarModeClick("documentMap")
     },
     {
       id: "toggleDocumentMetrics",
-      match: { key: "t", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.toggleDocumentMetrics,
       handler: () => handleActivityBarModeClick("documentMetrics")
     }
   ]);

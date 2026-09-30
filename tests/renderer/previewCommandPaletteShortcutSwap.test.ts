@@ -11,6 +11,15 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { resolveDefaultKeybindings } from "../../src/shared/keybindings";
+
+/** The catalog's win32 key for a command (the shortcut key is catalog-derived, #643). */
+function catalogKey(commandId: string): string | null | undefined {
+  return resolveDefaultKeybindings("win32").find(
+    (binding) => binding.command === commandId
+  )?.key;
+}
+
 
 describe("Preview toggle global shortcut wiring (source-level assertions, #554)", () => {
   it("registers togglePreview with ctrlOrCmd + shift, not plain ctrlOrCmd", () => {
@@ -22,8 +31,10 @@ describe("Preview toggle global shortcut wiring (source-level assertions, #554)"
     const registrationEnd = source.indexOf("handler:", registrationStart);
     const block = source.slice(registrationStart, registrationEnd);
 
+    // #643: the key is the catalog's Mod-Shift-p (Shift required, not plain Mod).
     expect(block).toContain(
-      'match: { key: "p", ctrlOrCmd: true, shift: true }'
+      "commandId: rendererShortcutCommandIds.previewToggle"
     );
+    expect(catalogKey("editor.preview.toggle")).toBe("Mod-Shift-p");
   });
 });

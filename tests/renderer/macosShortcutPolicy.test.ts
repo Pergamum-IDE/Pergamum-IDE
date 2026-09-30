@@ -369,7 +369,10 @@ describe("macOS default overrides: catalog and runtime agree (#636)", () => {
     for (const id of ["openCommandPaletteHeadingJump", "openCommandPaletteProjectSearch"]) {
       const start = app.indexOf(`id: "${id}"`);
       const block = app.slice(start, app.indexOf("handler:", start));
-      expect(block, id).toContain('excludePlatforms: ["darwin"]');
+      // #643: no literal exclusion any more; the catalog's darwin key is null,
+      // so the catalog-derived listener has no darwin binding at all.
+      expect(block, id).not.toContain("excludePlatforms");
+      expect(block, id).toContain("commandId: rendererShortcutCommandIds.");
     }
   });
 });

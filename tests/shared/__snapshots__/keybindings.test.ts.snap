@@ -227,6 +227,21 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
   "workspace.documentMetrics.toggle": [
     "Mod-Shift-t",
   ],
+  "workspace.files.copy": [
+    "Mod-c",
+  ],
+  "workspace.files.cut": [
+    "Mod-x",
+  ],
+  "workspace.files.delete": [
+    "Delete",
+  ],
+  "workspace.files.paste": [
+    "Mod-v",
+  ],
+  "workspace.files.rename": [
+    "F2",
+  ],
   "workspace.files.toggle": [
     "Mod-Shift-e",
   ],
@@ -472,6 +487,21 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
   "workspace.documentMetrics.toggle": [
     "Mod-Shift-t",
   ],
+  "workspace.files.copy": [
+    "Mod-c",
+  ],
+  "workspace.files.cut": [
+    "Mod-x",
+  ],
+  "workspace.files.delete": [
+    "Delete",
+  ],
+  "workspace.files.paste": [
+    "Mod-v",
+  ],
+  "workspace.files.rename": [
+    "F2",
+  ],
   "workspace.files.toggle": [
     "Mod-Shift-e",
   ],
@@ -716,6 +746,21 @@ exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
   ],
   "workspace.documentMetrics.toggle": [
     "Mod-Shift-t",
+  ],
+  "workspace.files.copy": [
+    "Mod-c",
+  ],
+  "workspace.files.cut": [
+    "Mod-x",
+  ],
+  "workspace.files.delete": [
+    "Delete",
+  ],
+  "workspace.files.paste": [
+    "Mod-v",
+  ],
+  "workspace.files.rename": [
+    "F2",
   ],
   "workspace.files.toggle": [
     "Mod-Shift-e",

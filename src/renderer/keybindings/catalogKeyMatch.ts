@@ -19,11 +19,30 @@ import {
 
 export interface CatalogKeyEvent {
   readonly key: string;
-  readonly code: string;
+  /** Needed for physical matching only. */
+  readonly code?: string;
   readonly ctrlKey: boolean;
   readonly metaKey: boolean;
   readonly altKey: boolean;
   readonly shiftKey: boolean;
+  readonly isComposing?: boolean;
+  getModifierState?(key: "AltGraph"): boolean;
+}
+
+export interface CatalogKeyMatchOptions {
+  /**
+   * `"physical"` (default): letters, digits, `` ` `` and Space match on
+   * `event.code` (layout independent; CodeMirror / Option-safe).
+   * `"logical"`: they match on `event.key` (case-insensitive), as the renderer
+   * window listeners always did, so non-QWERTY layouts behave as before.
+   */
+  readonly keyBasis?: "physical" | "logical";
+  /**
+   * Symbol keys (`#`, `@`, `:`, `%`, ...) whose catalog key carries no Shift /
+   * Alt are produced with Shift or Alt on some layouts; match them on the
+   * character alone, ignoring Shift / Alt. Mod stays exact.
+   */
+  readonly tolerateSymbolModifiers?: boolean;
 }
 
 /** Exact modifier match (no key check). */
@@ -48,7 +67,21 @@ export function modifiersMatchCatalogKey(
   );
 }
 
-function keyMatches(event: CatalogKeyEvent, key: string): boolean {
+function isSymbolKey(key: string): boolean {
+  return /^[\x21-\x7e]$/.test(key) && !/^[A-Za-z0-9]$/.test(key);
+}
+
+function keyMatches(
+  event: CatalogKeyEvent,
+  key: string,
+  basis: "physical" | "logical"
+): boolean {
+  if (basis === "logical") {
+    if (/^[a-z]$/.test(key)) {
+      return event.key.toLowerCase() === key;
+    }
+    return event.key === (key === "Space" ? " " : key);
+  }
   if (/^[a-z]$/.test(key)) {
     return event.code === `Key${key.toUpperCase()}`;
   }
@@ -67,14 +100,45 @@ function keyMatches(event: CatalogKeyEvent, key: string): boolean {
 export function eventMatchesCatalogKey(
   event: CatalogKeyEvent,
   catalogKey: string,
-  platform: PergamumPlatform
+  platform: PergamumPlatform,
+  options: CatalogKeyMatchOptions = {}
 ): boolean {
   const parsed = parseKeybindingKey(catalogKey);
-  return (
-    parsed !== null &&
-    modifiersMatchCatalogKey(event, catalogKey, platform) &&
-    keyMatches(event, parsed.key)
-  );
+  if (parsed === null) {
+    return false;
+  }
+  const basis = options.keyBasis ?? "physical";
+  const onlyMod =
+    !parsed.modifiers.has("Ctrl") &&
+    !parsed.modifiers.has("Alt") &&
+    !parsed.modifiers.has("Shift");
+
+  let modifiersOk: boolean;
+  if (options.tolerateSymbolModifiers && onlyMod && isSymbolKey(parsed.key)) {
+    const modPressed =
+      platform === "darwin"
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey;
+    modifiersOk = parsed.modifiers.has("Mod")
+      ? modPressed
+      : !event.ctrlKey && !event.metaKey;
+  } else {
+    modifiersOk = modifiersMatchCatalogKey(event, catalogKey, platform);
+  }
+  if (!modifiersOk) {
+    return false;
+  }
+  // AltGr is reported as Ctrl+Alt on Windows / Linux; never mistake it for
+  // Mod+Alt. (macOS has no AltGr: Option is plain Alt there.)
+  if (
+    platform !== "darwin" &&
+    parsed.modifiers.has("Mod") &&
+    typeof event.getModifierState === "function" &&
+    event.getModifierState("AltGraph")
+  ) {
+    return false;
+  }
+  return keyMatches(event, parsed.key, basis);
 }
 
 const keysByPlatform = new Map<PergamumPlatform, Map<string, string[]>>();
@@ -103,9 +167,10 @@ export function catalogKeysForCommand(
 export function eventMatchesCatalogCommand(
   event: CatalogKeyEvent,
   commandId: string,
-  platform: PergamumPlatform
+  platform: PergamumPlatform,
+  options?: CatalogKeyMatchOptions
 ): boolean {
   return catalogKeysForCommand(commandId, platform).some((key) =>
-    eventMatchesCatalogKey(event, key, platform)
+    eventMatchesCatalogKey(event, key, platform, options)
   );
 }

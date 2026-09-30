@@ -511,6 +511,56 @@ export const keybindingCommands: readonly KeybindingCommand[] = [
     when: whenWorkbench,
     scope: "pane"
   }),
+  // File Explorer pane commands (#643). Local keydown handling of the tree;
+  // the rename id is also used by the tab bar's F2 (rename the file).
+  pergamum({
+    id: "workspace.files.rename",
+    title: "Rename File",
+    category: "File Explorer",
+    description:
+      "Renames the selected file / folder (File Explorer) or the focused project document tab's file (tab bar). Editor-body F2 is editor.document.rename.",
+    handlerStatus: callbackDirect,
+    when: "fileExplorerFocus",
+    scope: "pane"
+  }),
+  pergamum({
+    id: "workspace.files.copy",
+    title: "Copy File",
+    category: "File Explorer",
+    description: "Copies the selected File Explorer entries (pane-local keydown).",
+    handlerStatus: callbackDirect,
+    when: "fileExplorerFocus",
+    scope: "pane"
+  }),
+  pergamum({
+    id: "workspace.files.cut",
+    title: "Cut File",
+    category: "File Explorer",
+    description: "Cuts the selected File Explorer entries (pane-local keydown).",
+    handlerStatus: callbackDirect,
+    when: "fileExplorerFocus",
+    scope: "pane"
+  }),
+  pergamum({
+    id: "workspace.files.paste",
+    title: "Paste File",
+    category: "File Explorer",
+    description:
+      "Pastes the pending File Explorer copy / cut into the current destination (pane-local keydown).",
+    handlerStatus: callbackDirect,
+    when: "fileExplorerFocus",
+    scope: "pane"
+  }),
+  pergamum({
+    id: "workspace.files.delete",
+    title: "Delete File",
+    category: "File Explorer",
+    description:
+      "Deletes the selected File Explorer entries through the confirmation dialog (pane-local keydown).",
+    handlerStatus: callbackDirect,
+    when: "fileExplorerFocus",
+    scope: "pane"
+  }),
   pergamum({
     id: "editor.preview.toggle",
     title: "Toggle Preview",

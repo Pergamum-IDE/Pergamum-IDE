@@ -34,6 +34,10 @@ import {
 } from "./workspaceTabs";
 import alertTriangleIcon from "../../assets/icons/feather/global/alert-triangle.svg?raw";
 import closeXIcon from "../../assets/icons/feather/global/close-x.svg?raw";
+import {
+  matchRendererShortcut,
+  rendererShortcutCommandIds
+} from "./keybindings/rendererShortcuts";
 import shieldIcon from "../../assets/icons/feather/global/shield.svg?raw";
 
 /**
@@ -201,7 +205,14 @@ export function DocumentTabBar({
     tab: DocumentTab,
     isActive: boolean
   ): void {
-    if (event.key === "F2") {
+    // #643: F2 comes from the catalog (workspace.files.rename, rename the
+    // file); strict modifiers.
+    if (
+      matchRendererShortcut(
+        event.nativeEvent,
+        rendererShortcutCommandIds.filesRename
+      )
+    ) {
       if (isActive && tab.id.kind === "projectDocument") {
         event.preventDefault();
         event.stopPropagation();
