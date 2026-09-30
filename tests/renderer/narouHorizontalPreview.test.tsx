@@ -270,14 +270,13 @@ describe("Narou-like horizontal novel preview (#507)", () => {
       expect(contextualKanji).toContain("寝床の<ruby>菖苔<rt>わらづと</rt></ruby>を調べる");
     });
 
-    it("does not render implicit ruby for non-Kanji base text", () => {
+    it("renders non-kana implicit ruby and suppresses ruby for hiragana-only base text (#628)", () => {
       const kana = markdownPreviewRenderer.render("かな《かな》");
       expect(kana).not.toContain("<ruby>");
       expect(kana).toContain("かな《かな》");
 
       const abc = markdownPreviewRenderer.render("abc《えーびーしー》");
-      expect(abc).not.toContain("<ruby>");
-      expect(abc).toContain("abc《えーびーしー》");
+      expect(abc).toContain("<ruby>abc<rt>えーびーしー</rt></ruby>");
 
       const rubyOnly = markdownPreviewRenderer.render("《ルビだけ》");
       expect(rubyOnly).not.toContain("<ruby>");

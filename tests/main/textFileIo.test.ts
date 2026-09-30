@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  decodeAozoraTextBytes,
   decodeTextFileBytes,
   encodeTextFileContent,
   PergamumTextFileEncodingError
@@ -181,6 +182,32 @@ describe("textFileIo", () => {
       expect(() =>
         encodeTextFileContent("test", "invalid" as TextFileEncoding)
       ).toThrow(PergamumTextFileEncodingError);
+    });
+  });
+
+  describe("decodeAozoraTextBytes", () => {
+    it("decodes UTF-8 bytes without corruption, including non-kana implicit ruby text", () => {
+      const testSource =
+        "BOKC《ヴォクス》という組織名が出てくる。\nВОКС《ヴォクス》はキリル文字の略称である。\nΑθήνα《アテネ》へ向かう船。";
+
+      const utf8Bytes = Buffer.from(testSource, "utf-8");
+      const decoded = decodeAozoraTextBytes(utf8Bytes);
+
+      expect(decoded).toBe(testSource);
+      expect(decoded).toContain("ヴォクス");
+      expect(decoded).toContain("キリル文字");
+      expect(decoded).toContain("アテネ");
+      expect(decoded).not.toContain("縲");
+      expect(decoded).not.toContain("繝");
+      expect(decoded).not.toContain("髱");
+    });
+
+    it("falls back to Shift_JIS/CP932 for legacy Shift_JIS Aozora bytes", () => {
+      const sjisSource = "｜漢字《かんじ》のテスト";
+      const encodeResult = encodeTextFileContent(sjisSource, "shiftJis");
+
+      const decoded = decodeAozoraTextBytes(encodeResult.bytes);
+      expect(decoded).toBe(sjisSource);
     });
   });
 });

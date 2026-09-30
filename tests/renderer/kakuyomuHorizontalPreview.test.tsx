@@ -226,8 +226,7 @@ describe("Kakuyomu-like horizontal novel preview (#508)", () => {
       expect(kana).toContain("かな《かな》");
 
       const abc = markdownPreviewRenderer.render("abc《えーびーしー》");
-      expect(abc).not.toContain("<ruby>");
-      expect(abc).toContain("abc《えーびーしー》");
+      expect(abc).toContain("<ruby>abc<rt>えーびーしー</rt></ruby>");
 
       const rubyOnly = markdownPreviewRenderer.render("《ルビだけ》");
       expect(rubyOnly).not.toContain("<ruby>");

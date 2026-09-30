@@ -60,7 +60,11 @@ import {
   sanitizedFileIoError
 } from "./markdownFileIo";
 import { loadSettings } from "./settingsStore";
-import { decodeTextFileBytes, type DecodeTextFileBytesResult } from "./textFileIo";
+import {
+  decodeAozoraTextBytes,
+  decodeTextFileBytes,
+  type DecodeTextFileBytesResult
+} from "./textFileIo";
 import {
   currentActiveProjectFilePath,
   currentProjectRootPath,
@@ -1012,8 +1016,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           ? String((rawRequest as { path: unknown }).path)
           : String(rawRequest);
       const bytes = await fs.readFile(filePath);
-      const decoder = new TextDecoder("shift_jis");
-      return decoder.decode(bytes);
+      return decodeAozoraTextBytes(bytes);
     }
   );
 

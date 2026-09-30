@@ -46,7 +46,15 @@ describe("exportHtml (#523 Slice 7)", () => {
     const { htmlContent } = await generateCombinedHtml(assembly);
 
     expect(htmlContent).toContain("<!doctype html>");
+    expect(htmlContent).toContain('<meta charset="utf-8">');
     expect(htmlContent).toContain("<title>迷子たち &amp; 千年領主</title>");
+
+    const metaIndex = htmlContent.indexOf('<meta charset="utf-8">');
+    const titleIndex = htmlContent.indexOf("<title>");
+    expect(metaIndex).toBeGreaterThan(-1);
+    expect(titleIndex).toBeGreaterThan(-1);
+    expect(metaIndex).toBeLessThan(titleIndex);
+
     expect(htmlContent).toContain(
       '<section class="pergamum-export-document" data-file-path="chapter1.md" data-parent-path="">'
     );
@@ -143,6 +151,23 @@ describe("exportHtml (#523 Slice 7)", () => {
     const { bodyHtml } = await renderDocumentToHtml(doc, "aozora", 0, "exports.assets");
 
     expect(bodyHtml).toContain("<ruby>漢字<rt>かんじ</rt></ruby>");
+  });
+
+  it("converts Aozora non-kana implicit ruby base notation to HTML ruby tags in exported HTML", async () => {
+    const doc: ExportAssemblyDocument = {
+      filePath: "aozora_non_kana.txt",
+      parentPath: "",
+      fileName: "aozora_non_kana.txt",
+      kind: "text",
+      text: "BOKC《ヴォクス》という組織名が出てくる。\nВОКС《ヴォクス》はキリル文字の略称である。\nΑθήνα《アテネ》へ向かう船。",
+      rawText: "BOKC《ヴォクス》という組織名が出てくる。\nВОКС《ヴォクス》はキリル文字の略称である。\nΑθήνα《アテネ》へ向かう船。"
+    };
+
+    const { bodyHtml } = await renderDocumentToHtml(doc, "aozora", 0, "exports.assets");
+
+    expect(bodyHtml).toContain("<ruby>BOKC<rt>ヴォクス</rt></ruby>");
+    expect(bodyHtml).toContain("<ruby>ВОКС<rt>ヴォクス</rt></ruby>");
+    expect(bodyHtml).toContain("<ruby>Αθήνα<rt>アテネ</rt></ruby>");
   });
 
   it("converts Kakuyomu emphasis notation to emphasis span", async () => {
@@ -364,6 +389,28 @@ describe("exportHtml (#523 Slice 7)", () => {
       expect(aozoraHtml).not.toContain("<ruby>");
       expect(kakuyomuHtml).not.toContain("<ruby>");
     });
+
+    it("supports non-kana implicit ruby bases in HTML export (#628)", async () => {
+      const doc: ExportAssemblyDocument = {
+        filePath: "test.txt",
+        parentPath: "",
+        fileName: "test.txt",
+        kind: "text",
+        text: "BOKC《ヴォクス》とВОКС《ヴォクス》と「BOKC《ヴォクス》から",
+        rawText: "BOKC《ヴォクス》とВОКС《ヴォクス》と「BOKC《ヴォクス》から"
+      };
+
+      const { bodyHtml } = await renderDocumentToHtml(
+        doc,
+        "aozora",
+        0,
+        "exports.assets"
+      );
+
+      expect(bodyHtml).toContain("<ruby>BOKC<rt>ヴォクス</rt></ruby>");
+      expect(bodyHtml).toContain("<ruby>ВОКС<rt>ヴォクス</rt></ruby>");
+      expect(bodyHtml).toContain("「<ruby>BOKC<rt>ヴォクス</rt></ruby>から");
+    });
   });
 
   describe("#577 Slice 2: static Markdown document HTML export", () => {
@@ -491,6 +538,58 @@ describe("exportHtml (#523 Slice 7)", () => {
         { sourceProjectRelativePath: "images/a.png", outputRelativePath: "out.assets/images/a.png" },
         { sourceProjectRelativePath: "shared/b.png", outputRelativePath: "out.assets/shared/b.png" }
       ]);
+    });
+
+    it("writes exported HTML to actual file bytes as UTF-8 without mojibake fragments", async () => {
+      const fs = await import("node:fs/promises");
+      const path = await import("node:path");
+      const os = await import("node:os");
+      const { decodeAozoraTextBytes } = await import("../../src/main/textFileIo");
+
+      const testSource =
+        "BOKC《ヴォクス》という組織名が出てくる。\nВОКС《ヴォクス》はキリル文字の略称である。\nΑθήνα《アテネ》へ向かう船。";
+
+      const rawUtf8Bytes = Buffer.from(testSource, "utf-8");
+      const decodedAozoraText = decodeAozoraTextBytes(rawUtf8Bytes);
+
+      const doc: ExportAssemblyDocument = {
+        filePath: "chapter1.md",
+        parentPath: "",
+        fileName: "chapter1.md",
+        kind: "markdown",
+        text: decodedAozoraText,
+        rawText: decodedAozoraText
+      };
+
+      const assembly: ExportAssembly = {
+        format: "htmlCombined",
+        bodyNotation: "aozora",
+        headingRemovalLevel: 0,
+        documents: [doc],
+        appendFileStructureToc: false,
+        imageAssetFolderName: "exports.assets",
+        projectName: "Aozora Export Test"
+      };
+
+      const { htmlContent } = await generateCombinedHtml(assembly);
+
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pergamum-test-export-"));
+      const tempHtmlPath = path.join(tempDir, "exported.html");
+      await fs.writeFile(tempHtmlPath, htmlContent, "utf-8");
+
+      const savedBytes = await fs.readFile(tempHtmlPath);
+      const decodedUtf8 = savedBytes.toString("utf-8");
+
+      expect(decodedUtf8).toContain('<meta charset="utf-8">');
+      expect(decodedUtf8).toContain("<ruby>BOKC<rt>ヴォクス</rt></ruby>");
+      expect(decodedUtf8).toContain("<ruby>ВОКС<rt>ヴォクス</rt></ruby>");
+      expect(decodedUtf8).toContain("<ruby>Αθήνα<rt>アテネ</rt></ruby>");
+
+      expect(decodedUtf8).not.toContain("縲");
+      expect(decodedUtf8).not.toContain("繝");
+      expect(decodedUtf8).not.toContain("髱");
+
+      await fs.rm(tempDir, { recursive: true, force: true });
     });
   });
 });
