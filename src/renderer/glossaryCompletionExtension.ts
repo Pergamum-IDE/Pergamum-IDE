@@ -28,12 +28,14 @@ import {
 } from "@codemirror/autocomplete";
 import { Prec, type Extension } from "@codemirror/state";
 import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
+import { getRuntimePlatform } from "./platformModifier";
 import type { GlossaryEntry } from "../shared/glossary";
 import {
   GLOSSARY_COMPLETION_SUFFIX_LOOKBACK,
   collectGlossaryCompletionAtoms,
   extractGlossaryCompletionPrefix,
   filterGlossaryCompletionCandidates,
+  isGlossaryCompletionShortcutEvent,
   toGlossaryCompletionDisplayItem
 } from "./glossaryCompletion";
 
@@ -117,13 +119,7 @@ const glossaryCompletionKeymapWithoutCtrlSpace: readonly KeyBinding[] = [
 ];
 
 function isGlossaryCompletionTriggerEvent(event: KeyboardEvent): boolean {
-  return (
-    event.code === "Space" &&
-    event.ctrlKey &&
-    !event.altKey &&
-    !event.metaKey &&
-    !event.shiftKey
-  );
+  return isGlossaryCompletionShortcutEvent(event, getRuntimePlatform());
 }
 
 function createGlossaryCompletionTrigger(

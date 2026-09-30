@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { stubRuntimePlatform } from "./helpers/runtimePlatform";
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
@@ -706,10 +707,15 @@ describe("FileExplorer Cut/Paste — keyboard shortcuts (#328)", () => {
 
   it("cuts the selection on Cmd+X (meta) as well", async () => {
     await mount();
-    clickEntry("a.md");
-    pressKey(entryButton("a.md"), "x", { metaKey: true });
+    const restorePlatform = stubRuntimePlatform("macos");
+    try {
+      clickEntry("a.md");
+      pressKey(entryButton("a.md"), "x", { metaKey: true });
 
-    expect(cutMarkers()).toEqual(["a.md"]);
+      expect(cutMarkers()).toEqual(["a.md"]);
+    } finally {
+      restorePlatform();
+    }
   });
 
   it("pastes the pending Cut on Ctrl+V into the current destination", async () => {

@@ -41,9 +41,11 @@ describe("direct Command Palette mode shortcut wiring (source-level assertions, 
     const block = globalShortcutsBlock();
 
     expect(block).toContain('id: "openCommandPaletteHeadingJump"');
-    expect(block).toContain(
-      'match: { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true }'
-    );
+    // #636: not offered on macOS (Cmd+Shift+3 is a system screenshot key).
+    expect(block).toContain('key: "#"');
+    expect(block).toContain("ctrlOrCmd: true");
+    expect(block).toContain("ignoreShiftAndAltState: true");
+    expect(block).toContain('excludePlatforms: ["darwin"]');
     expect(block).toContain('openCommandPaletteWithPrefix("#")');
   });
 
@@ -71,9 +73,11 @@ describe("direct Command Palette mode shortcut wiring (source-level assertions, 
     const block = globalShortcutsBlock();
 
     expect(block).toContain('id: "openCommandPaletteProjectSearch"');
-    expect(block).toContain(
-      'match: { key: "%", ctrlOrCmd: true, ignoreShiftAndAltState: true }'
-    );
+    // #636: not offered on macOS (Cmd+Shift+5 is a system screenshot key).
+    expect(block).toContain('key: "%"');
+    expect(block).toContain("ctrlOrCmd: true");
+    expect(block).toContain("ignoreShiftAndAltState: true");
+    expect(block).toContain('excludePlatforms: ["darwin"]');
     expect(block).toContain('openCommandPaletteWithPrefix("%")');
   });
 

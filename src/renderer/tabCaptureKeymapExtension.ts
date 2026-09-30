@@ -6,12 +6,15 @@ import {
   plainTextTabCommand
 } from "./plainTextIndentCommands";
 import { tryNavigateTableCell } from "./markdownTableNavigation";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform } from "./platformModifier";
 
 /**
- * Escape / Ctrl+M tab-capture bypass state for accessibility escape hatch.
- * Module-level state: when Escape or Ctrl+M is pressed inside an editor with
- * tab capture ON, the very next Tab / Shift+Tab keypress bypasses editor
- * indentation and falls back to normal browser focus movement.
+ * Escape tab-capture bypass state for accessibility escape hatch.
+ * Module-level state: when Escape is pressed inside an editor with tab
+ * capture ON, the very next Tab / Shift+Tab keypress bypasses editor
+ * indentation and falls back to normal browser focus movement. (#636: Ctrl+M
+ * no longer arms this one-shot bypass; it toggles the setting instead.)
  */
 let bypassNextTab = false;
 
@@ -28,39 +31,94 @@ export function triggerTabCaptureBypass(): void {
 }
 
 /**
+ * #636: `editor.tabCapture.toggle`. The owner (App) publishes a callback that
+ * flips the existing `editor.captureTabInEditor` application setting through
+ * the normal settings-save path. Module-level slot, same shape as the other
+ * editor shortcut slots (EditorState is cached across remounts).
+ */
+let currentTabCaptureToggle: (() => void) | null = null;
+
+export function publishTabCaptureToggle(toggle: () => void): void {
+  currentTabCaptureToggle = toggle;
+}
+
+export function unpublishTabCaptureToggle(toggle: () => void): void {
+  if (currentTabCaptureToggle === toggle) {
+    currentTabCaptureToggle = null;
+  }
+}
+
+/**
+ * Ctrl+M on win32/linux, Shift+Option+M on darwin (Cmd+M minimizes the
+ * window there). `code` is used because Option+M composes a character.
+ */
+export function isTabCaptureToggleShortcut(
+  event: {
+    readonly code: string;
+    readonly ctrlKey: boolean;
+    readonly metaKey: boolean;
+    readonly altKey: boolean;
+    readonly shiftKey: boolean;
+  },
+  platform: PergamumPlatform = getRuntimePlatform()
+): boolean {
+  if (event.code !== "KeyM") {
+    return false;
+  }
+  return platform === "darwin"
+    ? event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey
+    : event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+}
+
+function createTabCaptureToggleHandler(
+  getPlatform: () => PergamumPlatform
+): Extension {
+  return Prec.highest(
+    EditorView.domEventHandlers({
+      keydown(event): boolean {
+        if (event.isComposing || !isTabCaptureToggleShortcut(event, getPlatform())) {
+          return false;
+        }
+        const toggle = currentTabCaptureToggle;
+        if (toggle === null) {
+          return false;
+        }
+        event.preventDefault();
+        toggle();
+        return true;
+      }
+    })
+  );
+}
+
+/**
  * Creates the CodeMirror keymap extension for `editor.captureTabInEditor`.
- * - When `false` (default): returns an empty extension `[]`, so Tab / Shift+Tab
- *   are not captured at all and perform normal focus movement.
- * - When `true`: binds `Tab` -> `indentCommand`, `Shift-Tab` -> `outdentCommand`,
- *   and provides Escape -> Tab / Ctrl+M focus escape hatches.
+ * - Always: the `editor.tabCapture.toggle` shortcut (#636), so capture can be
+ *   turned on from the keyboard while it is off.
+ * - When `false` (default): Tab / Shift+Tab are not captured at all and
+ *   perform normal focus movement.
+ * - When `true`: also binds `Tab` -> `indentCommand`, `Shift-Tab` ->
+ *   `outdentCommand`, and provides the Escape -> one-shot Tab bypass.
  */
 export function createTabCaptureKeymapExtension(
-  captureTabInEditor: boolean
+  captureTabInEditor: boolean,
+  platform?: PergamumPlatform
 ): Extension {
+  const getPlatform = (): PergamumPlatform => platform ?? getRuntimePlatform();
+  const toggleHandler = createTabCaptureToggleHandler(getPlatform);
+
   if (!captureTabInEditor) {
     bypassNextTab = false;
-    return [];
+    return toggleHandler;
   }
 
-  return Prec.highest(
+  const tabHandler = Prec.highest(
     EditorView.domEventHandlers({
       keydown(event, view): boolean {
         // Escape key: sets bypass flag, but lets event propagate/bubble
         if (event.key === "Escape") {
           bypassNextTab = true;
           return false;
-        }
-
-        // Ctrl+M / Cmd+M key: sets bypass flag and consumes event
-        if (
-          event.code === "KeyM" &&
-          (event.ctrlKey || event.metaKey) &&
-          !event.altKey &&
-          !event.shiftKey
-        ) {
-          bypassNextTab = true;
-          event.preventDefault();
-          return true;
         }
 
         // Tab / Shift+Tab handling
@@ -90,4 +148,6 @@ export function createTabCaptureKeymapExtension(
       }
     })
   );
+
+  return [toggleHandler, tabHandler];
 }

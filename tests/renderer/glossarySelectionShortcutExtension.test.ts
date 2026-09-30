@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { stubRuntimePlatform } from "./helpers/runtimePlatform";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -71,6 +72,7 @@ describe("createGlossarySelectionShortcutKeymapExtension (#436 Slice 12)", () =>
   });
 
   it("also handles Cmd+G (metaKey) for macOS", () => {
+    const restorePlatform = stubRuntimePlatform("macos");
     const requestOpen = vi.fn();
     const testView = createView({
       doc: "hello",
@@ -78,9 +80,14 @@ describe("createGlossarySelectionShortcutKeymapExtension (#436 Slice 12)", () =>
     });
 
     const event = glossaryKeydown({ ctrlKey: false, metaKey: true });
+    const ctrlG = glossaryKeydown({ ctrlKey: true });
     testView.contentDOM.dispatchEvent(event);
+    testView.contentDOM.dispatchEvent(ctrlG);
+    restorePlatform();
 
     expect(event.defaultPrevented).toBe(true);
+    // darwin: bare Ctrl+G is left to the OS.
+    expect(ctrlG.defaultPrevented).toBe(false);
     expect(requestOpen).toHaveBeenCalledTimes(1);
   });
 

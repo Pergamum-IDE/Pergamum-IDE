@@ -32,8 +32,35 @@ describe("matchesGlobalKeyboardShortcut", () => {
     expect(
       matchesGlobalKeyboardShortcut(
         { key: "p", ctrlKey: false, metaKey: true, shiftKey: false, altKey: false },
-        { key: "p", ctrlOrCmd: true }
+        { key: "p", ctrlOrCmd: true },
+        "darwin"
       )
+    ).toBe(true);
+  });
+
+  it("does not treat Ctrl+P as Mod on macOS, nor Cmd+P on win32/linux (#636)", () => {
+    const ctrlP = { key: "p", ctrlKey: true, metaKey: false, shiftKey: false, altKey: false };
+    const cmdP = { ...ctrlP, ctrlKey: false, metaKey: true };
+    const match = { key: "p", ctrlOrCmd: true };
+    expect(matchesGlobalKeyboardShortcut(ctrlP, match, "darwin")).toBe(false);
+    expect(matchesGlobalKeyboardShortcut(cmdP, match, "win32")).toBe(false);
+    expect(matchesGlobalKeyboardShortcut(cmdP, match, "linux")).toBe(false);
+    expect(matchesGlobalKeyboardShortcut(ctrlP, match, "win32")).toBe(true);
+    expect(
+      matchesGlobalKeyboardShortcut(
+        { ...ctrlP, ctrlKey: true, metaKey: true },
+        match,
+        "darwin"
+      )
+    ).toBe(false);
+  });
+
+  it("excludePlatforms disables a shortcut on that platform only (#636)", () => {
+    const hash = { key: "#", ctrlKey: false, metaKey: true, shiftKey: true, altKey: false };
+    const match = { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true, excludePlatforms: ["darwin"] as const };
+    expect(matchesGlobalKeyboardShortcut(hash, match, "darwin")).toBe(false);
+    expect(
+      matchesGlobalKeyboardShortcut({ ...hash, ctrlKey: true, metaKey: false }, match, "win32")
     ).toBe(true);
   });
 

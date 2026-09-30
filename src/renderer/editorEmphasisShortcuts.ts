@@ -1,5 +1,7 @@
 import { Prec, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform, isModKey } from "./platformModifier";
 
 export interface MarkdownEditorEmphasisMarkShortcutConfig {
   readonly requestOpenEmphasisMarkDialog: (input: {
@@ -33,13 +35,16 @@ export function getCurrentEmphasisMarkShortcutConfig(): MarkdownEditorEmphasisMa
 }
 
 /**
- * Trigger check for Ctrl+. / Cmd+.
+ * Trigger check for Mod+. (Ctrl+. on win32/linux, Cmd+. on darwin).
  */
-export function isEmphasisMarkShortcutTrigger(event: KeyboardEvent): boolean {
+export function isEmphasisMarkShortcutTrigger(
+  event: KeyboardEvent,
+  platform: PergamumPlatform = getRuntimePlatform()
+): boolean {
   return (
     !event.altKey &&
     !event.shiftKey &&
-    (event.ctrlKey || event.metaKey) &&
+    isModKey(event, platform) &&
     (event.key === "." || event.code === "Period")
   );
 }
