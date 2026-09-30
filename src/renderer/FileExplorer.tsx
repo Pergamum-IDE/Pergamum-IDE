@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState
@@ -136,6 +137,7 @@ import {
   type FileExplorerSelectionState
 } from "./fileExplorerSelectionState";
 import type { ExportOrigin } from "./exportCandidates";
+import { clampContextMenuPosition } from "./contextMenuPosition";
 
 /**
  * #311: an external request (from the Command Palette) to open the same
@@ -331,6 +333,87 @@ type FileExplorerDeleteFlowState =
       readonly fileCount: number;
       readonly folderCount: number;
     };
+
+interface FileExplorerContextMenuPopupProps {
+  readonly initialX: number;
+  readonly initialY: number;
+  readonly onClose: () => void;
+  readonly ariaLabel: string;
+  readonly children: React.ReactNode;
+}
+
+/**
+ * #629: Context menu popup wrapper that measures its own dimensions and clamps
+ * its position within the viewport bounds. Also listens for Escape to close.
+ */
+function FileExplorerContextMenuPopup({
+  initialX,
+  initialY,
+  onClose,
+  ariaLabel,
+  children
+}: FileExplorerContextMenuPopupProps): JSX.Element {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ x: number; y: number }>({
+    x: initialX,
+    y: initialY
+  });
+
+  useLayoutEffect(() => {
+    if (!menuRef.current) {
+      return;
+    }
+    const rect = menuRef.current.getBoundingClientRect();
+    const clamped = clampContextMenuPosition({
+      clickX: initialX,
+      clickY: initialY,
+      menuWidth: rect.width,
+      menuHeight: rect.height,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight
+    });
+    setPosition(clamped);
+  }, [initialX, initialY]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fileExplorerContextMenuBackdrop"
+      onClick={onClose}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <div
+        ref={menuRef}
+        className="fileExplorerContextMenu"
+        role="menu"
+        aria-label={ariaLabel}
+        style={
+          {
+            "--file-explorer-context-menu-x": `${position.x}px`,
+            "--file-explorer-context-menu-y": `${position.y}px`
+          } as CSSProperties
+        }
+        onClick={(event) => event.stopPropagation()}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
 
 interface FileExplorerViewProps {
   projectName: string | null;
@@ -3895,251 +3978,236 @@ export function FileExplorer({
         onActivateDocument={onActivateDocument}
       />
       {contextMenu !== null ? (
-        <div
-          className="fileExplorerContextMenuBackdrop"
-          onClick={closeContextMenu}
-          onContextMenu={(event) => {
-            event.preventDefault();
-            closeContextMenu();
-          }}
+        <FileExplorerContextMenuPopup
+          initialX={contextMenu.x}
+          initialY={contextMenu.y}
+          ariaLabel={translate("explorer.contextMenu.label")}
+          onClose={closeContextMenu}
         >
-          <div
-            className="fileExplorerContextMenu"
-            role="menu"
-            aria-label={translate("explorer.contextMenu.label")}
-            style={
-              {
-                "--file-explorer-context-menu-x": `${contextMenu.x}px`,
-                "--file-explorer-context-menu-y": `${contextMenu.y}px`
-              } as CSSProperties
-            }
-            onClick={(event) => event.stopPropagation()}
+          {contextMenu.createTarget !== null
+            ? (["file", "folder"] as const).map((createKind) => {
+                const target = contextMenu.createTarget;
+                return (
+                  <button
+                    key={`create-${createKind}`}
+                    type="button"
+                    role="menuitem"
+                    className="fileExplorerContextMenuItem"
+                    data-file-explorer-context-command={
+                      createKind === "file" ? "new-file" : "new-folder"
+                    }
+                    disabled={!canCreate}
+                    aria-disabled={!canCreate}
+                    title={
+                      canCreate
+                        ? undefined
+                        : translate("explorer.create.error.readOnlyProject")
+                    }
+                    onClick={() => {
+                      closeContextMenu();
+                      if (canCreate && target !== null) {
+                        openCreateDialog(
+                          createKind,
+                          target.kind === "root"
+                            ? null
+                            : target.relativePath
+                        );
+                      }
+                    }}
+                  >
+                    {translate(
+                      createKind === "file"
+                        ? "explorer.contextMenu.newFile"
+                        : "explorer.contextMenu.newFolder"
+                    )}
+                  </button>
+                );
+              })
+            : null}
+          <button
+            type="button"
+            role="menuitem"
+            className="fileExplorerContextMenuItem"
+            data-file-explorer-context-command="export"
+            disabled={!onExportFromFileExplorer}
+            aria-disabled={!onExportFromFileExplorer}
+            onClick={() => {
+              const origin = contextMenu.exportOrigin;
+              closeContextMenu();
+              onExportFromFileExplorer?.(origin);
+            }}
           >
-            {contextMenu.createTarget !== null
-              ? (["file", "folder"] as const).map((createKind) => {
-                  const target = contextMenu.createTarget;
-                  return (
-                    <button
-                      key={`create-${createKind}`}
-                      type="button"
-                      role="menuitem"
-                      className="fileExplorerContextMenuItem"
-                      data-file-explorer-context-command={
-                        createKind === "file" ? "new-file" : "new-folder"
-                      }
-                      disabled={!canCreate}
-                      aria-disabled={!canCreate}
-                      title={
-                        canCreate
-                          ? undefined
-                          : translate("explorer.create.error.readOnlyProject")
-                      }
-                      onClick={() => {
-                        closeContextMenu();
-                        if (canCreate && target !== null) {
-                          openCreateDialog(
-                            createKind,
-                            target.kind === "root"
-                              ? null
-                              : target.relativePath
-                          );
-                        }
-                      }}
-                    >
-                      {translate(
-                        createKind === "file"
-                          ? "explorer.contextMenu.newFile"
-                          : "explorer.contextMenu.newFolder"
-                      )}
-                    </button>
-                  );
-                })
-              : null}
+            {translate("explorer.contextMenu.export")}
+          </button>
+          {contextMenu.exportOrigin.kind === "file" &&
+          onJapaneseMachineCheck &&
+          isJapaneseMachineCheckPath(contextMenu.exportOrigin.filePath) ? (
             <button
               type="button"
               role="menuitem"
               className="fileExplorerContextMenuItem"
-              data-file-explorer-context-command="export"
-              disabled={!onExportFromFileExplorer}
-              aria-disabled={!onExportFromFileExplorer}
+              data-file-explorer-context-command="japaneseMachineCheck"
               onClick={() => {
-                const origin = contextMenu.exportOrigin;
-                closeContextMenu();
-                onExportFromFileExplorer?.(origin);
-              }}
-            >
-              {translate("explorer.contextMenu.export")}
-            </button>
-            {contextMenu.exportOrigin.kind === "file" &&
-            onJapaneseMachineCheck &&
-            isJapaneseMachineCheckPath(contextMenu.exportOrigin.filePath) ? (
-              <button
-                type="button"
-                role="menuitem"
-                className="fileExplorerContextMenuItem"
-                data-file-explorer-context-command="japaneseMachineCheck"
-                onClick={() => {
-                  const target = contextMenu.exportOrigin;
+                const target = contextMenu.exportOrigin;
 
-                  closeContextMenu();
-                  if (target.kind === "file") {
-                    onJapaneseMachineCheck(target.filePath);
-                  }
-                }}
-              >
-                {translate("explorer.contextMenu.japaneseMachineCheck")}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              role="menuitem"
-              className="fileExplorerContextMenuItem"
-              data-file-explorer-context-command="move"
-              data-file-explorer-move-disabled-reason={
-                moveDisabledReason ?? undefined
-              }
-              disabled={!canMoveSelection}
-              aria-disabled={!canMoveSelection}
-              title={
-                moveDisabledReason
-                  ? translate(
-                      MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason]
-                    )
-                  : undefined
-              }
-              onClick={() => {
                 closeContextMenu();
-                if (canMoveSelection) {
-                  setMoveDialogOpen(true);
+                if (target.kind === "file") {
+                  onJapaneseMachineCheck(target.filePath);
                 }
               }}
             >
-              {translate("explorer.contextMenu.move")}
+              {translate("explorer.contextMenu.japaneseMachineCheck")}
             </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="fileExplorerContextMenuItem"
-              data-file-explorer-context-command="copy"
-              data-file-explorer-copy-disabled-reason={
-                canCopySelection
-                  ? undefined
-                  : (moveDisabledReason ?? "protected-or-root")
+          ) : null}
+          <button
+            type="button"
+            role="menuitem"
+            className="fileExplorerContextMenuItem"
+            data-file-explorer-context-command="move"
+            data-file-explorer-move-disabled-reason={
+              moveDisabledReason ?? undefined
+            }
+            disabled={!canMoveSelection}
+            aria-disabled={!canMoveSelection}
+            title={
+              moveDisabledReason
+                ? translate(
+                    MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason]
+                  )
+                : undefined
+            }
+            onClick={() => {
+              closeContextMenu();
+              if (canMoveSelection) {
+                setMoveDialogOpen(true);
               }
-              disabled={!canCopySelection}
-              aria-disabled={!canCopySelection}
-              title={
-                canCopySelection
-                  ? undefined
-                  : translate(
-                      moveDisabledReason
-                        ? MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason]
-                        : "explorer.copy.disabled.protectedSelected"
-                    )
+            }}
+          >
+            {translate("explorer.contextMenu.move")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="fileExplorerContextMenuItem"
+            data-file-explorer-context-command="copy"
+            data-file-explorer-copy-disabled-reason={
+              canCopySelection
+                ? undefined
+                : (moveDisabledReason ?? "protected-or-root")
+            }
+            disabled={!canCopySelection}
+            aria-disabled={!canCopySelection}
+            title={
+              canCopySelection
+                ? undefined
+                : translate(
+                    moveDisabledReason
+                      ? MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason]
+                      : "explorer.copy.disabled.protectedSelected"
+                  )
+            }
+            onClick={() => {
+              closeContextMenu();
+              if (canCopySelection) {
+                performCopy();
               }
-              onClick={() => {
-                closeContextMenu();
-                if (canCopySelection) {
-                  performCopy();
-                }
-              }}
-            >
-              {translate("explorer.contextMenu.copy")}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="fileExplorerContextMenuItem"
-              data-file-explorer-context-command="cut"
-              data-file-explorer-cut-disabled-reason={
-                moveDisabledReason ?? undefined
+            }}
+          >
+            {translate("explorer.contextMenu.copy")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="fileExplorerContextMenuItem"
+            data-file-explorer-context-command="cut"
+            data-file-explorer-cut-disabled-reason={
+              moveDisabledReason ?? undefined
+            }
+            disabled={!canCutSelection}
+            aria-disabled={!canCutSelection}
+            title={
+              moveDisabledReason
+                ? translate(
+                    CUT_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason]
+                  )
+                : undefined
+            }
+            onClick={() => {
+              closeContextMenu();
+              if (canCutSelection) {
+                performCut();
               }
-              disabled={!canCutSelection}
-              aria-disabled={!canCutSelection}
-              title={
-                moveDisabledReason
-                  ? translate(
-                      CUT_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason]
-                    )
-                  : undefined
+            }}
+          >
+            {translate("explorer.contextMenu.cut")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="fileExplorerContextMenuItem"
+            data-file-explorer-context-command="paste"
+            data-file-explorer-paste-disabled-reason={
+              pasteDisabledReason ?? undefined
+            }
+            disabled={!canPaste}
+            aria-disabled={!canPaste}
+            title={
+              pasteDisabledReason
+                ? translate(
+                    PASTE_DISABLED_REASON_MESSAGE_KEY[pasteDisabledReason]
+                  )
+                : undefined
+            }
+            onClick={() => {
+              closeContextMenu();
+              if (canPaste) {
+                explorerPasteRouterRef.current();
               }
-              onClick={() => {
-                closeContextMenu();
-                if (canCutSelection) {
-                  performCut();
-                }
-              }}
-            >
-              {translate("explorer.contextMenu.cut")}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="fileExplorerContextMenuItem"
-              data-file-explorer-context-command="paste"
-              data-file-explorer-paste-disabled-reason={
-                pasteDisabledReason ?? undefined
+            }}
+          >
+            {translate("explorer.contextMenu.paste")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="fileExplorerContextMenuItem"
+            data-file-explorer-context-command="rename"
+            disabled={!canRenameSelection}
+            aria-disabled={!canRenameSelection}
+            onClick={() => {
+              closeContextMenu();
+              if (canRenameSelection) {
+                openRenameDialog();
               }
-              disabled={!canPaste}
-              aria-disabled={!canPaste}
-              title={
-                pasteDisabledReason
-                  ? translate(
-                      PASTE_DISABLED_REASON_MESSAGE_KEY[pasteDisabledReason]
-                    )
-                  : undefined
+            }}
+          >
+            {translate("explorer.contextMenu.rename")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="fileExplorerContextMenuItem"
+            data-file-explorer-context-command="delete"
+            data-file-explorer-delete-disabled-reason={
+              deleteDisabledReasonKey ?? undefined
+            }
+            disabled={!canDeleteSelection}
+            aria-disabled={!canDeleteSelection}
+            title={
+              deleteDisabledReasonKey
+                ? translate(deleteDisabledReasonKey)
+                : undefined
+            }
+            onClick={() => {
+              closeContextMenu();
+              if (canDeleteSelection) {
+                void beginDelete();
               }
-              onClick={() => {
-                closeContextMenu();
-                if (canPaste) {
-                  explorerPasteRouterRef.current();
-                }
-              }}
-            >
-              {translate("explorer.contextMenu.paste")}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="fileExplorerContextMenuItem"
-              data-file-explorer-context-command="rename"
-              disabled={!canRenameSelection}
-              aria-disabled={!canRenameSelection}
-              onClick={() => {
-                closeContextMenu();
-                if (canRenameSelection) {
-                  openRenameDialog();
-                }
-              }}
-            >
-              {translate("explorer.contextMenu.rename")}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="fileExplorerContextMenuItem"
-              data-file-explorer-context-command="delete"
-              data-file-explorer-delete-disabled-reason={
-                deleteDisabledReasonKey ?? undefined
-              }
-              disabled={!canDeleteSelection}
-              aria-disabled={!canDeleteSelection}
-              title={
-                deleteDisabledReasonKey
-                  ? translate(deleteDisabledReasonKey)
-                  : undefined
-              }
-              onClick={() => {
-                closeContextMenu();
-                if (canDeleteSelection) {
-                  void beginDelete();
-                }
-              }}
-            >
-              {translate("explorer.contextMenu.delete")}
-            </button>
-          </div>
-        </div>
+            }}
+          >
+            {translate("explorer.contextMenu.delete")}
+          </button>
+        </FileExplorerContextMenuPopup>
       ) : null}
       {deleteFlow?.kind === "confirm" ? (
         <FileExplorerDeleteDialog
