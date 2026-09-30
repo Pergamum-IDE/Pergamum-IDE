@@ -173,21 +173,40 @@ function electronKeyName(key: string): string {
   }
 }
 
+export interface ElectronAcceleratorOptions {
+  /**
+   * How `Mod` is written. `"platform"` (default) resolves it for `platform`:
+   * `Control` off macOS, `Command` on macOS. `"commandOrControl"` writes
+   * Electron's own `CommandOrControl` and leaves platform resolution to
+   * Electron (the spelling the application menu has always used).
+   */
+  readonly modStyle?: "platform" | "commandOrControl";
+}
+
 /**
  * Electron accelerator string, e.g. `Control+Shift+P` (win32/linux) or
- * `Command+Shift+P` (darwin). Not yet used for menu registration.
+ * `Command+Shift+P` (darwin); with `modStyle: "commandOrControl"`,
+ * `CommandOrControl+Shift+P` everywhere. The application menu uses the latter.
  */
 export function toElectronAccelerator(
   notation: string,
-  platform: PergamumPlatform
+  platform: PergamumPlatform,
+  options: ElectronAcceleratorOptions = {}
 ): string {
   const parsed = requireParsed(notation);
-  const modifiers = effectiveModifiers(parsed.modifiers, platform);
+  const commandOrControl = options.modStyle === "commandOrControl";
+  const modifiers = commandOrControl
+    ? parsed.modifiers
+    : effectiveModifiers(parsed.modifiers, platform);
   const parts: string[] = [];
   for (const modifier of sortedModifiers(modifiers)) {
-    parts.push(
-      modifier === "Mod" ? "Command" : modifier === "Ctrl" ? "Control" : modifier
-    );
+    if (modifier === "Mod") {
+      parts.push(commandOrControl ? "CommandOrControl" : "Command");
+    } else if (modifier === "Ctrl") {
+      parts.push("Control");
+    } else {
+      parts.push(modifier);
+    }
   }
   parts.push(electronKeyName(parsed.key));
   return parts.join("+");
