@@ -18,7 +18,17 @@ import refreshIcon from "../../assets/icons/codicons/general/refresh.svg?raw";
 import addIcon from "../../assets/icons/codicons/general/add.svg?raw";
 import shieldIcon from "../../assets/icons/codicons/general/shield.svg?raw";
 import { setEffectiveKeybindings } from "./keybindings/effectiveKeybindingStore";
-import { filterKeyboardShortcutGroups } from "./keyboardShortcutSearch";
+import {
+  DEFAULT_KEYBOARD_SHORTCUT_FILTER,
+  applyKeyboardShortcutFilter,
+  deriveKeyboardShortcutCategories,
+  isDefaultKeyboardShortcutFilter,
+  KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS,
+  displayCommandDescription,
+  normalizeKeyboardShortcutFilter,
+  type KeyboardShortcutFilterState,
+  type KeyboardShortcutView
+} from "./keyboardShortcutSearch";
 import { KeyboardShortcutCaptureDialog } from "./KeyboardShortcutCaptureDialog";
 import {
   KeyboardShortcutNoticeDialog,
@@ -44,6 +54,8 @@ type LoadState =
 
 export interface KeyboardShortcutsScreenProps {
   readonly translate: Translate;
+  /** The UI language: decides the description fallback (English UI only). */
+  readonly language?: "ja" | "en";
 }
 
 function targetOf(row: KeyboardShortcutRow): KeybindingEditTarget {
@@ -97,10 +109,13 @@ function findCorrespondingRowId(
 }
 
 export function KeyboardShortcutsScreen({
-  translate
+  translate,
+  language = "ja"
 }: KeyboardShortcutsScreenProps): JSX.Element {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
-  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<KeyboardShortcutFilterState>(
+    DEFAULT_KEYBOARD_SHORTCUT_FILTER
+  );
   const [openLocationFailed, setOpenLocationFailed] = useState(false);
   const [capture, setCapture] = useState<CaptureState | null>(null);
   const [notice, setNotice] = useState<KeyboardShortcutNotice | null>(null);
@@ -108,6 +123,10 @@ export function KeyboardShortcutsScreen({
   const openerRef = useRef<Element | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
+  // The list's own scroll container: scroll restoration targets this, not the page.
+  const listScrollRef = useRef<HTMLDivElement | null>(null);
+  // Display option (not a filter): show each command's `when` condition.
+  const [showConditions, setShowConditions] = useState(false);
   const pendingRestoreRef = useRef<PendingRestore | null>(null);
   const pendingFocusRef = useRef<PendingRestore | null>(null);
 
@@ -117,19 +136,20 @@ export function KeyboardShortcutsScreen({
   // No-op on any other render.
   useLayoutEffect(() => {
     const pending = pendingRestoreRef.current;
-    const root = rootRef.current;
-    if (pending === null || root === null || state.kind !== "ready") {
+    const list = listScrollRef.current;
+    if (pending === null || list === null || state.kind !== "ready") {
       return;
     }
     pendingRestoreRef.current = null;
     pendingFocusRef.current = pending;
-    root.scrollTop = pending.scrollTop;
+    list.scrollTop = pending.scrollTop;
   }, [state]);
 
   useEffect(() => {
     const pending = pendingFocusRef.current;
     const root = rootRef.current;
-    if (pending === null || root === null || state.kind !== "ready") {
+    const list = listScrollRef.current;
+    if (pending === null || root === null || list === null || state.kind !== "ready") {
       return;
     }
     pendingFocusRef.current = null;
@@ -145,7 +165,7 @@ export function KeyboardShortcutsScreen({
       rowElement?.querySelector<HTMLElement>(".keyboardShortcutAction-edit") ??
       rowElement;
     target?.focus({ preventScroll: true });
-    root.scrollTop = pending.scrollTop;
+    list.scrollTop = pending.scrollTop;
   }, [state]);
 
   async function loadItems(): Promise<void> {
@@ -184,12 +204,32 @@ export function KeyboardShortcutsScreen({
   const groups = useMemo(() => groupKeyboardShortcutRows(rows), [rows]);
   const originLabel = (origin: KeyboardShortcutOriginKind): string =>
     translate(`keyboardShortcuts.origin.${origin}`);
+  const categoryLabel = (category: string): string => {
+    const key = KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS[category];
+    return key === undefined ? category : translate(key);
+  };
+  // Search looks at both the shown description and the raw catalog text.
+  const descriptionLabel = (commandId: string, description: string): string =>
+    displayCommandDescription(commandId, description, translate, language);
   const visibleGroups = useMemo(
-    () => filterKeyboardShortcutGroups(groups, query, sourceLabel, originLabel),
+    () => applyKeyboardShortcutFilter(
+        groups,
+        filter,
+        sourceLabel,
+        originLabel,
+        categoryLabel,
+        descriptionLabel
+      ),
     // `sourceLabel` / `originLabel` only depend on `translate`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [groups, query, translate]
+    [groups, filter, translate]
   );
+  const categories = useMemo(
+    () => deriveKeyboardShortcutCategories(groups, filter.showReadonly),
+    [groups, filter.showReadonly]
+  );
+  const filtersActive = !isDefaultKeyboardShortcutFilter(filter);
+  const viewOptions: readonly KeyboardShortcutView[] = ["all", "modified", "unassigned"];
 
   async function handleOpenLocation(): Promise<void> {
     setOpenLocationFailed(false);
@@ -215,7 +255,7 @@ export function KeyboardShortcutsScreen({
       return;
     }
     setBusy(true);
-    const scrollTop = rootRef.current?.scrollTop ?? 0;
+    const scrollTop = listScrollRef.current?.scrollTop ?? 0;
     try {
       const result = await window.pergamum.keybindings.applyKeybindingChange(request);
       if (result.ok && result.items !== undefined && result.keybindings !== undefined) {
@@ -322,9 +362,12 @@ export function KeyboardShortcutsScreen({
           ref={searchRef}
           className="keyboardShortcutsSearch"
           type="search"
-          value={query}
+          value={filter.query}
           placeholder={translate("keyboardShortcuts.search.placeholder")}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            const query = event.target.value;
+            setFilter((current) => ({ ...current, query }));
+          }}
         />
         <button
           type="button"
@@ -334,6 +377,78 @@ export function KeyboardShortcutsScreen({
           }}
         >
           {translate("keyboardShortcuts.openLocation")}
+        </button>
+      </div>
+
+      <div className="keyboardShortcutsFilters">
+        <label className="keyboardShortcutsFilterField">
+          <span>{translate("keyboardShortcuts.filter.category")}</span>
+          <select
+            className="keyboardShortcutsCategorySelect"
+            value={filter.category}
+            onChange={(event) => {
+              const category = event.target.value;
+              setFilter((current) => ({ ...current, category }));
+            }}
+          >
+            <option value="all">{translate("keyboardShortcuts.filter.all")}</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {categoryLabel(category)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div
+          className="keyboardShortcutsViewGroup"
+          role="group"
+          aria-label={translate("keyboardShortcuts.filter.view")}
+        >
+          {viewOptions.map((view) => (
+            <button
+              key={view}
+              type="button"
+              className="keyboardShortcutsViewButton"
+              data-view={view}
+              aria-pressed={filter.view === view}
+              onClick={() => setFilter((current) => ({ ...current, view }))}
+            >
+              {translate(`keyboardShortcuts.filter.view.${view}`)}
+            </button>
+          ))}
+        </div>
+        <label className="keyboardShortcutsFilterToggle">
+          <input
+            className="settingsSwitchInput"
+            type="checkbox"
+            role="switch"
+            checked={filter.showReadonly}
+            onChange={(event) => {
+              const showReadonly = event.target.checked;
+              setFilter((current) =>
+                normalizeKeyboardShortcutFilter({ ...current, showReadonly }, groups)
+              );
+            }}
+          />
+          <span>{translate("keyboardShortcuts.filter.showReadonly")}</span>
+        </label>
+        <label className="keyboardShortcutsFilterToggle keyboardShortcutsConditionsToggle">
+          <input
+            className="settingsSwitchInput"
+            type="checkbox"
+            role="switch"
+            checked={showConditions}
+            onChange={(event) => setShowConditions(event.target.checked)}
+          />
+          <span>{translate("keyboardShortcuts.filter.showConditions")}</span>
+        </label>
+        <button
+          type="button"
+          className="keyboardShortcutsClearFilters"
+          disabled={!filtersActive}
+          onClick={() => setFilter(DEFAULT_KEYBOARD_SHORTCUT_FILTER)}
+        >
+          {translate("keyboardShortcuts.filter.clear")}
         </button>
       </div>
 
@@ -402,14 +517,39 @@ export function KeyboardShortcutsScreen({
           {translate("keyboardShortcuts.loadFailed")}
         </p>
       ) : visibleGroups.length === 0 ? (
-        <p className="keyboardShortcutsStatus" role="status">
-          {translate("keyboardShortcuts.empty")}
-        </p>
+        <div className="keyboardShortcutsStatus" role="status">
+          {filtersActive ? (
+            <>
+              <p>{translate("keyboardShortcuts.filter.empty")}</p>
+              <button
+                type="button"
+                className="keyboardShortcutsClearFilters"
+                onClick={() => setFilter(DEFAULT_KEYBOARD_SHORTCUT_FILTER)}
+              >
+                {translate("keyboardShortcuts.filter.clear")}
+              </button>
+            </>
+          ) : (
+            translate("keyboardShortcuts.empty")
+          )}
+        </div>
       ) : (
         <>
           <p className="keyboardShortcutsStatus" role="status">
             {translate("keyboardShortcuts.count", { count: visibleGroups.length })}
           </p>
+          <div ref={listScrollRef} className="keyboardShortcutsListScroll">
+            <div className="keyboardShortcutsListHeader" aria-hidden="true">
+              <span className="keyboardShortcutsListHeaderCommand">
+                {translate("keyboardShortcuts.header.command")}
+              </span>
+              <span className="keyboardShortcutsListHeaderAttributes">
+                {translate("keyboardShortcuts.header.attributes")}
+              </span>
+              <span className="keyboardShortcutsListHeaderShortcut">
+                {translate("keyboardShortcuts.header.shortcut")}
+              </span>
+            </div>
           <ul className="keyboardShortcutsList">
             {visibleGroups.map((group) => (
               <li
@@ -421,18 +561,24 @@ export function KeyboardShortcutsScreen({
                   <div className="keyboardShortcutGroupTitleBlock">
                     <span className="keyboardShortcutTitle">{group.title}</span>
                     <code className="keyboardShortcutCommandId">{group.commandId}</code>
+                    {group.description.trim() === "" ||
+                    descriptionLabel(group.commandId, group.description).trim() === "" ? null : (
+                      <span className="keyboardShortcutCommandDescription">
+                        {descriptionLabel(group.commandId, group.description)}
+                      </span>
+                    )}
                   </div>
                   <span className="keyboardShortcutGroupMeta">
-                    <span className="keyboardShortcutCategory">{group.category}</span>
+                    <span className="keyboardShortcutCategory">{categoryLabel(group.category)}</span>
                     <span className="keyboardShortcutScope">{group.scope}</span>
                     <span className="keyboardShortcutSource">
                       {sourceLabel(group.source)}
                     </span>
-                    <span className="keyboardShortcutWhen">
-                      {group.when === null
-                        ? translate("keyboardShortcuts.whenNone")
-                        : translate("keyboardShortcuts.when", { when: group.when })}
-                    </span>
+                    {showConditions && group.when !== null ? (
+                      <span className="keyboardShortcutWhen">
+                        {translate("keyboardShortcuts.when", { when: group.when })}
+                      </span>
+                    ) : null}
                   </span>
                   {group.canAdd ? (
                     <button
@@ -542,6 +688,7 @@ export function KeyboardShortcutsScreen({
               </li>
             ))}
           </ul>
+          </div>
         </>
       )}
 

@@ -28,7 +28,7 @@ describe("Keyboard Shortcuts special tab wiring (#646)", () => {
     expect(app).toContain("function openKeyboardShortcutsTab()");
     expect(app).toContain('setActiveSpecialTabId("keyboardShortcuts")');
     expect(app).toContain('id: "keyboardShortcuts"');
-    expect(app).toContain("<KeyboardShortcutsScreen translate={translate} />");
+    expect(app).toContain("<KeyboardShortcutsScreen translate={translate} language={displayLanguage} />");
     expect(app).toContain("openKeyboardShortcuts: () => {\n          openKeyboardShortcutsTab();");
     // The screen's logic lives in its own component, not in App.
     expect(app).not.toContain("filterKeyboardShortcutRows");

@@ -256,3 +256,32 @@ export function groupKeyboardShortcutRows(
     };
   });
 }
+
+/**
+ * #649: a group the Keyboard Shortcuts UI shows but cannot assign / edit
+ * (nativeRole, standard behavior, readonly, ...): the ReadOnly groups, hidden
+ * unless "Show ReadOnly" is on. Commands with no runtime handler
+ * (`notYetRegistered`) never reach a group at all. The single definition is
+ * the group's `canAdd`.
+ */
+export function isReadonlyCommandGroup(group: KeyboardShortcutCommandGroup): boolean {
+  return !group.canAdd;
+}
+
+/** #649: a user change on this binding (a user-added key, or an unbound default). */
+export function isModifiedBinding(row: KeyboardShortcutRow): boolean {
+  return row.originKind === "user" || row.originKind === "unbound";
+}
+
+/** #649: does the command carry any user change? (Derived; not an origin.) */
+export function isModifiedCommandGroup(group: KeyboardShortcutCommandGroup): boolean {
+  return group.bindings.some(isModifiedBinding);
+}
+
+/**
+ * #649: the command has no effective key at all. An unbound default next to
+ * another live key does NOT make a command unassigned.
+ */
+export function isUnassignedCommandGroup(group: KeyboardShortcutCommandGroup): boolean {
+  return group.bindings.every((row) => row.key === null);
+}
