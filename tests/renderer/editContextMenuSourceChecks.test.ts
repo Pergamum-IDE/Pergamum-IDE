@@ -148,6 +148,11 @@ function allSourceText(): string {
  * competing global shortcut system, and unrelated to the Markdown editor's
  * native-edit-command delegation this guard otherwise protects.
  *
+ * KeyboardShortcutCaptureDialog.tsx (#647) is the same category: a dialog-
+ * scoped DOM key listener that exists only as the fallback for when the main
+ * process cannot swallow keys during shortcut capture (it is removed when the
+ * dialog closes); unrelated to the native-edit-command delegation.
+ *
  * reloadKeyFallback.ts (#644) is the same category: one bubble-phase window
  * listener that only calls `preventDefault()` on an UNHANDLED reload /
  * forceReload key (never a command, never `stopPropagation()`), so Chromium's
@@ -179,6 +184,7 @@ const onKeyDownExemptFileNames = new Set([
   "editorFindShortcuts.ts",
   "globalKeyboardShortcuts.ts",
   "reloadKeyFallback.ts",
+  "KeyboardShortcutCaptureDialog.tsx",
   "App.tsx",
   "EditorSurface.tsx"
 ]);

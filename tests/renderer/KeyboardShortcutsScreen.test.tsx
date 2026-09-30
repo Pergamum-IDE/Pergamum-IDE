@@ -27,6 +27,12 @@ function row(overrides: Partial<KeyboardShortcutRow>): KeyboardShortcutRow {
     when: "editorFocus && markdownDocument && !readOnly",
     key: "Mod-b",
     keyLabel: "Ctrl+B",
+    rowId: `${overrides.commandId ?? "editor.markdown.bold"}|${overrides.key ?? "Mod-b"}`,
+    origin: "default",
+    editable: overrides.source === undefined || overrides.source === "pergamum",
+    canReset: false,
+    defaultKey: null,
+    defaultKeyLabel: null,
     ...overrides
   };
 }
@@ -190,7 +196,7 @@ describe("KeyboardShortcutsScreen rows (#646)", () => {
       li.textContent?.includes("editor.selection.copy")
     ) as HTMLElement;
     const badge = copy.querySelector(".keyboardShortcutReadonly") as HTMLElement;
-    expect(badge.textContent).toContain("ReadOnly");
+    expect(badge.textContent).toContain("読み取り専用");
     expect(badge.querySelector("svg")).not.toBeNull();
     expect(badge.querySelector("[aria-hidden=true]")).not.toBeNull();
     const bold = [...container.querySelectorAll("li.keyboardShortcutRow")].find((li) =>
@@ -422,29 +428,29 @@ describe("KeyboardShortcutsScreen open location (#646)", () => {
   });
 });
 
-describe("KeyboardShortcutsScreen is view only (#646)", () => {
-  it("renders no editing, capture, delete, reset or JSON editor controls", async () => {
+describe("KeyboardShortcutsScreen has no JSON editor or chord UI (#647)", () => {
+  it("renders no text editor for keybindings.json and no chord controls", async () => {
     install(data());
     await render();
     expect(container.querySelector("textarea")).toBeNull();
     expect(container.querySelector("[contenteditable]")).toBeNull();
-    const buttons = [...container.querySelectorAll("button")].map((b) => b.textContent);
-    expect(buttons).toEqual(["keybindings.json の場所を開く"]);
     expect(container.querySelectorAll("input")).toHaveLength(1);
+    expect(container.textContent).not.toMatch(/chord|コード進行|when を編集/i);
   });
 
-  it("the source never saves, captures keys or listens to the keyboard", () => {
+  it("the source never writes the file, lists user entries or listens to the keyboard itself", () => {
     const source = readFileSync("src/renderer/KeyboardShortcutsScreen.tsx", "utf8");
     expect(source).not.toContain("saveUserKeybindings");
     expect(source).not.toContain("getUserKeybindings");
     expect(source).not.toMatch(/onKeyDown|addEventListener\(["']keydown/);
-    expect(source).not.toMatch(/resetKeybinding|deleteKeybinding|captureKey/i);
-    expect(source).not.toMatch(/\bwatch\b|fs\./);
+    expect(source).not.toMatch(/watch|fs\./);
+    // No trash icon for unbind / reset.
+    expect(source).not.toMatch(/trash/i);
   });
 
   it("never renders a file path (the location button is text only)", async () => {
     install(data());
     await render();
-    expect(container.textContent).not.toMatch(/[A-Za-z]:\\|\/Users\/|\/home\//);
+    expect(container.textContent).not.toMatch(/[A-Za-z]:\|\/Users\/|\/home\//);
   });
 });

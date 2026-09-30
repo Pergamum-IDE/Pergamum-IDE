@@ -189,12 +189,15 @@ describe("listKeyboardShortcutRows (#646)", () => {
   it("works on the effective keybindings (user overrides show up)", () => {
     const { keybindings } = resolveEffectiveKeybindings({
       platform: "win32",
-      userEntries: [{ key: "Mod-Alt-9", command: "editor.markdown.bold" }]
+      userEntries: [
+        { key: "Mod-b", command: "-editor.markdown.bold" },
+        { key: "Mod-Alt-9", command: "editor.markdown.bold" }
+      ]
     });
     const bold = listKeyboardShortcutRows(keybindings, "win32").filter(
       (item) => item.commandId === "editor.markdown.bold"
     );
-    expect(bold.map((item) => item.keyLabel)).toEqual(["Ctrl+Alt+9"]);
+    expect(bold.map((item) => item.keyLabel)).toEqual([null, "Ctrl+Alt+9"]);
   });
 
   it("returns only serializable data", () => {

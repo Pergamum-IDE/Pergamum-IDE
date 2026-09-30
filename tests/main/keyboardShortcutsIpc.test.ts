@@ -106,7 +106,7 @@ describe("getKeyboardShortcutItems (#646)", () => {
     const result = await invoke<ItemsResult>(KEYBINDINGS_CHANNELS.getKeyboardShortcutItems);
     expect(
       result.items.filter((item) => item.commandId === "editor.markdown.bold").map((i) => i.keyLabel)
-    ).toEqual(["Ctrl+Alt+9"]);
+    ).toEqual(["Ctrl+B", "Ctrl+Alt+9"]);
     expect(
       result.items.filter((item) => item.commandId === "editor.markdown.italic").map((i) => i.keyLabel)
     ).toEqual(["Ctrl+I"]);
@@ -181,7 +181,7 @@ describe("openKeybindingsJsonLocation (#646)", () => {
 });
 
 describe("registration (#646)", () => {
-  it("registers the five keybindings channels (no edit-specific new channel)", () => {
+  it("registers the keybindings channels (#647 adds apply-change and capture mode)", () => {
     registerKeybindingsIpc("win32");
     expect([...electronMock.handlers.keys()].sort()).toEqual(
       [
@@ -189,7 +189,9 @@ describe("registration (#646)", () => {
         "keybindings:getEffectiveKeybindings",
         "keybindings:saveUserKeybindings",
         "keybindings:getKeyboardShortcutItems",
-        "keybindings:openKeybindingsJsonLocation"
+        "keybindings:openKeybindingsJsonLocation",
+        "keybindings:applyKeybindingChange",
+        "keybindings:setCaptureMode"
       ].sort()
     );
   });

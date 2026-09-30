@@ -1,0 +1,106 @@
+import type { ApplyKeybindingChangeFailureReason } from "../shared/api";
+import type { Translate } from "../shared/i18n";
+import type { KeybindingEditConflict } from "../shared/keybindings";
+import { InfoDialog } from "./dialog/InfoDialog";
+
+/**
+ * #647: why a shortcut change was NOT saved (conflict, reserved key, save
+ * failure, unsupported key, ...). Nothing was written when this is shown.
+ */
+
+export interface KeyboardShortcutNotice {
+  readonly reason: ApplyKeybindingChangeFailureReason | "unsupported";
+  readonly conflict?: KeybindingEditConflict;
+  /** The label of the key the user pressed, when known. */
+  readonly keyLabel?: string;
+}
+
+export interface KeyboardShortcutNoticeDialogProps {
+  readonly translate: Translate;
+  readonly notice: KeyboardShortcutNotice;
+  readonly opener: Element | null;
+  readonly onClose: () => void;
+}
+
+export function KeyboardShortcutNoticeDialog({
+  translate,
+  notice,
+  opener,
+  onClose
+}: KeyboardShortcutNoticeDialogProps): JSX.Element {
+  const { conflict } = notice;
+
+  let message: string;
+  switch (notice.reason) {
+    case "conflict":
+      message = translate("keyboardShortcuts.notice.conflict");
+      break;
+    case "reserved":
+      message = translate("keyboardShortcuts.notice.reserved");
+      break;
+    case "saveFailed":
+      message = translate("keyboardShortcuts.notice.saveFailed");
+      break;
+    case "fileInvalid":
+      message = translate("keyboardShortcuts.notice.fileInvalid");
+      break;
+    case "unsupported":
+      message = translate("keyboardShortcuts.unsupportedKey");
+      break;
+    case "stale":
+      message = translate("keyboardShortcuts.notice.stale");
+      break;
+    default:
+      message = translate("keyboardShortcuts.notice.generic");
+  }
+
+  const keyLabel = conflict?.keyLabel ?? notice.keyLabel;
+
+  return (
+    <InfoDialog
+      title={translate("keyboardShortcuts.notice.title")}
+      opener={opener}
+      role="alertdialog"
+      onClose={onClose}
+      footer={
+        <button
+          type="button"
+          className="appDialogButton appDialogButton-confirm"
+          autoFocus
+          onClick={onClose}
+        >
+          {translate("keyboardShortcuts.notice.ok")}
+        </button>
+      }
+    >
+      <p className="appDialogMessageText">{message}</p>
+      {conflict !== undefined || (keyLabel !== undefined && notice.reason === "reserved") ? (
+        <ul className="keyboardShortcutNoticeDetails">
+          {keyLabel !== undefined ? (
+            <li>{translate("keyboardShortcuts.notice.conflict.key", { key: keyLabel })}</li>
+          ) : null}
+          {conflict !== undefined ? (
+            <>
+              <li>
+                {translate("keyboardShortcuts.notice.conflict.command", {
+                  title: conflict.title,
+                  commandId: conflict.commandId
+                })}
+              </li>
+              <li>
+                {translate("keyboardShortcuts.notice.conflict.category", {
+                  category: conflict.category
+                })}
+              </li>
+              <li>
+                {translate("keyboardShortcuts.notice.conflict.scope", {
+                  scope: conflict.scope
+                })}
+              </li>
+            </>
+          ) : null}
+        </ul>
+      ) : null}
+    </InfoDialog>
+  );
+}

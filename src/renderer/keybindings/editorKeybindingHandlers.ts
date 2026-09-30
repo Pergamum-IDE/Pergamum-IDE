@@ -14,6 +14,10 @@ import {
   RENAME_DOCUMENT_COMMAND_ID,
   createRenameKeybindingHandlers
 } from "../editorRenameShortcut";
+import {
+  EDITOR_INDENT_COMMAND_IDS,
+  editorIndentKeybindingHandlers
+} from "../indentCommands";
 import { createRubyKeybindingHandlers } from "../editorRubyShortcuts";
 import {
   ACTIVE_FIND_OPEN_COMMAND_ID,
@@ -38,12 +42,13 @@ import type { EditorKeybindingHandlers } from "./codeMirrorKeymap";
 /**
  * Every catalog command the dispatched CodeMirror editor keymap handles.
  * Editor-scope commands missing here are handled elsewhere: F3 / Shift+F3
- * Find next / previous is a window listener (#643), and `editor.indent` /
- * `editor.outdent` are built into the base CodeMirror setup
- * (markdownEditorCodeMirrorSetup.ts) through CodeMirror's ordinary keymap.
+ * Find next / previous is a window listener (#643). (`editor.indent` /
+ * `editor.outdent` joined the dispatcher in #647, so a rebinding takes effect
+ * immediately like every other editor shortcut.)
  */
 export const EDITOR_KEYMAP_COMMAND_IDS: readonly string[] = [
   ...MARKDOWN_TOOLBAR_KEYBINDING_COMMAND_IDS,
+  ...EDITOR_INDENT_COMMAND_IDS,
   editorCommandIds.insertRuby,
   editorCommandIds.insertEmphasisMark,
   GLOSSARY_SELECTION_COMMAND_ID,
@@ -81,6 +86,7 @@ export function createDefaultEditorKeybindingHandlers(
     ...createRubyKeybindingHandlers(),
     ...createEmphasisMarkKeybindingHandlers(),
     ...createGlossarySelectionKeybindingHandlers(),
+    ...editorIndentKeybindingHandlers,
     ...createActiveFindKeybindingHandlers(
       options.activeFindDiagnostics === undefined
         ? undefined

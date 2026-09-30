@@ -73,12 +73,9 @@ import { createEditorThemeExtension } from "./editorThemeExtension";
 import { createJapaneseLintExtension } from "./japaneseLint/japaneseLintGutterExtension";
 import {
   EDITOR_INDENT_COMMAND_IDS,
-  editorIndentKeybindingHandlers,
   fencedCodeIndentUnitFacet
 } from "./indentCommands";
 import { listCommonDefaultKeys } from "../shared/keybindings";
-import { createPergamumEditorKeyBindings } from "./keybindings/codeMirrorKeymap";
-import { getRuntimePlatform } from "./platformModifier";
 import type { FencedCodeIndentUnit } from "../shared/settings";
 
 /**
@@ -170,14 +167,8 @@ export function createMarkdownEditorBaseSetup(
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymapWithoutIndentBindings,
-      // #641: Mod-] / Mod-[ come from the keybinding catalog
-      // (editor.indent / editor.outdent), run by CodeMirror's ordinary keymap.
-      ...createPergamumEditorKeyBindings({
-        platform: getRuntimePlatform(),
-        handlers: editorIndentKeybindingHandlers,
-        commandIds: EDITOR_INDENT_COMMAND_IDS,
-        scope: "editor"
-      }),
+      // (#647: Mod-] / Mod-[ - editor.indent / editor.outdent - are run by the
+      // catalog-derived editor keymap dispatcher, not from here.)
       ...searchKeymapWithoutPanelOpeners,
       ...historyKeymap,
       ...foldKeymap,

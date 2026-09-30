@@ -127,6 +127,7 @@ describe("no keybindings.json: #641-#644 behavior is unchanged (#645)", () => {
 describe("a user override reaches every registration layer (#645)", () => {
   it("CodeMirror: the generated editor binding follows the user key (and only it)", () => {
     const rows = effectiveRows("win32", [
+      { key: "Mod-b", command: "-editor.markdown.bold" },
       { key: "Mod-Alt-9", command: "editor.markdown.bold" }
     ]);
     setEffectiveKeybindings("win32", rows);
@@ -166,7 +167,10 @@ describe("a user override reaches every registration layer (#645)", () => {
 
     setEffectiveKeybindings(
       "win32",
-      effectiveRows("win32", [{ key: "Mod-Alt-9", command: id }])
+      effectiveRows("win32", [
+        { key: "Mod-o", command: `-${id}` },
+        { key: "Mod-Alt-9", command: id }
+      ])
     );
     expect(matchRendererShortcut(ev("o", { ctrlKey: true }), id, "win32")).toBe(false);
     expect(
@@ -181,7 +185,9 @@ describe("a user override reaches every registration layer (#645)", () => {
     setEffectiveKeybindings(
       "win32",
       effectiveRows("win32", [
+        { key: "Alt-ArrowLeft", command: "-workspace.tabs.previous" },
         { key: "Mod-Alt-9", command: "workspace.tabs.previous" },
+        { key: "Ctrl-Space", command: "-glossary.completion.open" },
         { key: "Mod-Alt-x", command: "glossary.completion.open" }
       ])
     );

@@ -47,8 +47,11 @@ afterEach(async () => {
 
 describe("keybindings IPC (#645)", () => {
   it("registers exactly the three keybindings channels", () => {
+    // (captureInput is main -> renderer: it has no handler.)
     expect([...electronMock.handlers.keys()].sort()).toEqual(
-      Object.values(KEYBINDINGS_CHANNELS).sort()
+      Object.values(KEYBINDINGS_CHANNELS)
+        .filter((channel) => channel !== KEYBINDINGS_CHANNELS.captureInput)
+        .sort()
     );
   });
 
@@ -102,8 +105,11 @@ describe("keybindings IPC (#645)", () => {
       keybindings: Array<{ command: string; key: string | null }>;
     }>(KEYBINDINGS_CHANNELS.getEffectiveKeybindings);
     const keys = (command: string) =>
-      effective.keybindings.filter((b) => b.command === command).map((b) => b.key);
-    expect(keys("editor.find.replace.open")).toEqual(["Mod-Alt-f"]);
+      effective.keybindings
+        .filter((b) => b.command === command && b.key !== null)
+        .map((b) => b.key);
+    // A positive entry adds; the unbind removed F1.
+    expect(keys("editor.find.replace.open")).toEqual(["Mod-h", "Mod-Alt-f"]);
     expect(keys("workbench.commandPalette.open")).toEqual(["Mod-p"]);
   });
 
@@ -227,8 +233,8 @@ describe("preload / API surface and #645 scope safety", () => {
     expect(main.indexOf("loadKeybindings(")).toBeLessThan(
       main.indexOf("await installApplicationMenu(")
     );
-    expect(main).toContain("keybindingRows: loadedKeybindings.effective.keybindings");
-    expect(main).toContain("registerKeybindingsIpc()");
+    expect(main).toContain("applicationMenuOptions(loadedKeybindings.effective.keybindings)");
+    expect(main).toContain("registerKeybindingsIpc(process.platform, {");
   });
 
   it("the renderer loads effective keybindings before the first render", () => {

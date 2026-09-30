@@ -241,7 +241,22 @@ const pergamumApi: PergamumApi = {
     getKeyboardShortcutItems: () =>
       ipcRenderer.invoke(KEYBINDINGS_CHANNELS.getKeyboardShortcutItems),
     openKeybindingsJsonLocation: () =>
-      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.openKeybindingsJsonLocation)
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.openKeybindingsJsonLocation),
+    applyKeybindingChange: (request) =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.applyKeybindingChange, request),
+    setCaptureMode: (enabled) =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.setCaptureMode, enabled),
+    onCaptureInput: (listener) => {
+      const handler = (_event: unknown, input: unknown): void => {
+        if (typeof input === "object" && input !== null) {
+          listener(input as Parameters<typeof listener>[0]);
+        }
+      };
+      ipcRenderer.on(KEYBINDINGS_CHANNELS.captureInput, handler);
+      return () => {
+        ipcRenderer.removeListener(KEYBINDINGS_CHANNELS.captureInput, handler);
+      };
+    }
   },
   session: {
     persist: (snapshot) =>

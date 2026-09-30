@@ -117,7 +117,7 @@ describe("Ctrl+G glossary-from-selection wiring (#436 Slice 12)", () => {
     // #641: the command is selected into the catalog-derived editor keymap
     // only for the instance that owns the shortcut.
     expect(source).toContain(
-      "...(options.glossarySelectionShortcutEnabled\n            ? [GLOSSARY_SELECTION_COMMAND_ID]\n            : []),"
+      "...(options.glossarySelectionShortcutEnabled\n        ? [GLOSSARY_SELECTION_COMMAND_ID]\n        : []),"
     );
   });
 

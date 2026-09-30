@@ -18,14 +18,17 @@
  *   command's own `when` (or a default row's); anything else is rejected.
  * - Unknown fields are ignored with a warning (and dropped on re-save).
  *
- * Overlay (deterministic): defaults for the platform -> all unbinds (file
- * order) -> positive entries (file order). The first positive entry of a
- * command replaces its primary default binding; later positive entries of the
- * same command are added as aliases. An entry that is invalid, targets a
- * readonly / nativeRole / standard command, uses a reserved key (reusing the
- * #644 validation), or collides with another binding in the same scope is
- * ignored with a diagnostic; the defaults stay in effect. Diagnostics carry
- * the entry's index in the file, and never include file contents or paths.
+ * Overlay (deterministic, VS Code style): defaults for the platform -> all
+ * unbinds (file order) -> positive entries (file order). A positive entry
+ * ALWAYS adds a binding; a default binding is removed only by an unbind entry.
+ * (Changing a default is therefore "unbind the old key + add the new one".)
+ * An unbound default stays in the effective rows as an unassigned row that
+ * remembers its `defaultKey`, so it can be restored. An entry that is invalid,
+ * targets a readonly / nativeRole / standard command, uses a reserved key
+ * (reusing the #644 validation), or collides with another binding in the same
+ * scope is ignored with a diagnostic; the defaults stay in effect. Diagnostics
+ * carry the entry's index in the file, and never include file contents or
+ * paths.
  */
 
 import {
@@ -194,19 +197,6 @@ function isUnbind(entry: UserKeybindingEntry): boolean {
   return entry.command.startsWith("-");
 }
 
-/**
- * The primary default binding of a command: its first remaining default-origin
- * row that has a key. The one place that decides primary vs alias.
- */
-function findPrimaryRowIndex(rows: readonly Row[], commandId: string): number {
-  return rows.findIndex(
-    (row) =>
-      row.binding.command === commandId &&
-      row.origin === "default" &&
-      row.binding.key !== null
-  );
-}
-
 function physicalKey(key: string, platform: PergamumPlatform): string {
   return toCodeMirrorKey(key, platform);
 }
@@ -216,23 +206,27 @@ function templateFor(
   rows: readonly Row[]
 ): ResolvedKeybinding {
   const existing = rows.find((row) => row.binding.command === command.id);
-  if (existing !== undefined) {
-    return existing.binding;
-  }
-  return {
-    command: command.id,
-    key: null,
-    title: command.title,
-    category: command.category,
-    scope: command.scope,
-    executionHost: command.executionHost,
-    source: command.source,
-    readonly: command.readonly,
-    readonlyReason: command.readonlyReason,
-    when: command.when,
-    description: command.description,
-    handlerStatus: command.handlerStatus
-  };
+  const base: ResolvedKeybinding =
+    existing !== undefined
+      ? existing.binding
+      : {
+          command: command.id,
+          key: null,
+          title: command.title,
+          category: command.category,
+          scope: command.scope,
+          executionHost: command.executionHost,
+          source: command.source,
+          readonly: command.readonly,
+          readonlyReason: command.readonlyReason,
+          when: command.when,
+          description: command.description,
+          handlerStatus: command.handlerStatus
+        };
+  const { origin: _origin, defaultKey: _defaultKey, ...plain } = base;
+  void _origin;
+  void _defaultKey;
+  return plain;
 }
 
 export function resolveEffectiveKeybindings(options: {
@@ -299,8 +293,8 @@ export function resolveEffectiveKeybindings(options: {
     return command;
   }
 
-  // Pass 1: unbinds, in file order.
-  const primaryUnbound = new Set<string>();
+  // Pass 1: unbinds, in file order. The unbound default stays as an
+  // unassigned row that remembers the key it would restore.
   for (const { entry, index } of indexed) {
     if (!isUnbind(entry)) {
       continue;
@@ -335,23 +329,17 @@ export function resolveEffectiveKeybindings(options: {
       });
       continue;
     }
-    if (findPrimaryRowIndex(rows, commandId) === chosen.rowIndex) {
-      // The primary was unbound: a positive entry then ADDS a binding instead
-      // of replacing whichever alias is left.
-      primaryUnbound.add(commandId);
-    }
-    rows.splice(chosen.rowIndex, 1);
-    if (!rows.some((row) => row.binding.command === commandId)) {
-      // Keep one (unassigned) row so the command stays listed.
-      rows.push({
-        binding: { ...chosen.row.binding, key: null },
-        origin: "default"
-      });
-    }
+    rows[chosen.rowIndex] = {
+      binding: {
+        ...chosen.row.binding,
+        key: null,
+        defaultKey: chosen.row.binding.key as string
+      },
+      origin: "default"
+    };
   }
 
-  // Pass 2: positive entries, in file order.
-  const replacedPrimary = new Set<string>(primaryUnbound);
+  // Pass 2: positive entries, in file order. Each one ADDS a binding.
   for (const { entry, index } of indexed) {
     if (isUnbind(entry)) {
       continue;
@@ -426,7 +414,8 @@ export function resolveEffectiveKeybindings(options: {
     const candidate: ResolvedKeybinding = {
       ...template,
       key: entry.key,
-      when: entry.when ?? template.when
+      when: entry.when ?? template.when,
+      origin: "user"
     };
     const reserved = reservedUseDiagnostics(candidate, catalog, platform).map(
       (diagnostic) => ({ ...diagnostic, index })
@@ -436,28 +425,27 @@ export function resolveEffectiveKeybindings(options: {
       continue;
     }
 
-    // Apply: the first positive entry replaces the primary default binding;
-    // later ones for the same command become aliases.
-    const primary = findPrimaryRowIndex(rows, command.id);
-    if (!replacedPrimary.has(command.id) && primary >= 0) {
-      rows[primary] = { binding: candidate, origin: "user" };
+    // Add after the command's last row. A bare placeholder (a command with no
+    // default at all, or none on this platform) is filled instead, so the
+    // command is not listed twice. A placeholder that remembers an unbound
+    // default is NOT filled: it stays restorable.
+    const placeholder = rows.findIndex(
+      (row) =>
+        row.binding.command === command.id &&
+        row.binding.key === null &&
+        row.binding.defaultKey === undefined
+    );
+    if (placeholder >= 0) {
+      rows[placeholder] = { binding: candidate, origin: "user" };
     } else {
-      const unassigned = rows.findIndex(
-        (row) => row.binding.command === command.id && row.binding.key === null
-      );
-      if (unassigned >= 0) {
-        rows[unassigned] = { binding: candidate, origin: "user" };
-      } else {
-        let lastOfCommand = -1;
-        rows.forEach((row, rowIndex) => {
-          if (row.binding.command === command.id) {
-            lastOfCommand = rowIndex;
-          }
-        });
-        rows.splice(lastOfCommand + 1, 0, { binding: candidate, origin: "user" });
-      }
+      let lastOfCommand = -1;
+      rows.forEach((row, rowIndex) => {
+        if (row.binding.command === command.id) {
+          lastOfCommand = rowIndex;
+        }
+      });
+      rows.splice(lastOfCommand + 1, 0, { binding: candidate, origin: "user" });
     }
-    replacedPrimary.add(command.id);
   }
 
   return { keybindings: rows.map((row) => row.binding), diagnostics };

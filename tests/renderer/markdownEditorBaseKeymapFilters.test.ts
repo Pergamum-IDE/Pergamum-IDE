@@ -102,7 +102,7 @@ describe("base keymap filters derived from the catalog (#641)", () => {
     expect(remaining).toEqual(expect.arrayContaining(["Mod-d", "Mod-Alt-g"]));
   });
 
-  it("the indent keys are generated from the catalog and run through the base keymap", () => {
+  it("the base setup no longer binds Mod-] / Mod-[ itself (the editor keymap dispatcher does, #647)", () => {
     const v = mountBase();
     const event = new KeyboardEvent("keydown", {
       key: "]",
@@ -112,6 +112,8 @@ describe("base keymap filters derived from the catalog (#641)", () => {
       cancelable: true
     });
     v.contentDOM.dispatchEvent(event);
-    expect(event.defaultPrevented).toBe(true);
+    // CodeMirror's own generic indentMore is filtered out and nothing else
+    // handles the key here.
+    expect(event.defaultPrevented).toBe(false);
   });
 });

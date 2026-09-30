@@ -115,6 +115,23 @@ export interface KeyboardShortcutRow {
   readonly key: string | null;
   /** Platform-aware label (`Ctrl+S` / `Cmd+S`), or null when unassigned. */
   readonly keyLabel: string | null;
+  /**
+   * #647: a stable id for this binding row (command + origin + key), safe to
+   * use as a React key and to target an edit after filtering / sorting.
+   */
+  readonly rowId: string;
+  /** Where the binding comes from: the catalog default, or keybindings.json. */
+  readonly origin: "default" | "user";
+  /**
+   * #647: may the user change / unbind / reset this row? Pergamum commands
+   * only: never a nativeRole / standard / readonly command.
+   */
+  readonly editable: boolean;
+  /** #647: is there something to reset (a user binding, or an unbound default)? */
+  readonly canReset: boolean;
+  /** On an unassigned row standing for an unbound default: that key. */
+  readonly defaultKey: string | null;
+  readonly defaultKeyLabel: string | null;
 }
 
 /**
@@ -135,7 +152,14 @@ export function listKeyboardShortcutRows(
         compareText(a.row.command, b.row.command) ||
         a.position - b.position
     )
-    .map(({ row }) => ({
+    .map(({ row }) => {
+      const origin = row.origin ?? "default";
+      const defaultKey = row.defaultKey ?? null;
+      const editable =
+        row.source === "pergamum" &&
+        !row.readonly &&
+        row.handlerStatus !== "notYetRegistered";
+      return {
       commandId: row.command,
       title: row.title,
       category: row.category,
@@ -148,6 +172,18 @@ export function listKeyboardShortcutRows(
       handlerStatus: row.handlerStatus,
       when: row.when,
       key: row.key,
-      keyLabel: row.key === null ? null : formatKeybindingLabel(row.key, platform)
-    }));
+      keyLabel: row.key === null ? null : formatKeybindingLabel(row.key, platform),
+      rowId: [
+        row.command,
+        origin,
+        row.key ?? `unassigned:${defaultKey ?? ""}`
+      ].join(""),
+      origin,
+      editable,
+      canReset: editable && (origin === "user" || defaultKey !== null),
+      defaultKey,
+      defaultKeyLabel:
+        defaultKey === null ? null : formatKeybindingLabel(defaultKey, platform)
+      };
+    });
 }
