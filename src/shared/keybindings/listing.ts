@@ -132,7 +132,15 @@ export interface KeyboardShortcutRow {
   /** On an unassigned row standing for an unbound default: that key. */
   readonly defaultKey: string | null;
   readonly defaultKeyLabel: string | null;
+  /**
+   * #648: the binding's origin for display, separate from `source`:
+   * `default` (catalog key), `user` (keybindings.json) or `unbound` (a default
+   * removed by the user). `null` for a command that never had a key.
+   */
+  readonly originKind: KeyboardShortcutOriginKind | null;
 }
+
+export type KeyboardShortcutOriginKind = "default" | "user" | "unbound";
 
 /**
  * Display rows from resolved keybindings (the effective set), sorted by
@@ -183,7 +191,68 @@ export function listKeyboardShortcutRows(
       canReset: editable && (origin === "user" || defaultKey !== null),
       defaultKey,
       defaultKeyLabel:
-        defaultKey === null ? null : formatKeybindingLabel(defaultKey, platform)
+        defaultKey === null ? null : formatKeybindingLabel(defaultKey, platform),
+      originKind:
+        row.key === null
+          ? defaultKey === null
+            ? null
+            : "unbound"
+          : origin
       };
     });
+}
+
+/**
+ * #648: one command with all of its bindings. Display metadata comes from the
+ * command (every row of one command carries the same scope / source / readonly
+ * state), so it is taken from the first row.
+ */
+export interface KeyboardShortcutCommandGroup {
+  readonly commandId: string;
+  readonly title: string;
+  readonly category: string;
+  readonly description: string;
+  readonly scope: KeybindingScope;
+  readonly source: KeybindingSource;
+  readonly readonly: boolean;
+  readonly readonlyReason: KeybindingReadonlyReason | null;
+  readonly handlerStatus: CommandHandlerStatus;
+  readonly when: string | null;
+  readonly editable: boolean;
+  /** May the user add a shortcut to this command? Same rule as `editable`. */
+  readonly canAdd: boolean;
+  readonly bindings: readonly KeyboardShortcutRow[];
+}
+
+/** Groups rows by command; group and row order follow the input order. */
+export function groupKeyboardShortcutRows(
+  rows: readonly KeyboardShortcutRow[]
+): KeyboardShortcutCommandGroup[] {
+  const groups = new Map<string, KeyboardShortcutRow[]>();
+  for (const row of rows) {
+    const bucket = groups.get(row.commandId);
+    if (bucket === undefined) {
+      groups.set(row.commandId, [row]);
+    } else {
+      bucket.push(row);
+    }
+  }
+  return [...groups.values()].map((bindings) => {
+    const first = bindings[0] as KeyboardShortcutRow;
+    return {
+      commandId: first.commandId,
+      title: first.title,
+      category: first.category,
+      description: first.description,
+      scope: first.scope,
+      source: first.source,
+      readonly: first.readonly,
+      readonlyReason: first.readonlyReason,
+      handlerStatus: first.handlerStatus,
+      when: first.when,
+      editable: first.editable,
+      canAdd: first.editable,
+      bindings
+    };
+  });
 }

@@ -41,7 +41,7 @@ import type {
   ResolvedKeybinding
 } from "./types";
 
-export type KeybindingEditKind = "change" | "unbind" | "reset";
+export type KeybindingEditKind = "change" | "unbind" | "reset" | "add";
 
 /** Identifies one effective row (binding) to edit. */
 export interface KeybindingEditTarget {
@@ -53,12 +53,24 @@ export interface KeybindingEditTarget {
   readonly defaultKey?: string | null;
 }
 
-export interface KeybindingEditRequest {
-  readonly kind: KeybindingEditKind;
+/**
+ * #648: an `add` names only the command (its scope / when / source / readonly
+ * state follow from the command); the other kinds name one binding row.
+ */
+export interface KeybindingAddRequest {
+  readonly kind: "add";
+  readonly target: { readonly commandId: string };
+  readonly newKey: string;
+}
+
+export interface KeybindingRowEditRequest {
+  readonly kind: "change" | "unbind" | "reset";
   readonly target: KeybindingEditTarget;
   /** Required for `change` (canonical notation). */
   readonly newKey?: string;
 }
+
+export type KeybindingEditRequest = KeybindingAddRequest | KeybindingRowEditRequest;
 
 export interface KeybindingEditConflict {
   readonly key: string;
@@ -76,6 +88,7 @@ export type KeybindingEditFailureReason =
   | "readonly"
   | "stale"
   | "noop"
+  | "duplicate"
   | "invalid";
 
 export type KeybindingEditResult =
@@ -166,8 +179,7 @@ export function applyKeybindingEdit(input: {
 }): KeybindingEditResult {
   const { platform, request } = input;
   const catalog = input.catalog ?? defaultKeybindingCatalog;
-  const { target } = request;
-  const command = catalog.commands.find((c) => c.id === target.commandId);
+  const command = catalog.commands.find((c) => c.id === request.target.commandId);
   if (command === undefined) {
     return fail("invalid");
   }
@@ -185,9 +197,12 @@ export function applyKeybindingEdit(input: {
     userEntries: entries,
     catalog
   });
-  const targetRow = findTargetRow(before.keybindings, target, platform);
-  if (targetRow === undefined) {
-    return fail("stale");
+  // An add has no row to find: it appends a key to the command.
+  if (request.kind !== "add") {
+    const targetRow = findTargetRow(before.keybindings, request.target, platform);
+    if (targetRow === undefined) {
+      return fail("stale");
+    }
   }
 
   const positiveIndex = (key: string | null): number =>
@@ -216,7 +231,7 @@ export function applyKeybindingEdit(input: {
   /** Where the new positive entry goes (a user row is rewritten in place). */
   let insertAt: number | null = null;
 
-  if (request.kind === "change") {
+  if (request.kind === "add" || request.kind === "change") {
     if (request.newKey === undefined) {
       return fail("unsupported");
     }
@@ -224,7 +239,7 @@ export function applyKeybindingEdit(input: {
     if (!isValidKeybindingKey(newKey)) {
       return fail("unsupported");
     }
-    if (sameKey(newKey, target.key, platform)) {
+    if (request.kind === "change" && sameKey(newKey, request.target.key, platform)) {
       return fail("noop");
     }
     // An editor-scope shortcut needs a command modifier (or an F-key): a bare
@@ -240,22 +255,42 @@ export function applyKeybindingEdit(input: {
         return fail("unsupported");
       }
     }
-    if (target.origin === "user") {
-      const at = positiveIndex(target.key);
+    if (request.kind === "add") {
+      // Same command, same key, already effective: a duplicate (not a conflict
+      // with another command). A key that is merely unbound stays re-addable.
+      if (
+        before.keybindings.some(
+          (row) =>
+            row.command === command.id &&
+            row.key !== null &&
+            sameKey(row.key, newKey, platform)
+        )
+      ) {
+        return fail("duplicate");
+      }
+      // Re-adding a key whose default was unbound would collide with the
+      // `-command` entry; the row's Reset restores it instead.
+      if (unbindIndex(newKey) >= 0) {
+        return fail("duplicate");
+      }
+      base = [...entries];
+    } else if (request.target.origin === "user") {
+      const at = positiveIndex(request.target.key);
       if (at < 0) {
         return fail("stale");
       }
       insertAt = at;
       base = entries.filter((_, index) => index !== at);
-    } else if (target.key !== null) {
+    } else if (request.target.key !== null) {
       base =
-        unbindIndex(target.key) >= 0
+        unbindIndex(request.target.key) >= 0
           ? [...entries]
-          : [...entries, { key: target.key, command: `-${command.id}` }];
+          : [...entries, { key: request.target.key, command: `-${command.id}` }];
     } else {
       base = [...entries];
     }
   } else if (request.kind === "unbind") {
+    const target = request.target;
     if (target.key === null) {
       return fail("noop");
     }
@@ -273,6 +308,7 @@ export function applyKeybindingEdit(input: {
     }
   } else {
     // reset
+    const target = request.target;
     if (target.origin === "user") {
       const at = positiveIndex(target.key);
       if (at < 0) {

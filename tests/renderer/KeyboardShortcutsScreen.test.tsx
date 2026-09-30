@@ -33,6 +33,7 @@ function row(overrides: Partial<KeyboardShortcutRow>): KeyboardShortcutRow {
     canReset: false,
     defaultKey: null,
     defaultKeyLabel: null,
+    originKind: "default",
     ...overrides
   };
 }
@@ -122,7 +123,7 @@ function type(value: string): void {
 }
 
 function rowTexts(): string[] {
-  return [...container.querySelectorAll("li.keyboardShortcutRow")].map(
+  return [...container.querySelectorAll("li.keyboardShortcutGroup")].map(
     (li) => li.textContent ?? ""
   );
 }
@@ -192,14 +193,14 @@ describe("KeyboardShortcutsScreen rows (#646)", () => {
   it("readonly rows show the ReadOnly text (and an icon); editable rows do not", async () => {
     install(data());
     await render();
-    const copy = [...container.querySelectorAll("li.keyboardShortcutRow")].find((li) =>
+    const copy = [...container.querySelectorAll("li.keyboardShortcutGroup")].find((li) =>
       li.textContent?.includes("editor.selection.copy")
     ) as HTMLElement;
     const badge = copy.querySelector(".keyboardShortcutReadonly") as HTMLElement;
     expect(badge.textContent).toContain("読み取り専用");
     expect(badge.querySelector("svg")).not.toBeNull();
     expect(badge.querySelector("[aria-hidden=true]")).not.toBeNull();
-    const bold = [...container.querySelectorAll("li.keyboardShortcutRow")].find((li) =>
+    const bold = [...container.querySelectorAll("li.keyboardShortcutGroup")].find((li) =>
       li.textContent?.includes("editor.markdown.bold")
     ) as HTMLElement;
     expect(bold.querySelector(".keyboardShortcutReadonly")).toBeNull();
@@ -225,7 +226,7 @@ describe("KeyboardShortcutsScreen rows (#646)", () => {
     expect(open).toContain("when: —");
   });
 
-  it("one row per binding: a command with two keys appears twice", async () => {
+  it("one command group with one binding row per key (#648)", async () => {
     install(
       data([
         row({ commandId: "workbench.commandPalette.open", title: "コマンドパレット", key: "Mod-p", keyLabel: "Ctrl+P" }),
@@ -233,9 +234,13 @@ describe("KeyboardShortcutsScreen rows (#646)", () => {
       ])
     );
     await render();
-    expect(rowTexts()).toHaveLength(2);
-    expect(rowTexts()[0]).toContain("Ctrl+P");
-    expect(rowTexts()[1]).toContain("F1");
+    expect(rowTexts()).toHaveLength(1);
+    const bindings = [...container.querySelectorAll("li.keyboardShortcutRow")].map(
+      (li) => li.textContent ?? ""
+    );
+    expect(bindings).toHaveLength(2);
+    expect(bindings[0]).toContain("Ctrl+P");
+    expect(bindings[1]).toContain("F1");
   });
 
   it("rows are keyboard reachable and the search input has an accessible label", async () => {

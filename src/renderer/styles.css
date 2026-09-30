@@ -15440,30 +15440,83 @@ label.settingsItemHeader {
   border-radius: 6px;
 }
 
-.keyboardShortcutRow {
+/* #648: one group per command; its bindings are indented rows below. */
+.keyboardShortcutGroup {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   padding-block: 8px;
   padding-inline: 14px;
   border-block-end: 1px solid var(--pg-color-panel-divider);
 }
 
-.keyboardShortcutRow:last-child {
+.keyboardShortcutGroup:last-child {
   border-block-end: none;
+}
+
+.keyboardShortcutGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.keyboardShortcutGroupTitleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.keyboardShortcutGroupMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin-inline-start: auto;
+  column-gap: 14px;
+  row-gap: 2px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutBindings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  padding-inline-start: 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.keyboardShortcutRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 4px;
+  padding-inline: 6px;
+  border-radius: 4px;
+}
+
+.keyboardShortcutRowKey {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.keyboardShortcutOrigin {
+  padding-block: 0;
+  padding-inline: 6px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 8px;
 }
 
 .keyboardShortcutRow:hover,
 .keyboardShortcutRow:focus-visible {
   background: var(--pg-color-surface-hover);
   outline: none;
-}
-
-.keyboardShortcutRowMain {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
 }
 
 .keyboardShortcutTitle {
@@ -15474,13 +15527,6 @@ label.settingsItemHeader {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.keyboardShortcutRowBadges {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
 }
 
 .keyboardShortcutKey {
@@ -15517,16 +15563,6 @@ label.settingsItemHeader {
 .keyboardShortcutReadonlyIcon svg {
   inline-size: 100%;
   block-size: 100%;
-}
-
-.keyboardShortcutRowMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  column-gap: 14px;
-  row-gap: 2px;
-  font-size: 11px;
-  color: var(--pg-color-surface-muted);
 }
 
 .keyboardShortcutCommandId {

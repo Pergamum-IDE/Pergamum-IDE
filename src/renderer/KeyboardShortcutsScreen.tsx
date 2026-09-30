@@ -5,15 +5,20 @@ import type {
 import type { Translate } from "../shared/i18n";
 import {
   formatKeybindingLabel,
+  groupKeyboardShortcutRows,
+  type KeyboardShortcutCommandGroup,
+  type KeyboardShortcutOriginKind,
   type KeybindingEditRequest,
+  type KeybindingEditTarget,
   type KeyboardShortcutRow
 } from "../shared/keybindings";
 import editIcon from "../../assets/icons/codicons/general/edit.svg?raw";
 import eraserIcon from "../../assets/icons/codicons/general/eraser.svg?raw";
 import refreshIcon from "../../assets/icons/codicons/general/refresh.svg?raw";
+import addIcon from "../../assets/icons/codicons/general/add.svg?raw";
 import shieldIcon from "../../assets/icons/codicons/general/shield.svg?raw";
 import { setEffectiveKeybindings } from "./keybindings/effectiveKeybindingStore";
-import { filterKeyboardShortcutRows } from "./keyboardShortcutSearch";
+import { filterKeyboardShortcutGroups } from "./keyboardShortcutSearch";
 import { KeyboardShortcutCaptureDialog } from "./KeyboardShortcutCaptureDialog";
 import {
   KeyboardShortcutNoticeDialog,
@@ -41,7 +46,7 @@ export interface KeyboardShortcutsScreenProps {
   readonly translate: Translate;
 }
 
-function targetOf(row: KeyboardShortcutRow): KeybindingEditRequest["target"] {
+function targetOf(row: KeyboardShortcutRow): KeybindingEditTarget {
   return {
     commandId: row.commandId,
     key: row.key,
@@ -61,6 +66,11 @@ function Icon({ svg }: { readonly svg: string }): JSX.Element {
 }
 
 type EditAction = "edit" | "unbind" | "reset";
+
+/** What the capture dialog is capturing for (#648). */
+type CaptureState =
+  | { readonly mode: "edit"; readonly row: KeyboardShortcutRow }
+  | { readonly mode: "add"; readonly group: KeyboardShortcutCommandGroup };
 
 /** What to restore (scroll + focus) once a successful change has re-rendered. */
 interface PendingRestore {
@@ -92,16 +102,19 @@ export function KeyboardShortcutsScreen({
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [query, setQuery] = useState("");
   const [openLocationFailed, setOpenLocationFailed] = useState(false);
-  const [capture, setCapture] = useState<KeyboardShortcutRow | null>(null);
+  const [capture, setCapture] = useState<CaptureState | null>(null);
   const [notice, setNotice] = useState<KeyboardShortcutNotice | null>(null);
   const [busy, setBusy] = useState(false);
   const openerRef = useRef<Element | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
   const pendingRestoreRef = useRef<PendingRestore | null>(null);
+  const pendingFocusRef = useRef<PendingRestore | null>(null);
 
-  // After a successful change, keep the scroll position and put focus back on
-  // the corresponding row (its id may have changed). No-op on any other render.
+  // After a successful change: restore the scroll position before paint, then
+  // (in a passive effect, so a closing capture dialog's own focus restore has
+  // already run) put focus on the corresponding row. Its id may have changed.
+  // No-op on any other render.
   useLayoutEffect(() => {
     const pending = pendingRestoreRef.current;
     const root = rootRef.current;
@@ -109,7 +122,17 @@ export function KeyboardShortcutsScreen({
       return;
     }
     pendingRestoreRef.current = null;
+    pendingFocusRef.current = pending;
     root.scrollTop = pending.scrollTop;
+  }, [state]);
+
+  useEffect(() => {
+    const pending = pendingFocusRef.current;
+    const root = rootRef.current;
+    if (pending === null || root === null || state.kind !== "ready") {
+      return;
+    }
+    pendingFocusRef.current = null;
     const rowId = findCorrespondingRowId(state.data.items, pending);
     const rowElement =
       rowId === null
@@ -158,11 +181,14 @@ export function KeyboardShortcutsScreen({
 
   const rows = state.kind === "ready" ? state.data.items : [];
   const platform = state.kind === "ready" ? state.data.platform : "win32";
-  const visibleRows = useMemo(
-    () => filterKeyboardShortcutRows(rows, query, sourceLabel),
-    // `sourceLabel` only depends on `translate`.
+  const groups = useMemo(() => groupKeyboardShortcutRows(rows), [rows]);
+  const originLabel = (origin: KeyboardShortcutOriginKind): string =>
+    translate(`keyboardShortcuts.origin.${origin}`);
+  const visibleGroups = useMemo(
+    () => filterKeyboardShortcutGroups(groups, query, sourceLabel, originLabel),
+    // `sourceLabel` / `originLabel` only depend on `translate`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, query, translate]
+    [groups, query, translate]
   );
 
   async function handleOpenLocation(): Promise<void> {
@@ -197,8 +223,10 @@ export function KeyboardShortcutsScreen({
         pendingRestoreRef.current = {
           scrollTop,
           commandId: request.target.commandId,
-          action: request.kind === "change" ? "edit" : request.kind,
-          ...(request.kind === "change" ? { newKey: request.newKey } : {})
+          action: request.kind === "change" || request.kind === "add" ? "edit" : request.kind,
+          ...(request.kind === "change" || request.kind === "add"
+            ? { newKey: request.newKey }
+            : {})
         };
         setState({
           kind: "ready",
@@ -238,18 +266,30 @@ export function KeyboardShortcutsScreen({
 
   function startEdit(row: KeyboardShortcutRow, button: Element): void {
     openerRef.current = button;
-    setCapture(row);
+    setCapture({ mode: "edit", row });
+  }
+
+  function startAdd(group: KeyboardShortcutCommandGroup, button: Element): void {
+    openerRef.current = button;
+    setCapture({ mode: "add", group });
   }
 
   function handleCaptured(notation: string): void {
-    const row = capture;
+    const current = capture;
     setCapture(null);
-    if (row === null) {
+    if (current === null) {
       return;
     }
+    const keyLabel = formatKeybindingLabel(notation, platform);
     void applyChange(
-      { kind: "change", target: targetOf(row), newKey: notation },
-      formatKeybindingLabel(notation, platform)
+      current.mode === "add"
+        ? {
+            kind: "add",
+            target: { commandId: current.group.commandId },
+            newKey: notation
+          }
+        : { kind: "change", target: targetOf(current.row), newKey: notation },
+      keyLabel
     );
   }
 
@@ -361,113 +401,144 @@ export function KeyboardShortcutsScreen({
         <p className="keyboardShortcutsError" role="alert">
           {translate("keyboardShortcuts.loadFailed")}
         </p>
-      ) : visibleRows.length === 0 ? (
+      ) : visibleGroups.length === 0 ? (
         <p className="keyboardShortcutsStatus" role="status">
           {translate("keyboardShortcuts.empty")}
         </p>
       ) : (
         <>
           <p className="keyboardShortcutsStatus" role="status">
-            {translate("keyboardShortcuts.count", { count: visibleRows.length })}
+            {translate("keyboardShortcuts.count", { count: visibleGroups.length })}
           </p>
           <ul className="keyboardShortcutsList">
-            {visibleRows.map((row) => (
+            {visibleGroups.map((group) => (
               <li
-                key={row.rowId}
-                data-row-id={row.rowId}
-                className="keyboardShortcutRow"
-                data-readonly={row.editable ? "false" : "true"}
-                tabIndex={0}
+                key={group.commandId}
+                className="keyboardShortcutGroup"
+                data-readonly={group.editable ? "false" : "true"}
               >
-                <div className="keyboardShortcutRowMain">
-                  <span className="keyboardShortcutTitle">{row.title}</span>
-                  <span className="keyboardShortcutRowBadges">
-                    {row.editable ? (
-                      <span className="keyboardShortcutActions">
-                        <button
-                          type="button"
-                          className="keyboardShortcutActionButton keyboardShortcutActionEdit keyboardShortcutAction-edit"
-                          aria-label={translate("keyboardShortcuts.action.edit")}
-                          title={translate("keyboardShortcuts.action.edit")}
-                          disabled={busy}
-                          onClick={(event) => startEdit(row, event.currentTarget)}
-                        >
-                          <Icon svg={editIcon} />
-                        </button>
-                        {row.key !== null ? (
-                          <button
-                            type="button"
-                            className="keyboardShortcutActionButton keyboardShortcutActionUnbind keyboardShortcutAction-unbind"
-                            aria-label={translate("keyboardShortcuts.action.unbind")}
-                            title={translate("keyboardShortcuts.action.unbind")}
-                            disabled={busy}
-                            onClick={(event) => {
-                              openerRef.current = event.currentTarget;
-                              void applyChange({ kind: "unbind", target: targetOf(row) });
-                            }}
-                          >
-                            <Icon svg={eraserIcon} />
-                          </button>
-                        ) : null}
-                        {row.canReset ? (
-                          <button
-                            type="button"
-                            className="keyboardShortcutActionButton keyboardShortcutActionReset keyboardShortcutAction-reset"
-                            aria-label={translate("keyboardShortcuts.action.reset")}
-                            title={translate("keyboardShortcuts.action.reset")}
-                            disabled={busy}
-                            onClick={(event) => {
-                              openerRef.current = event.currentTarget;
-                              void applyChange({ kind: "reset", target: targetOf(row) });
-                            }}
-                          >
-                            <Icon svg={refreshIcon} />
-                          </button>
-                        ) : null}
-                      </span>
-                    ) : (
+                <div className="keyboardShortcutGroupHeader">
+                  <div className="keyboardShortcutGroupTitleBlock">
+                    <span className="keyboardShortcutTitle">{group.title}</span>
+                    <code className="keyboardShortcutCommandId">{group.commandId}</code>
+                  </div>
+                  <span className="keyboardShortcutGroupMeta">
+                    <span className="keyboardShortcutCategory">{group.category}</span>
+                    <span className="keyboardShortcutScope">{group.scope}</span>
+                    <span className="keyboardShortcutSource">
+                      {sourceLabel(group.source)}
+                    </span>
+                    <span className="keyboardShortcutWhen">
+                      {group.when === null
+                        ? translate("keyboardShortcuts.whenNone")
+                        : translate("keyboardShortcuts.when", { when: group.when })}
+                    </span>
+                  </span>
+                  {group.canAdd ? (
+                    <button
+                      type="button"
+                      className="keyboardShortcutActionButton keyboardShortcutActionAdd keyboardShortcutAction-add"
+                      aria-label={translate("keyboardShortcuts.action.add")}
+                      title={translate("keyboardShortcuts.action.add")}
+                      disabled={busy}
+                      onClick={(event) => startAdd(group, event.currentTarget)}
+                    >
+                      <Icon svg={addIcon} />
+                    </button>
+                  ) : (
+                    <span
+                      className="keyboardShortcutReadonly"
+                      title={translate("keyboardShortcuts.readonly.tooltip")}
+                    >
                       <span
-                        className="keyboardShortcutReadonly"
-                        title={translate("keyboardShortcuts.readonly.tooltip")}
-                      >
-                        <span
-                          className="keyboardShortcutReadonlyIcon"
-                          aria-hidden="true"
-                          dangerouslySetInnerHTML={{ __html: shieldIcon }}
-                        />
-                        {translate("keyboardShortcuts.readonly")}
-                      </span>
-                    )}
-                    {row.keyLabel !== null ? (
-                      <kbd className="keyboardShortcutKey" title={row.key ?? undefined}>
-                        {row.keyLabel}
-                      </kbd>
-                    ) : row.defaultKeyLabel !== null ? (
-                      <span className="keyboardShortcutUnassignedDefault">
-                        {translate("keyboardShortcuts.unassignedDefault", {
-                          key: row.defaultKeyLabel
-                        })}
-                      </span>
-                    ) : (
-                      <span className="keyboardShortcutUnassigned">
-                        {translate("keyboardShortcuts.unassigned")}
-                      </span>
-                    )}
-                  </span>
+                        className="keyboardShortcutReadonlyIcon"
+                        aria-hidden="true"
+                        dangerouslySetInnerHTML={{ __html: shieldIcon }}
+                      />
+                      {translate("keyboardShortcuts.readonly")}
+                    </span>
+                  )}
                 </div>
-                <div className="keyboardShortcutRowMeta">
-                  <code className="keyboardShortcutCommandId">{row.commandId}</code>
-                  <span className="keyboardShortcutCategory">{row.category}</span>
-                  <span className="keyboardShortcutScope">{row.scope}</span>
-                  <span className="keyboardShortcutSource">
-                    {sourceLabel(row.source)}
-                  </span>
-                  <span className="keyboardShortcutWhen">
-                    {row.when === null
-                      ? translate("keyboardShortcuts.whenNone")
-                      : translate("keyboardShortcuts.when", { when: row.when })}
-                  </span>
-                </div>
+                <ul className="keyboardShortcutBindings">
+                  {group.bindings.map((row) => (
+                    <li
+                      key={row.rowId}
+                      data-row-id={row.rowId}
+                      className="keyboardShortcutRow"
+                      data-readonly={row.editable ? "false" : "true"}
+                      tabIndex={0}
+                    >
+                      <span className="keyboardShortcutRowKey">
+                        {row.keyLabel !== null ? (
+                          <kbd className="keyboardShortcutKey" title={row.key ?? undefined}>
+                            {row.keyLabel}
+                          </kbd>
+                        ) : row.defaultKeyLabel !== null ? (
+                          <span className="keyboardShortcutUnassignedDefault">
+                            {translate("keyboardShortcuts.unassignedDefault", {
+                              key: row.defaultKeyLabel
+                            })}
+                          </span>
+                        ) : (
+                          <span className="keyboardShortcutUnassigned">
+                            {translate("keyboardShortcuts.unassigned")}
+                          </span>
+                        )}
+                        {row.originKind !== null ? (
+                          <span
+                            className={`keyboardShortcutOrigin keyboardShortcutOrigin-${row.originKind}`}
+                          >
+                            {originLabel(row.originKind)}
+                          </span>
+                        ) : null}
+                      </span>
+                      {row.editable ? (
+                        <span className="keyboardShortcutActions">
+                          <button
+                            type="button"
+                            className="keyboardShortcutActionButton keyboardShortcutActionEdit keyboardShortcutAction-edit"
+                            aria-label={translate("keyboardShortcuts.action.edit")}
+                            title={translate("keyboardShortcuts.action.edit")}
+                            disabled={busy}
+                            onClick={(event) => startEdit(row, event.currentTarget)}
+                          >
+                            <Icon svg={editIcon} />
+                          </button>
+                          {row.key !== null ? (
+                            <button
+                              type="button"
+                              className="keyboardShortcutActionButton keyboardShortcutActionUnbind keyboardShortcutAction-unbind"
+                              aria-label={translate("keyboardShortcuts.action.unbind")}
+                              title={translate("keyboardShortcuts.action.unbind")}
+                              disabled={busy}
+                              onClick={(event) => {
+                                openerRef.current = event.currentTarget;
+                                void applyChange({ kind: "unbind", target: targetOf(row) });
+                              }}
+                            >
+                              <Icon svg={eraserIcon} />
+                            </button>
+                          ) : null}
+                          {row.canReset && row.origin !== "user" ? (
+                            <button
+                              type="button"
+                              className="keyboardShortcutActionButton keyboardShortcutActionReset keyboardShortcutAction-reset"
+                              aria-label={translate("keyboardShortcuts.action.reset")}
+                              title={translate("keyboardShortcuts.action.reset")}
+                              disabled={busy}
+                              onClick={(event) => {
+                                openerRef.current = event.currentTarget;
+                                void applyChange({ kind: "reset", target: targetOf(row) });
+                              }}
+                            >
+                              <Icon svg={refreshIcon} />
+                            </button>
+                          ) : null}
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>
@@ -478,7 +549,8 @@ export function KeyboardShortcutsScreen({
         <KeyboardShortcutCaptureDialog
           translate={translate}
           platform={platform}
-          row={capture}
+          row={capture.mode === "add" ? capture.group.bindings[0]! : capture.row}
+          mode={capture.mode}
           opener={openerRef.current}
           onCapture={handleCaptured}
           onCancel={() => setCapture(null)}

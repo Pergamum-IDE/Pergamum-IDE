@@ -87,11 +87,15 @@ async function render(): Promise<void> {
   await flush();
 }
 
-function rowOf(commandId: string, index = 0): HTMLElement {
-  const matches = [...container.querySelectorAll("li.keyboardShortcutRow")].filter(
+function groupOf(commandId: string): HTMLElement {
+  return [...container.querySelectorAll("li.keyboardShortcutGroup")].find(
     (li) => li.querySelector(".keyboardShortcutCommandId")?.textContent === commandId
-  );
-  return matches[index] as HTMLElement;
+  ) as HTMLElement;
+}
+
+/** The index-th binding row of the command's group. */
+function rowOf(commandId: string, index = 0): HTMLElement {
+  return groupOf(commandId).querySelectorAll("li.keyboardShortcutRow")[index] as HTMLElement;
 }
 
 function button(row: HTMLElement, kind: "edit" | "unbind" | "reset"): HTMLButtonElement | null {
@@ -184,12 +188,14 @@ describe("row actions and read-only rows (#647)", () => {
     expect(button(unassigned, "unbind")).toBeNull();
   });
 
-  it("a user-defined row shows reset", async () => {
+  it("a user-added row shows edit and unbind but no reset (#648)", async () => {
     installApi(rowsFor([{ key: "Mod-Alt-9", command: "editor.markdown.bold" }]));
     await render();
     const userRow = rowOf("editor.markdown.bold", 1);
     expect(userRow.textContent).toContain("Ctrl+Alt+9");
-    expect(button(userRow, "reset")).not.toBeNull();
+    expect(button(userRow, "edit")).not.toBeNull();
+    expect(button(userRow, "unbind")).not.toBeNull();
+    expect(button(userRow, "reset")).toBeNull();
     // The untouched default row of the same command has no reset.
     expect(button(rowOf("editor.markdown.bold", 0), "reset")).toBeNull();
   });
@@ -198,7 +204,7 @@ describe("row actions and read-only rows (#647)", () => {
     installApi();
     await render();
     for (const commandId of ["editor.selection.copy", "editor.undo", "editor.cursor.lineStart"]) {
-      const row = rowOf(commandId);
+      const row = groupOf(commandId);
       const badge = row.querySelector(".keyboardShortcutReadonly") as HTMLElement;
       expect(badge.textContent).toContain("読み取り専用");
       expect(badge.querySelector("svg")).not.toBeNull();
@@ -372,7 +378,7 @@ describe("saving a change (#647)", () => {
     const before = getEffectiveKeybindingsRevision();
     await capture("editor.markdown.bold", { key: "9", code: "Digit9", ctrlKey: true, altKey: true });
 
-    const labels = [...container.querySelectorAll("li.keyboardShortcutRow")]
+    const labels = [...container.querySelectorAll("li.keyboardShortcutGroup")]
       .filter((li) => li.textContent?.includes("editor.markdown.bold"))
       .map((li) => li.textContent ?? "");
     expect(labels.some((text) => text.includes("Ctrl+Alt+9"))).toBe(true);
@@ -529,7 +535,7 @@ describe("unbind and reset buttons (#647)", () => {
       }
     });
     // The list now shows the unassigned default row; Ctrl+P stays.
-    const texts = [...container.querySelectorAll("li.keyboardShortcutRow")]
+    const texts = [...container.querySelectorAll("li.keyboardShortcutGroup")]
       .filter((li) => li.textContent?.includes("workbench.commandPalette.open"))
       .map((li) => li.textContent ?? "");
     expect(texts.some((text) => text.includes("Ctrl+P"))).toBe(true);
@@ -560,17 +566,17 @@ describe("unbind and reset buttons (#647)", () => {
     expect(container.textContent).not.toContain("未割当（既定: F1）");
   });
 
-  it("reset on a user row sends a reset request for the user binding", async () => {
+  it("unbind on a user-added row sends an unbind request for the user binding (removes it)", async () => {
     installApi(rowsFor([{ key: "Mod-Alt-9", command: "editor.markdown.bold" }]));
     applyKeybindingChange.mockResolvedValue(okResult([]));
     await render();
     await act(async () => {
-      button(rowOf("editor.markdown.bold", 1), "reset")?.click();
+      button(rowOf("editor.markdown.bold", 1), "unbind")?.click();
       await Promise.resolve();
     });
     await flush();
     expect(applyKeybindingChange).toHaveBeenCalledWith({
-      kind: "reset",
+      kind: "unbind",
       target: {
         commandId: "editor.markdown.bold",
         key: "Mod-Alt-9",
@@ -745,5 +751,225 @@ describe("scroll and focus after a change (#647 dogfood fix)", () => {
     scroller().scrollTop = 321;
     await clickAndSettle(button(rowOf("editor.markdown.bold"), "unbind"));
     expect(scroller().scrollTop).toBe(321);
+  });
+});
+
+describe("adding a shortcut from the command group (#648)", () => {
+  function addButton(commandId: string): HTMLButtonElement | null {
+    return groupOf(commandId).querySelector(
+      ".keyboardShortcutGroupHeader .keyboardShortcutAction-add"
+    );
+  }
+
+  async function clickAdd(commandId: string): Promise<void> {
+    await act(async () => {
+      addButton(commandId)?.click();
+      await Promise.resolve();
+    });
+    await flush();
+  }
+
+  async function typeSearch(value: string): Promise<HTMLInputElement> {
+    const search = container.querySelector<HTMLInputElement>("#keyboardShortcutsSearch")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(search, value);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    return search;
+  }
+
+  it("editable groups show the add button in the header with the add label; read-only groups do not", async () => {
+    installApi();
+    await render();
+    const add = addButton("editor.markdown.bold");
+    expect(add?.getAttribute("aria-label")).toBe("ショートカットを追加");
+    expect(add?.getAttribute("title")).toBe("ショートカットを追加");
+    expect(add?.querySelector("svg")).not.toBeNull();
+    for (const commandId of ["editor.selection.copy", "editor.undo", "editor.cursor.lineStart"]) {
+      expect(addButton(commandId)).toBeNull();
+      expect(groupOf(commandId).querySelector(".keyboardShortcutAction-add")).toBeNull();
+    }
+  });
+
+  it("an unassigned command shows 未割当 and an add button", async () => {
+    installApi();
+    await render();
+    const group = [...container.querySelectorAll<HTMLElement>("li.keyboardShortcutGroup")].find(
+      (g) =>
+        g.querySelector(".keyboardShortcutAction-add") !== null &&
+        g.querySelectorAll("li.keyboardShortcutRow").length === 1 &&
+        g.querySelector(".keyboardShortcutUnassigned") !== null
+    );
+    expect(group).toBeDefined();
+    expect(group!.textContent).toContain("未割当");
+  });
+
+  it("clicking add opens the capture dialog with the add wording and no current-key line", async () => {
+    installApi();
+    await render();
+    await clickAdd("editor.markdown.bold");
+    const dialog = document.querySelector("[role=dialog]") as HTMLElement;
+    expect(dialog.textContent).toContain("追加するショートカットキーを押してください");
+    expect(dialog.textContent).toContain("editor.markdown.bold");
+    expect(dialog.textContent).not.toContain("現在:");
+    expect(setCaptureMode).toHaveBeenCalledWith(true);
+  });
+
+  it("a captured key sends ONE add request naming only the command, then updates the list", async () => {
+    installApi();
+    applyKeybindingChange.mockResolvedValue(
+      okResult([{ key: "Mod-Alt-9", command: "editor.markdown.bold" }])
+    );
+    await render();
+    await clickAdd("editor.markdown.bold");
+    await press({ key: "9", code: "Digit9", ctrlKey: true, altKey: true });
+    expect(applyKeybindingChange).toHaveBeenCalledOnce();
+    expect(applyKeybindingChange).toHaveBeenCalledWith({
+      kind: "add",
+      target: { commandId: "editor.markdown.bold" },
+      newKey: "Mod-Alt-9"
+    });
+    const rows = groupOf("editor.markdown.bold").querySelectorAll("li.keyboardShortcutRow");
+    expect([...rows].map((r) => r.textContent)).toEqual([
+      expect.stringContaining("Ctrl+B"),
+      expect.stringContaining("Ctrl+Alt+9")
+    ]);
+    expect(setCaptureMode).toHaveBeenLastCalledWith(false);
+  });
+
+  it("shows binding origin labels, separate from the source label", async () => {
+    installApi(
+      rowsFor([
+        { key: "F1", command: "-workbench.commandPalette.open" },
+        { key: "Mod-Alt-p", command: "workbench.commandPalette.open" }
+      ])
+    );
+    await render();
+    const rows = groupOf("workbench.commandPalette.open").querySelectorAll(
+      "li.keyboardShortcutRow"
+    );
+    const origins = [...rows].map((r) => r.querySelector(".keyboardShortcutOrigin")?.textContent);
+    expect(origins).toEqual(["既定", "解除済み", "ユーザー"]);
+    expect(
+      groupOf("workbench.commandPalette.open").querySelector(".keyboardShortcutSource")
+        ?.textContent
+    ).toBe("Pergamum");
+  });
+
+  it("an unbound default row offers reset (not unbind); a user-added row offers edit + unbind (not reset)", async () => {
+    installApi(
+      rowsFor([
+        { key: "F1", command: "-workbench.commandPalette.open" },
+        { key: "Mod-Alt-p", command: "workbench.commandPalette.open" }
+      ])
+    );
+    await render();
+    const unbound = rowOf("workbench.commandPalette.open", 1);
+    expect(button(unbound, "reset")).not.toBeNull();
+    expect(button(unbound, "unbind")).toBeNull();
+    const user = rowOf("workbench.commandPalette.open", 2);
+    expect(button(user, "edit")).not.toBeNull();
+    expect(button(user, "unbind")).not.toBeNull();
+    expect(button(user, "reset")).toBeNull();
+  });
+
+  it.each([
+    ["duplicate", "既に同じショートカット"],
+    ["reserved", "予約されている"],
+    ["saveFailed", "保存に失敗しました"]
+  ])("a %s response shows the dialog and changes nothing", async (reason, text) => {
+    installApi();
+    applyKeybindingChange.mockResolvedValue({ ok: false, failure: { reason } });
+    await render();
+    const revisionBefore = getEffectiveKeybindingsRevision();
+    await clickAdd("editor.markdown.bold");
+    await press({ key: "9", code: "Digit9", ctrlKey: true, altKey: true });
+    expect(document.querySelector("[role=alertdialog]")?.textContent).toContain(text);
+    expect(
+      groupOf("editor.markdown.bold").querySelectorAll("li.keyboardShortcutRow")
+    ).toHaveLength(1);
+    expect(getEffectiveKeybindingsRevision()).toBe(revisionBefore);
+  });
+
+  it("a conflict response shows the conflicting command", async () => {
+    installApi();
+    applyKeybindingChange.mockResolvedValue({
+      ok: false,
+      failure: {
+        reason: "conflict",
+        conflict: {
+          key: "Mod-i",
+          keyLabel: "Ctrl+I",
+          commandId: "editor.markdown.italic",
+          title: "斜体",
+          category: "Markdown",
+          scope: "editor"
+        }
+      }
+    });
+    await render();
+    await clickAdd("editor.markdown.bold");
+    await press({ key: "i", code: "KeyI", ctrlKey: true });
+    const dialog = document.querySelector("[role=alertdialog]") as HTMLElement;
+    expect(dialog.textContent).toContain("editor.markdown.italic");
+  });
+
+  it("Esc cancels the add without saving and returns focus to the add button", async () => {
+    installApi();
+    await render();
+    addButton("editor.markdown.bold")?.focus();
+    await clickAdd("editor.markdown.bold");
+    await press({ key: "Escape", code: "Escape" });
+    expect(applyKeybindingChange).not.toHaveBeenCalled();
+    expect(document.querySelector("[role=dialog]")).toBeNull();
+    expect(document.activeElement).toBe(addButton("editor.markdown.bold"));
+  });
+
+  it("keeps the scroll position and search query, and focuses the new row after an add", async () => {
+    installApi();
+    applyKeybindingChange.mockResolvedValue(
+      okResult([{ key: "Mod-Alt-9", command: "editor.markdown.bold" }])
+    );
+    await render();
+    const search = await typeSearch("editor.markdown.bold");
+    const scroller = container.querySelector(".keyboardShortcutsTab") as HTMLElement;
+    scroller.scrollTop = 640;
+    addButton("editor.markdown.bold")?.focus();
+    await clickAdd("editor.markdown.bold");
+    await press({ key: "9", code: "Digit9", ctrlKey: true, altKey: true });
+    expect(scroller.scrollTop).toBe(640);
+    expect(search.value).toBe("editor.markdown.bold");
+    const active = document.activeElement as HTMLElement;
+    expect(active.closest("li.keyboardShortcutRow")?.textContent).toContain("Ctrl+Alt+9");
+  });
+
+  it("search matches origin labels, and one matching row shows the whole group", async () => {
+    installApi(rowsFor([{ key: "Mod-Alt-9", command: "editor.markdown.bold" }]));
+    await render();
+    await typeSearch("ユーザー");
+    const groups = [...container.querySelectorAll("li.keyboardShortcutGroup")];
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.querySelectorAll("li.keyboardShortcutRow")).toHaveLength(2);
+  });
+});
+
+describe("#648 boundary", () => {
+  it("adds no JSON editor, chord, file watcher, global shortcut, suggestion or reset-all UI", async () => {
+    const { readFileSync } = await import("node:fs");
+    const files = [
+      "src/renderer/KeyboardShortcutsScreen.tsx",
+      "src/renderer/keyboardShortcutSearch.ts",
+      "src/shared/keybindings/userEdit.ts",
+      "src/shared/keybindings/listing.ts"
+    ];
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      expect(text, file).not.toMatch(/globalShortcut|fs\.watch|chokidar|<textarea|sparkle/i);
+    }
+    const screen = readFileSync("src/renderer/KeyboardShortcutsScreen.tsx", "utf8");
+    expect(screen).not.toMatch(/resetAll/);
+    expect(screen).toContain("add.svg");
+    expect(screen).not.toContain("trash");
   });
 });
