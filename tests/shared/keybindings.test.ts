@@ -45,7 +45,8 @@ function command(
     readonly: false,
     readonlyReason: null,
     when: null,
-    metadataOnly: true,
+    description: "test command",
+    handlerStatus: "notYetRegistered",
     ...overrides
   };
 }
@@ -78,10 +79,12 @@ describe("keybinding catalog data (#639)", () => {
     }
   });
 
-  it("metadataOnly matches whether the id is registered in commandIds.ts", () => {
+  it("a Pergamum command is `registered` exactly when its id is in commandIds.ts", () => {
     const source = readFileSync("src/shared/commandIds.ts", "utf8");
-    for (const c of keybindingCommands) {
-      expect(c.metadataOnly, c.id).toBe(!source.includes(`"${c.id}"`));
+    for (const c of keybindingCommands.filter((x) => x.source === "pergamum")) {
+      expect(c.handlerStatus === "registered", c.id).toBe(
+        source.includes(`"${c.id}"`)
+      );
     }
   });
 
@@ -135,11 +138,12 @@ describe("resolveDefaultKeybindings (#639)", () => {
       title: "Save",
       category: "File",
       scope: "app",
-      executionHost: "main",
+      executionHost: "renderer",
       source: "pergamum",
       readonly: false,
       readonlyReason: null,
-      when: null
+      when: "activeDocument",
+      handlerStatus: "registered"
     });
   });
 

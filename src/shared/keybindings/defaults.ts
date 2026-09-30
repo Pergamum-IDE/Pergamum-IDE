@@ -96,6 +96,9 @@ export const defaultKeybindings: readonly DefaultKeybinding[] = [
 
   // Window / App
   bind("app.quit", "Mod-q"),
+  // macOS-only native roles (metadata; Electron owns the behavior).
+  bind("app.hide", null, { mac: "Mod-h" }),
+  bind("app.hideOthers", null, { mac: "Mod-Alt-h" }),
   bind("app.zoom.in", "Mod-="),
   bind("app.zoom.in", "Mod-+"),
   bind("app.zoom.out", "Mod--"),
@@ -118,6 +121,10 @@ export const defaultKeybindings: readonly DefaultKeybinding[] = [
   bind("editor.cursor.lineEnd", "End", { mac: "Mod-ArrowRight" }),
   bind("editor.cursor.documentStart", "Mod-Home", { mac: "Mod-ArrowUp" }),
   bind("editor.cursor.documentEnd", "Mod-End", { mac: "Mod-ArrowDown" }),
+  bind("editor.line.moveUp", "Alt-ArrowUp"),
+  bind("editor.line.moveDown", "Alt-ArrowDown"),
+  bind("editor.line.copyUp", "Shift-Alt-ArrowUp"),
+  bind("editor.line.copyDown", "Shift-Alt-ArrowDown"),
   bind("editor.comment.toggle", "Mod-/"),
   bind("editor.selection.nextOccurrence", "Mod-d"),
   bind("editor.line.insertBlankLine", "Mod-Enter"),

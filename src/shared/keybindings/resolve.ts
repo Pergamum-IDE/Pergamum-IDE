@@ -92,6 +92,8 @@ function toResolved(
     source: command.source,
     readonly: command.readonly,
     readonlyReason: command.readonlyReason,
-    when: entry?.when ?? command.when
+    when: entry?.when ?? command.when,
+    description: command.description,
+    handlerStatus: command.handlerStatus
   };
 }

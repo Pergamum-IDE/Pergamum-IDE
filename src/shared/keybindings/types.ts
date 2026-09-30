@@ -33,24 +33,57 @@ export type KeybindingSource = "pergamum" | "nativeRole" | "standard";
 /** Why a command's key cannot be customized. */
 export type KeybindingReadonlyReason = "nativeRole" | "standardBehavior";
 
+/**
+ * #640: how a command is handled at runtime today (not where it should be).
+ *
+ * registered       - a Pergamum command id in `src/shared/commandIds.ts` (the
+ *                    shared command registry vocabulary).
+ * callbackDirect   - executed by local callback / keymap / listener wiring;
+ *                    no registry command exists yet.
+ * nativeRole       - Electron native menu role (source "nativeRole").
+ * standard         - CodeMirror / OS / browser behavior (source "standard").
+ * notYetRegistered - metadata only; no runtime handler is wired.
+ */
+export type CommandHandlerStatus =
+  | "registered"
+  | "callbackDirect"
+  | "nativeRole"
+  | "standard"
+  | "notYetRegistered";
+
+/**
+ * Keybinding-facing command metadata. Extends (does not replace) the shared
+ * command registry's vocabulary: ids come from `commandIds.ts` where one
+ * exists.
+ */
 export interface KeybindingCommand {
   readonly id: string;
   readonly title: string;
+  /** Free-form display group (not the registry's `CommandCategory`). */
   readonly category: string;
+  /** Short human-readable explanation, including notable delegation. */
+  readonly description: string;
   readonly scope: KeybindingScope;
+  /**
+   * Where the command handler lives today. For Pergamum commands this is
+   * `renderer` even when the keystroke is a main-process menu accelerator
+   * (IPC then runs the renderer registry) or the renderer handler calls
+   * main over IPC; such delegation is noted in `description`.
+   */
   readonly executionHost: KeybindingExecutionHost;
   readonly source: KeybindingSource;
   readonly readonly: boolean;
   readonly readonlyReason: KeybindingReadonlyReason | null;
-  /** Reserved for the future `when` context (not evaluated in #639). */
-  readonly when: string | null;
   /**
-   * true when the id is not (yet) a registered runtime command in
-   * `src/shared/commandIds.ts`; the entry is catalog metadata for future
-   * wiring only.
+   * Descriptive, display-only context (e.g. "editorFocus && markdownDocument
+   * && !readOnly"). NOT evaluated; the registry's own
+   * `CommandEnablementExpression` `when` is unrelated and unchanged.
    */
-  readonly metadataOnly: boolean;
+  readonly when: string | null;
+  readonly handlerStatus: CommandHandlerStatus;
 }
+
+export type CommandMetadata = KeybindingCommand;
 
 /**
  * One default key for one command. A command with several default keys has
@@ -80,6 +113,8 @@ export interface ResolvedKeybinding {
   readonly readonly: boolean;
   readonly readonlyReason: KeybindingReadonlyReason | null;
   readonly when: string | null;
+  readonly description: string;
+  readonly handlerStatus: CommandHandlerStatus;
 }
 
 /**
@@ -119,7 +154,11 @@ export type KeybindingDiagnosticCode =
   | "reservedNativeOnlyKey"
   | "reservedDiscouragedKey"
   | "nativeRoleNotReadonly"
-  | "standardNotReadonly";
+  | "standardNotReadonly"
+  | "nativeRoleHostMismatch"
+  | "standardHostMismatch"
+  | "pergamumHostInvalid"
+  | "handlerStatusMismatch";
 
 export interface KeybindingDiagnostic {
   readonly code: KeybindingDiagnosticCode;
