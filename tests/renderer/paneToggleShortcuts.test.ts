@@ -13,6 +13,15 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { resolveDefaultKeybindings } from "../../src/shared/keybindings";
+
+/** The catalog's win32 key for a command (the shortcut key is catalog-derived, #643). */
+function catalogKey(commandId: string): string | null | undefined {
+  return resolveDefaultKeybindings("win32").find(
+    (binding) => binding.command === commandId
+  )?.key;
+}
+
 
 function globalShortcutsCallBlock(): string {
   const source = readFileSync("src/renderer/App.tsx", "utf8");
@@ -40,8 +49,9 @@ describe("pane toggle shortcut wiring (source-level assertions, #558)", () => {
 
     expect(block).toContain('id: "toggleFileExplorer"');
     expect(block).toContain(
-      'match: { key: "e", ctrlOrCmd: true, shift: true }'
+      "commandId: rendererShortcutCommandIds.toggleFiles"
     );
+    expect(catalogKey("workspace.files.toggle")).toBe("Mod-Shift-e");
     expect(block).toContain('handleActivityBarModeClick("files")');
   });
 
@@ -50,8 +60,9 @@ describe("pane toggle shortcut wiring (source-level assertions, #558)", () => {
 
     expect(block).toContain('id: "toggleGlossaryPane"');
     expect(block).toContain(
-      'match: { key: "g", ctrlOrCmd: true, shift: true }'
+      "commandId: rendererShortcutCommandIds.toggleGlossary"
     );
+    expect(catalogKey("workspace.glossary.toggle")).toBe("Mod-Shift-g");
     expect(block).toContain('handleActivityBarModeClick("glossary")');
   });
 
@@ -60,8 +71,9 @@ describe("pane toggle shortcut wiring (source-level assertions, #558)", () => {
 
     expect(block).toContain('id: "toggleDocumentMap"');
     expect(block).toContain(
-      'match: { key: "m", ctrlOrCmd: true, shift: true }'
+      "commandId: rendererShortcutCommandIds.toggleDocumentMap"
     );
+    expect(catalogKey("workspace.documentMap.toggle")).toBe("Mod-Shift-m");
     expect(block).toContain('handleActivityBarModeClick("documentMap")');
   });
 
@@ -70,8 +82,9 @@ describe("pane toggle shortcut wiring (source-level assertions, #558)", () => {
 
     expect(block).toContain('id: "toggleDocumentMetrics"');
     expect(block).toContain(
-      'match: { key: "t", ctrlOrCmd: true, shift: true }'
+      "commandId: rendererShortcutCommandIds.toggleDocumentMetrics"
     );
+    expect(catalogKey("workspace.documentMetrics.toggle")).toBe("Mod-Shift-t");
     expect(block).toContain('handleActivityBarModeClick("documentMetrics")');
   });
 

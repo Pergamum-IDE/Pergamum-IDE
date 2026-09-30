@@ -1,5 +1,9 @@
 import { useEffect, useRef } from "react";
 import { isModalOrDialogActive } from "./editorTabShortcuts";
+import {
+  matchRendererShortcut,
+  rendererShortcutCommandIds
+} from "./keybindings/rendererShortcuts";
 
 export type ActiveFindShortcutDirection = "previous" | "next";
 
@@ -56,11 +60,17 @@ export function shouldHandleActiveFindShortcut(
     return null;
   }
 
-  if (event.ctrlKey || event.altKey || event.metaKey) {
-    return null;
-  }
-
-  if (event.key !== "F3") {
+  // #643: F3 / Shift+F3 come from the catalog (editor.find.next / .previous).
+  // Modifiers are exact, so Ctrl / Alt / Meta + F3 never match.
+  const direction: ActiveFindShortcutDirection | null = matchRendererShortcut(
+    event,
+    rendererShortcutCommandIds.findNext
+  )
+    ? "next"
+    : matchRendererShortcut(event, rendererShortcutCommandIds.findPrevious)
+      ? "previous"
+      : null;
+  if (direction === null) {
     return null;
   }
 
@@ -72,7 +82,7 @@ export function shouldHandleActiveFindShortcut(
     return null;
   }
 
-  return event.shiftKey ? "previous" : "next";
+  return direction;
 }
 
 export interface UseActiveFindShortcutsOptions {

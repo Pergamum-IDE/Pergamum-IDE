@@ -3,6 +3,10 @@ import type { DocumentTab } from "./openDocuments";
 import type { PergamumPlatform } from "../shared/keybindings";
 import { getRuntimePlatform } from "./platformModifier";
 import {
+  matchRendererShortcut,
+  rendererShortcutCommandIds
+} from "./keybindings/rendererShortcuts";
+import {
   orderedWorkspaceTabs,
   workspaceTabIdEquals,
   workspaceTabIdForTab,
@@ -111,17 +115,23 @@ export function shouldHandleTabSwitchShortcut(
     return null;
   }
 
-  // win32/linux: Alt+Arrow. darwin: Cmd+Option+Arrow (#636) - a bare
+  // #643: the keys come from the catalog (workspace.tabs.previous / .next):
+  // win32/linux Alt+Arrow; darwin Cmd+Option+Arrow (#636) - a bare
   // Option+Arrow stays word movement on macOS.
-  const modifiersMatch =
-    platform === "darwin"
-      ? event.altKey && event.metaKey && !event.ctrlKey && !event.shiftKey
-      : event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-  if (!modifiersMatch) {
-    return null;
-  }
-
-  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+  const direction: TabSwitchDirection | null = matchRendererShortcut(
+    event,
+    rendererShortcutCommandIds.tabsPrevious,
+    platform
+  )
+    ? "previous"
+    : matchRendererShortcut(
+          event,
+          rendererShortcutCommandIds.tabsNext,
+          platform
+        )
+      ? "next"
+      : null;
+  if (direction === null) {
     return null;
   }
 
@@ -133,7 +143,7 @@ export function shouldHandleTabSwitchShortcut(
     return null;
   }
 
-  return event.key === "ArrowLeft" ? "previous" : "next";
+  return direction;
 }
 
 export interface UseTabSwitchShortcutsOptions {

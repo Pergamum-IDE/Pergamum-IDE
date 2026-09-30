@@ -119,10 +119,10 @@ describe("createMenuAcceleratorLookup (#642)", () => {
       defaults: [{ command: "menu.thing", key: "Mod-#", mac: null }],
       reserved: []
     };
-    expect(createMenuAcceleratorLookup("win32", catalog).get("menu.thing")).toBe(
+    expect(createMenuAcceleratorLookup("win32", catalog, null).get("menu.thing")).toBe(
       "CommandOrControl+#"
     );
-    const darwin = createMenuAcceleratorLookup("darwin", catalog);
+    const darwin = createMenuAcceleratorLookup("darwin", catalog, null);
     expect(darwin.get("menu.thing")).toBeUndefined();
     expect(darwin.getAll("menu.thing")).toEqual([]);
   });
@@ -171,9 +171,30 @@ describe("createMenuAcceleratorLookup (#642)", () => {
       ],
       reserved: []
     };
-    const lookup = createMenuAcceleratorLookup("linux", catalog);
+    const lookup = createMenuAcceleratorLookup("linux", catalog, null);
     expect(lookup.getAll("a")).toEqual(["CommandOrControl+K", "F2"]);
     expect(lookup.get("b")).toBeUndefined();
+  });
+
+  it("only serves commands that have a menu item (the palette prefix shortcuts are renderer listeners)", () => {
+    for (const platform of platforms) {
+      const lookup = createMenuAcceleratorLookup(platform);
+      for (const id of [
+        "workbench.commandPalette.file.open",
+        "workbench.commandPalette.heading.open",
+        "workbench.commandPalette.glossary.open",
+        "workbench.commandPalette.line.open",
+        "workbench.commandPalette.projectSearch.open"
+      ]) {
+        expect(lookup.getAll(id), `${id} on ${platform}`).toEqual([]);
+      }
+    }
+    // ... while the unrestricted lookup would have exposed Mod-o.
+    expect(
+      createMenuAcceleratorLookup("win32", undefined, null).get(
+        "workbench.commandPalette.file.open"
+      )
+    ).toBe("CommandOrControl+O");
   });
 
   it("never yields a reload / forceReload accelerator (Mod-r is Ruby, in editor scope)", () => {
