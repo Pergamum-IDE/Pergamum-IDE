@@ -22,9 +22,22 @@ export {
   type ReloadGuardInput,
   type ReloadShortcutClassification
 } from "./reloadGuard";
-export { listCommonDefaultKeys, resolveEditorKeybindings } from "./editor";
+export {
+  listCommonDefaultKeys,
+  resolveEditorKeybindings,
+  selectEditorKeybindings
+} from "./editor";
 export {
   listCommandMetadata,
   listResolvedKeyboardShortcutItems,
   type KeyboardShortcutListItem
 } from "./listing";
+export {
+  normalizeUserKeyNotation,
+  parseUserKeybindingsJson,
+  resolveEffectiveKeybindings,
+  serializeUserKeybindingsJson,
+  type EffectiveKeybindingResult,
+  type ParsedUserKeybindings,
+  type UserKeybindingEntry
+} from "./user";

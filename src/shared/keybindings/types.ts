@@ -173,12 +173,27 @@ export type KeybindingDiagnosticCode =
   | "nativeRoleHostMismatch"
   | "standardHostMismatch"
   | "pergamumHostInvalid"
-  | "handlerStatusMismatch";
+  | "handlerStatusMismatch"
+  // #645: user keybindings.json
+  | "jsonParseError"
+  | "rootMustBeArray"
+  | "entryMustBeObject"
+  | "missingKey"
+  | "missingCommand"
+  | "unknownField"
+  | "readonlyCommand"
+  | "conflictingKey"
+  | "duplicateUserEntry"
+  | "unsupportedWhen"
+  | "unbindTargetNotFound"
+  | "fileReadError";
 
 export interface KeybindingDiagnostic {
   readonly code: KeybindingDiagnosticCode;
   readonly severity: "error" | "warning";
   readonly message: string;
+  /** #645: the index of the offending entry in keybindings.json. */
+  readonly index?: number;
   readonly command?: string;
   readonly key?: string;
   readonly platform?: string;

@@ -12,7 +12,8 @@ import {
   resolveDefaultKeybindings,
   toElectronAccelerator,
   type KeybindingCatalog,
-  type PergamumPlatform
+  type PergamumPlatform,
+  type ResolvedKeybinding
 } from "../shared/keybindings";
 
 /**
@@ -71,12 +72,17 @@ export function nodePlatformToPergamumPlatform(
 export function createMenuAcceleratorLookup(
   platform: PergamumPlatform,
   catalog?: KeybindingCatalog,
-  commandIds: readonly string[] | null = MENU_ACCELERATOR_COMMAND_IDS
+  commandIds: readonly string[] | null = MENU_ACCELERATOR_COMMAND_IDS,
+  /**
+   * #645: resolved rows to read instead of the catalog defaults (the
+   * effective keybindings with the user's overrides).
+   */
+  rows?: readonly ResolvedKeybinding[]
 ): MenuAcceleratorLookup {
   const byCommand = new Map<string, string[]>();
   const allowed = commandIds === null ? null : new Set(commandIds);
 
-  for (const binding of resolveDefaultKeybindings(platform, catalog)) {
+  for (const binding of rows ?? resolveDefaultKeybindings(platform, catalog)) {
     if (
       (allowed !== null && !allowed.has(binding.command)) ||
       binding.scope !== "app" ||

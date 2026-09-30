@@ -20,7 +20,17 @@ export function resolveEditorKeybindings(
   platform: PergamumPlatform,
   catalog: KeybindingCatalog = defaultKeybindingCatalog
 ): ResolvedKeybinding[] {
-  return resolveDefaultKeybindings(platform, catalog).filter(
+  return selectEditorKeybindings(resolveDefaultKeybindings(platform, catalog));
+}
+
+/**
+ * The editor-scope customizable rows with a key, from any resolved rows
+ * (the defaults, or the effective keybindings with user overrides, #645).
+ */
+export function selectEditorKeybindings(
+  rows: readonly ResolvedKeybinding[]
+): ResolvedKeybinding[] {
+  return rows.filter(
     (binding) =>
       binding.scope === "editor" &&
       binding.source === "pergamum" &&

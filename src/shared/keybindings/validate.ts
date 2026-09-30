@@ -14,7 +14,11 @@
  * source, not only customizable commands.
  */
 
-import { isValidKeybindingKey, normalizeKeybindingKey } from "./format";
+import {
+  isValidKeybindingKey,
+  normalizeKeybindingKey,
+  toCodeMirrorKey
+} from "./format";
 import {
   defaultKeybindingCatalog,
   isPergamumPlatform,
@@ -248,7 +252,7 @@ function validateResolved(
     group.push(binding);
     byKey.set(groupKey, group);
 
-    validateReservedUse(binding, normalized, catalog, platform, diagnostics);
+    diagnostics.push(...reservedUseDiagnostics(binding, catalog, platform));
   }
 
   for (const group of byKey.values()) {
@@ -270,17 +274,27 @@ function validateResolved(
   }
 }
 
-function validateReservedUse(
+/**
+ * Reserved-key diagnostics for one binding on `platform` (shared by catalog
+ * validation and the user keybindings overlay, #645). Keys are compared as
+ * the physical key on `platform` (Mod = Ctrl off macOS, Cmd on macOS), so a
+ * user's `Ctrl-F5` on Windows is caught as `Mod-F5`.
+ */
+export function reservedUseDiagnostics(
   binding: ResolvedKeybinding,
-  normalizedKey: string,
   catalog: KeybindingCatalog,
-  platform: PergamumPlatform,
-  diagnostics: KeybindingDiagnostic[]
-): void {
+  platform: PergamumPlatform
+): KeybindingDiagnostic[] {
+  const diagnostics: KeybindingDiagnostic[] = [];
+  if (binding.key === null || !isValidKeybindingKey(binding.key)) {
+    return diagnostics;
+  }
+  const physicalKey = toCodeMirrorKey(binding.key, platform);
   for (const reserved of catalog.reserved) {
     if (
       !reserved.platforms.includes(platform) ||
-      normalizeKeybindingKey(reserved.key) !== normalizedKey
+      !isValidKeybindingKey(reserved.key) ||
+      toCodeMirrorKey(reserved.key, platform) !== physicalKey
     ) {
       continue;
     }
@@ -346,4 +360,5 @@ function validateReservedUse(
       });
     }
   }
+  return diagnostics;
 }

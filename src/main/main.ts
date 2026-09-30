@@ -28,6 +28,9 @@ import { registerPergamumAssetProtocol } from "./pergamumAssetProtocol";
 import { PERGAMUM_ASSET_SCHEME } from "../shared/pergamumAssetUrl";
 import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
 import { installReloadShortcutGuard } from "./reloadGuard";
+import { registerKeybindingsIpc } from "./keybindingsIpc";
+import { loadKeybindings } from "./keybindingsStore";
+import { nodePlatformToPergamumPlatform } from "./menuAccelerators";
 import {
   currentActiveProjectFilePath,
   currentProjectId,
@@ -371,12 +374,19 @@ app.whenReady().then(async () => {
     systemTerminationSource: powerMonitor
   });
 
+  // #645: the user's keybindings.json overlaid on the defaults, read once at
+  // startup (no live reload). A missing / malformed file falls back to the
+  // defaults; diagnostics are available to the renderer over IPC.
+  const loadedKeybindings = await loadKeybindings(
+    nodePlatformToPergamumPlatform(process.platform)
+  );
   await installApplicationMenu({
     getMainWindow: () => mainWindow,
     requestApplicationQuit: () => {
       windowLifecycleController?.requestApplicationQuit();
     },
-    debugLogger
+    debugLogger,
+    keybindingRows: loadedKeybindings.effective.keybindings
   });
   registerApplicationMenuIpc();
   registerDebugLogIpc(debugLogger);
@@ -409,6 +419,7 @@ app.whenReady().then(async () => {
       )
   );
   registerSettingsIpc();
+  registerKeybindingsIpc();
   registerFontCacheIpc();
   registerJapaneseLintIpc();
   registerJapaneseMachineCheckIpc();
