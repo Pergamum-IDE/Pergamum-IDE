@@ -84,7 +84,7 @@ function blur(input: HTMLInputElement): void {
 }
 
 describe("JapaneseLintSettingsSection (#625)", () => {
-  it("shows the two groups and all 12 rules in catalog order", () => {
+  it("shows the three groups in order: runtime, style, characters", () => {
     mountSection(vi.fn());
 
     const headings = [
@@ -92,9 +92,9 @@ describe("JapaneseLintSettingsSection (#625)", () => {
     ].map((heading) => heading.textContent);
 
     expect(headings).toEqual([
+      "動作設定",
       "文章表現",
-      "見えない文字・紛らわしい文字",
-      "動作設定"
+      "見えない文字・紛らわしい文字"
     ]);
     expect(ruleRows().map((row) => row.dataset.japaneseLintRule)).toEqual([
       "max-ten",
@@ -121,6 +121,11 @@ describe("JapaneseLintSettingsSection (#625)", () => {
     );
 
     expect(paths).toEqual([
+      // runtime options come first now
+      "JapaneseLinter.debounceMs",
+      "JapaneseLinter.lineCacheLimit",
+      "JapaneseLinter.workerRestartAttempts",
+      // followed by 12 rules
       "JapaneseLinter.max-ten",
       "JapaneseLinter.no-doubled-conjunctive-particle-ga",
       "JapaneseLinter.no-doubled-conjunction",
@@ -132,11 +137,7 @@ describe("JapaneseLintSettingsSection (#625)", () => {
       "JapaneseLinter.no-nfd",
       "JapaneseLinter.no-invalid-control-character",
       "JapaneseLinter.no-zero-width-spaces",
-      "JapaneseLinter.no-kangxi-radicals",
-      // runtime options follow the 12 rules
-      "JapaneseLinter.debounceMs",
-      "JapaneseLinter.lineCacheLimit",
-      "JapaneseLinter.workerRestartAttempts"
+      "JapaneseLinter.no-kangxi-radicals"
     ]);
     // The displayed path never leaks into the ids that are actually used.
     for (const row of ruleRows()) {
@@ -176,9 +177,9 @@ describe("JapaneseLintSettingsSection (#625)", () => {
     ].map((heading) => heading.textContent);
 
     expect(headings).toEqual([
+      "Behavior",
       "Style",
-      "Invisible or Confusable Characters",
-      "Behavior"
+      "Invisible or Confusable Characters"
     ]);
     expect(rowFor("no-nfd").textContent).toContain(
       "Check separated dakuten/handakuten marks"
@@ -195,17 +196,24 @@ describe("JapaneseLintSettingsSection (#625)", () => {
     }
   });
 
-  it("shows the two thresholds with their defaults (5 commas, 100 characters)", () => {
+  it("shows the two thresholds with spinbox UI (type=number, step, unit, range in description)", () => {
     mountSection(vi.fn());
 
     // 2 rule thresholds + 3 runtime options.
-    expect(container.querySelectorAll("input.settingsNumberInput")).toHaveLength(5);
+    const numberInputs = container.querySelectorAll<HTMLInputElement>("input.settingsNumberInput");
+    expect(numberInputs).toHaveLength(5);
+    for (const input of numberInputs) {
+      expect(input.type).toBe("number");
+    }
     expect(numberFor("max-ten").value).toBe("5");
     expect(numberFor("sentence-length").value).toBe("100");
+    expect(numberFor("sentence-length").step).toBe("10");
     expect(rowFor("max-ten").textContent).toContain("一文あたりの読点数");
     expect(rowFor("sentence-length").textContent).toContain("一文あたりの文字数");
     expect(rowFor("max-ten").textContent).toContain("1〜50");
+    expect(rowFor("max-ten").textContent).toContain("個");
     expect(rowFor("sentence-length").textContent).toContain("20〜1000");
+    expect(rowFor("sentence-length").textContent).toContain("文字");
     expect(rowFor("no-nfd").querySelector("input.settingsNumberInput")).toBeNull();
   });
 
@@ -361,18 +369,23 @@ describe("JapaneseLintSettingsSection runtime options (#625 worker foundation)",
     expect(runtimeInput("debounceMs").value).toBe("800");
     expect(runtimeInput("lineCacheLimit").value).toBe("5000");
     expect(runtimeInput("workerRestartAttempts").value).toBe("3");
+    expect(runtimeInput("debounceMs").type).toBe("number");
+    expect(runtimeInput("debounceMs").step).toBe("100");
+    expect(runtimeInput("lineCacheLimit").step).toBe("1000");
+    expect(runtimeInput("workerRestartAttempts").step).toBe("1");
 
-    expect(runtimeText("debounceMs")).toContain("デバウンス時間");
+    expect(runtimeText("debounceMs")).toContain("チェック開始までの待ち時間");
+    expect(runtimeText("debounceMs")).not.toContain("デバウンス時間");
     expect(runtimeText("debounceMs")).toContain(
-      "入力が止まってから日本語表現チェックを実行するまでの待ち時間です。"
+      "入力が止まってから日本語表現チェックを開始するまでの待ち時間です。"
     );
-    expect(runtimeText("debounceMs")).toContain("300〜3000 ms");
+    expect(runtimeText("debounceMs")).toContain("300〜3000 msの範囲で指定します。");
     expect(runtimeText("lineCacheLimit")).toContain("行キャッシュ上限");
-    expect(runtimeText("lineCacheLimit")).toContain("500〜50000 件");
+    expect(runtimeText("lineCacheLimit")).toContain("500〜50000 件の範囲で指定します。");
     expect(runtimeText("workerRestartAttempts")).toContain(
-      "Worker再起動試行回数"
+      "日本語表現チェックエンジンの再起動試行回数"
     );
-    expect(runtimeText("workerRestartAttempts")).toContain("2〜10 回");
+    expect(runtimeText("workerRestartAttempts")).toContain("2〜10 回の範囲で指定します。");
   });
 
   it("saves a committed runtime value while keeping the rules", () => {

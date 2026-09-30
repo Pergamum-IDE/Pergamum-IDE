@@ -42,6 +42,7 @@ export interface JapaneseLintRuleOptionDefinition {
   readonly type: "number";
   readonly labelKey: string;
   readonly descriptionKey: string;
+  readonly unitKey?: string;
   readonly defaultValue: number;
   readonly min: number;
   readonly max: number;
@@ -89,6 +90,7 @@ export const japaneseLintRuleCatalog: readonly JapaneseLintRuleDefinition[] = [
       type: "number",
       labelKey: "japaneseLint.rule.maxTen.option.max.label",
       descriptionKey: "japaneseLint.rule.maxTen.option.max.description",
+      unitKey: "japaneseLint.rule.maxTen.option.max.unit",
       defaultValue: 5,
       min: 1,
       max: 50,
@@ -112,10 +114,11 @@ export const japaneseLintRuleCatalog: readonly JapaneseLintRuleDefinition[] = [
       type: "number",
       labelKey: "japaneseLint.rule.sentenceLength.option.max.label",
       descriptionKey: "japaneseLint.rule.sentenceLength.option.max.description",
+      unitKey: "japaneseLint.rule.sentenceLength.option.max.unit",
       defaultValue: 100,
       min: 20,
       max: 1000,
-      step: 1
+      step: 10
     }
   ]),
   rule("no-dropping-the-ra", "noDroppingTheRa", "style", true),
@@ -209,7 +212,7 @@ export const japaneseLintRuntimeOptionCatalog: readonly JapaneseLintRuntimeOptio
       defaultValue: 800,
       min: 300,
       max: 3000,
-      step: 1
+      step: 100
     },
     {
       key: "lineCacheLimit",
@@ -219,7 +222,7 @@ export const japaneseLintRuntimeOptionCatalog: readonly JapaneseLintRuntimeOptio
       defaultValue: 5000,
       min: 500,
       max: 50000,
-      step: 1
+      step: 1000
     },
     {
       key: "workerRestartAttempts",
