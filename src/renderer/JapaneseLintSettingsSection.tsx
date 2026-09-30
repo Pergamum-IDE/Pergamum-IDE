@@ -64,6 +64,7 @@ interface ThresholdOption {
   readonly labelKey: string;
   readonly min: number;
   readonly max: number;
+  readonly step: number;
 }
 
 interface ThresholdInputProps {
@@ -72,7 +73,7 @@ interface ThresholdInputProps {
   readonly ownerId: string;
   readonly value: number;
   readonly translate: Translate;
-  /** Text after the range, e.g. "ms". */
+  /** Text after the input, e.g. "ms", "件", "回", "個", "文字". */
   readonly unit?: string;
   readonly onCommit: (value: number) => void;
 }
@@ -87,7 +88,6 @@ function ThresholdInput({
   option,
   ownerId,
   value,
-  translate,
   unit,
   onCommit
 }: ThresholdInputProps): JSX.Element {
@@ -117,17 +117,15 @@ function ThresholdInput({
   const inputId = `japaneseLintOption-${ownerId}-${option.key}`;
 
   return (
-    <div className="japaneseLintRuleOption">
-      <label htmlFor={inputId} className="japaneseLintRuleOptionLabel">
-        {translate(option.labelKey as TranslationKey)}
-      </label>
+    <div className="settingsNumberInputGroup">
       <input
         id={inputId}
         className="settingsNumberInput"
-        type="text"
-        inputMode="numeric"
+        type="number"
+        min={option.min}
+        max={option.max}
+        step={option.step}
         value={text}
-        aria-describedby={`${inputId}-hint`}
         onChange={(event) => setText(event.target.value)}
         onBlur={commit}
         onKeyDown={(event) => {
@@ -136,19 +134,13 @@ function ThresholdInput({
           }
         }}
       />
-      <span id={`${inputId}-hint`} className="settingsUnit">
-        {translate("japaneseLint.settings.range", {
-          min: String(option.min),
-          max: String(option.max)
-        })}
-        {unit ? ` ${unit}` : ""}
-      </span>
+      {unit ? <span className="settingsUnit">{unit}</span> : null}
     </div>
   );
 }
 
 /**
- * #625: the "日本語表現チェック" section of the Settings page. One switch per
+ * #625/#632: the "日本語表現チェック" section of the Settings page. One switch per
  * textlint rule (in catalog order, grouped) and a numeric threshold for the
  * rules that have one. Immediate-save like the rest of the Settings page. The
  * same settings drive the instant check and the future formal check.
@@ -197,6 +189,58 @@ export function JapaneseLintSettingsSection({
       <p className="settingsDescription">
         {translate("japaneseLint.settings.description")}
       </p>
+      <section
+        className="japaneseLintRuleGroup"
+        aria-labelledby="japaneseLintGroup-runtime"
+      >
+        <h3
+          id="japaneseLintGroup-runtime"
+          className="japaneseLintRuleGroupHeading"
+        >
+          {translate("japaneseLint.category.runtime")}
+        </h3>
+        <div className="settingsItemList">
+          {japaneseLintRuntimeOptionCatalog.map((option) => {
+            const runtimeInputId = `japaneseLintOption-runtime-${option.key}`;
+            const runtimeUnit = translate(option.unitKey as TranslationKey);
+
+            return (
+              <div
+                key={option.key}
+                className="settingsItemRow"
+                data-japanese-lint-runtime={option.key}
+              >
+                <div className="settingsItemHeader">
+                  <label htmlFor={runtimeInputId} className="settingsItemLabel">
+                    {translate(option.labelKey as TranslationKey)}
+                  </label>
+                  <div className="settingsItemControl">
+                    <ThresholdInput
+                      option={option}
+                      ownerId="runtime"
+                      value={resolved[option.key]}
+                      translate={translate}
+                      unit={runtimeUnit}
+                      onCommit={(value) => save(withRuntime(option.key, value))}
+                    />
+                  </div>
+                </div>
+                <p className="settingsDescription">
+                  {translate(option.descriptionKey as TranslationKey)}{" "}
+                  {translate("japaneseLint.settings.rangeHint", {
+                    min: String(option.min),
+                    max: String(option.max),
+                    unit: runtimeUnit
+                  })}
+                </p>
+                <code className="settingsItemKey">
+                  {"JapaneseLinter." + option.key}
+                </code>
+              </div>
+            );
+          })}
+        </div>
+      </section>
       {japaneseLintRuleCategories.map((category) => (
         <section
           key={category.id}
@@ -246,22 +290,55 @@ export function JapaneseLintSettingsSection({
                     <p className="settingsDescription">
                       {translate(definition.descriptionKey as TranslationKey)}
                     </p>
-                    {definition.options?.map((option) => (
-                      <ThresholdInput
-                        key={option.key}
-                        option={option}
-                        ownerId={definition.id}
-                        value={setting.options?.[option.key] ?? option.defaultValue}
-                        translate={translate}
-                        onCommit={(value) =>
-                          save(
-                            withRule(definition, {
-                              option: { key: option.key, value }
-                            })
-                          )
-                        }
-                      />
-                    ))}
+                    {definition.options?.map((option) => {
+                      const optionInputId = `japaneseLintOption-${definition.id}-${option.key}`;
+                      const optionUnit = option.unitKey
+                        ? translate(option.unitKey as TranslationKey)
+                        : undefined;
+
+                      return (
+                        <div
+                          key={option.key}
+                          className="japaneseLintRuleOptionGroup"
+                        >
+                          <div className="settingsItemHeader">
+                            <label
+                              htmlFor={optionInputId}
+                              className="settingsItemLabel"
+                            >
+                              {translate(option.labelKey as TranslationKey)}
+                            </label>
+                            <div className="settingsItemControl">
+                              <ThresholdInput
+                                option={option}
+                                ownerId={definition.id}
+                                value={
+                                  setting.options?.[option.key] ??
+                                  option.defaultValue
+                                }
+                                translate={translate}
+                                unit={optionUnit}
+                                onCommit={(value) =>
+                                  save(
+                                    withRule(definition, {
+                                      option: { key: option.key, value }
+                                    })
+                                  )
+                                }
+                              />
+                            </div>
+                          </div>
+                          <p className="settingsDescription">
+                            {translate(option.descriptionKey as TranslationKey)}{" "}
+                            {translate("japaneseLint.settings.rangeHint", {
+                              min: String(option.min),
+                              max: String(option.max),
+                              unit: optionUnit ?? ""
+                            })}
+                          </p>
+                        </div>
+                      );
+                    })}
                     <code className="settingsItemKey">
                       {japaneseLintRuleDisplayPath(definition.id)}
                     </code>
@@ -271,41 +348,6 @@ export function JapaneseLintSettingsSection({
           </div>
         </section>
       ))}
-      <section
-        className="japaneseLintRuleGroup"
-        aria-labelledby="japaneseLintGroup-runtime"
-      >
-        <h3
-          id="japaneseLintGroup-runtime"
-          className="japaneseLintRuleGroupHeading"
-        >
-          {translate("japaneseLint.category.runtime")}
-        </h3>
-        <div className="settingsItemList">
-          {japaneseLintRuntimeOptionCatalog.map((option) => (
-            <div
-              key={option.key}
-              className="settingsItemRow"
-              data-japanese-lint-runtime={option.key}
-            >
-              <ThresholdInput
-                option={option}
-                ownerId="runtime"
-                value={resolved[option.key]}
-                translate={translate}
-                unit={translate(option.unitKey as TranslationKey)}
-                onCommit={(value) => save(withRuntime(option.key, value))}
-              />
-              <p className="settingsDescription">
-                {translate(option.descriptionKey as TranslationKey)}
-              </p>
-              <code className="settingsItemKey">
-                {"JapaneseLinter." + option.key}
-              </code>
-            </div>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

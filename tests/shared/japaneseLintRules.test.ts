@@ -364,9 +364,9 @@ describe("japanese lint runtime settings (#625 worker foundation)", () => {
       lineCacheLimit: 50000,
       workerRestartAttempts: 10
     });
-    expect(at(300, 500, 2)).toMatchObject({
+    expect(at(300, 1000, 2)).toMatchObject({
       debounceMs: 300,
-      lineCacheLimit: 500,
+      lineCacheLimit: 1000,
       workerRestartAttempts: 2
     });
     expect(at(3000, 50000, 10)).toMatchObject({
@@ -374,9 +374,9 @@ describe("japanese lint runtime settings (#625 worker foundation)", () => {
       lineCacheLimit: 50000,
       workerRestartAttempts: 10
     });
-    expect(at(1234, 4321, 5)).toMatchObject({
-      debounceMs: 1234,
-      lineCacheLimit: 4321,
+    expect(at(1200, 4000, 5)).toMatchObject({
+      debounceMs: 1200,
+      lineCacheLimit: 4000,
       workerRestartAttempts: 5
     });
   });
@@ -402,7 +402,7 @@ describe("japanese lint runtime settings (#625 worker foundation)", () => {
         "no-nfd": { enabled: false }
       },
       debounceMs: "broken",
-      lineCacheLimit: 1234
+      lineCacheLimit: 4000
     });
 
     expect(resolved.rules["sentence-length"]).toEqual({
@@ -411,7 +411,7 @@ describe("japanese lint runtime settings (#625 worker foundation)", () => {
     });
     expect(resolved.rules["no-nfd"].enabled).toBe(false);
     expect(resolved.debounceMs).toBe(800);
-    expect(resolved.lineCacheLimit).toBe(1234);
+    expect(resolved.lineCacheLimit).toBe(4000);
   });
 
   it("an old section that only has rules still resolves, with runtime defaults", () => {
