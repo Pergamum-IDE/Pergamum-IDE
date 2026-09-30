@@ -17,6 +17,12 @@ function row(overrides: Partial<KeyboardShortcutRow>): KeyboardShortcutRow {
     when: "editorFocus && markdownDocument && !readOnly",
     key: "Mod-b",
     keyLabel: "Ctrl+B",
+    rowId: `${overrides.commandId ?? "editor.markdown.bold"}|${overrides.key ?? "Mod-b"}`,
+    origin: "default",
+    editable: overrides.source === undefined || overrides.source === "pergamum",
+    canReset: false,
+    defaultKey: null,
+    defaultKeyLabel: null,
     ...overrides
   };
 }

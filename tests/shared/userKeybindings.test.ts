@@ -31,6 +31,11 @@ function keysOf(
     .map((binding) => binding.key);
 }
 
+/** The keys actually bound (unassigned placeholder rows left out). */
+function assigned(result: ReturnType<typeof effective>, command: string): string[] {
+  return keysOf(result, command).filter((key): key is string => key !== null);
+}
+
 function codes(result: ReturnType<typeof effective>): string[] {
   return result.diagnostics.map((d) => d.code);
 }
@@ -179,30 +184,40 @@ describe("resolveEffectiveKeybindings (#645)", () => {
     expect(result.keybindings).toEqual(resolveDefaultKeybindings(platform));
   });
 
-  it("replaces the command's primary default binding with the user key", () => {
-    const result = effective("win32", [
+  it("a positive entry ADDS a binding; replacing a default = unbind the old key + add the new one", () => {
+    const added = effective("win32", [
       { key: "Mod-Alt-f", command: "editor.find.replace.open" }
     ]);
-    expect(result.diagnostics).toEqual([]);
-    expect(keysOf(result, "editor.find.replace.open")).toEqual(["Mod-Alt-f"]);
+    expect(added.diagnostics).toEqual([]);
+    expect(assigned(added, "editor.find.replace.open")).toEqual(["Mod-h", "Mod-Alt-f"]);
+
+    const replaced = effective("win32", [
+      { key: "Mod-h", command: "-editor.find.replace.open" },
+      { key: "Mod-Alt-f", command: "editor.find.replace.open" }
+    ]);
+    expect(replaced.diagnostics).toEqual([]);
+    expect(assigned(replaced, "editor.find.replace.open")).toEqual(["Mod-Alt-f"]);
   });
 
-  it("keeps aliases when the primary is replaced (command palette: Mod-p + F1)", () => {
+  it("replacing the primary keeps the alias (command palette: Mod-p + F1)", () => {
     const result = effective("linux", [
+      { key: "Mod-p", command: "-workbench.commandPalette.open" },
       { key: "Mod-Shift-x", command: "workbench.commandPalette.open" }
     ]);
-    expect(keysOf(result, "workbench.commandPalette.open")).toEqual(["Mod-Shift-x", "F1"]);
+    expect(result.diagnostics).toEqual([]);
+    expect(assigned(result, "workbench.commandPalette.open")).toEqual(["F1", "Mod-Shift-x"]);
   });
 
-  it("the second positive entry of a command is added as an alias", () => {
+  it("every positive entry of a command is added as another binding, in file order", () => {
     const result = effective("win32", [
       { key: "Mod-Shift-x", command: "workbench.commandPalette.open" },
       { key: "Mod-Shift-y", command: "workbench.commandPalette.open" }
     ]);
     expect(result.diagnostics).toEqual([]);
-    expect(keysOf(result, "workbench.commandPalette.open")).toEqual([
-      "Mod-Shift-x",
+    expect(assigned(result, "workbench.commandPalette.open")).toEqual([
+      "Mod-p",
       "F1",
+      "Mod-Shift-x",
       "Mod-Shift-y"
     ]);
   });
@@ -212,12 +227,43 @@ describe("resolveEffectiveKeybindings (#645)", () => {
       { key: "F1", command: "-workbench.commandPalette.open" }
     ]);
     expect(result.diagnostics).toEqual([]);
-    expect(keysOf(result, "workbench.commandPalette.open")).toEqual(["Mod-p"]);
+    expect(assigned(result, "workbench.commandPalette.open")).toEqual(["Mod-p"]);
 
     const primary = effective("win32", [
       { key: "Mod-p", command: "-workbench.commandPalette.open" }
     ]);
-    expect(keysOf(primary, "workbench.commandPalette.open")).toEqual(["F1"]);
+    expect(assigned(primary, "workbench.commandPalette.open")).toEqual(["F1"]);
+  });
+
+  it("an unbound default stays as an unassigned row that remembers its default key", () => {
+    const result = effective("win32", [
+      { key: "F1", command: "-workbench.commandPalette.open" }
+    ]);
+    const rows = result.keybindings.filter(
+      (b) => b.command === "workbench.commandPalette.open"
+    );
+    expect(rows.map((b) => [b.key, b.defaultKey])).toEqual([
+      ["Mod-p", undefined],
+      [null, "F1"]
+    ]);
+  });
+
+  it("user rows are marked origin user; untouched defaults carry no origin", () => {
+    const result = effective("win32", [
+      { key: "Mod-Alt-9", command: "editor.markdown.bold" }
+    ]);
+    const bold = result.keybindings.filter((b) => b.command === "editor.markdown.bold");
+    expect(bold.map((b) => [b.key, b.origin])).toEqual([
+      ["Mod-b", undefined],
+      ["Mod-Alt-9", "user"]
+    ]);
+  });
+
+  it("an unassigned placeholder (no default) is filled by the first positive entry", () => {
+    const result = effective("win32", [
+      { key: "Mod-Alt-9", command: "workspace.keyboardShortcuts.open" }
+    ]);
+    expect(keysOf(result, "workspace.keyboardShortcuts.open")).toEqual(["Mod-Alt-9"]);
   });
 
   it("unbinding the only binding leaves one unassigned row (the command stays listed)", () => {
@@ -247,15 +293,15 @@ describe("resolveEffectiveKeybindings (#645)", () => {
       { key: "Mod-h", command: "-editor.find.replace.open", when: "editorFocus" }
     ]);
     expect(result.diagnostics).toEqual([]);
-    expect(keysOf(result, "editor.find.replace.open")).toEqual(["Mod-Alt-f"]);
+    expect(assigned(result, "editor.find.replace.open")).toEqual(["Mod-Alt-f"]);
   });
 
-  it("after the primary is unbound, a positive entry adds a binding instead of replacing the alias", () => {
+  it("unbind + add keeps the other default bindings (palette: P -> X leaves F1)", () => {
     const result = effective("win32", [
       { key: "Mod-p", command: "-workbench.commandPalette.open" },
       { key: "Mod-Shift-x", command: "workbench.commandPalette.open" }
     ]);
-    expect(keysOf(result, "workbench.commandPalette.open").sort()).toEqual(
+    expect(assigned(result, "workbench.commandPalette.open").sort()).toEqual(
       ["F1", "Mod-Shift-x"].sort()
     );
   });
@@ -344,7 +390,7 @@ describe("resolveEffectiveKeybindings (#645)", () => {
     expect(result.diagnostics.map((d) => [d.code, d.severity])).toEqual([
       ["reservedDiscouragedKey", "warning"]
     ]);
-    expect(keysOf(result, "editor.markdown.bold")).toEqual(["Ctrl-a"]);
+    expect(assigned(result, "editor.markdown.bold")).toEqual(["Mod-b", "Ctrl-a"]);
   });
 
   it("ignores invalid notation with a diagnostic", () => {
@@ -401,7 +447,7 @@ describe("resolveEffectiveKeybindings (#645)", () => {
       { key: "Mod-Alt-9", command: "editor.markdown.italic" }
     ]);
     expect(result.diagnostics).toMatchObject([{ code: "conflictingKey", index: 1 }]);
-    expect(keysOf(result, "editor.markdown.bold")).toEqual(["Mod-Alt-9"]);
+    expect(assigned(result, "editor.markdown.bold")).toEqual(["Mod-b", "Mod-Alt-9"]);
     expect(keysOf(result, "editor.markdown.italic")).toEqual(["Mod-i"]);
   });
 
@@ -411,7 +457,7 @@ describe("resolveEffectiveKeybindings (#645)", () => {
       { key: "Mod-i", command: "-editor.markdown.italic" }
     ]);
     expect(result.diagnostics).toEqual([]);
-    expect(keysOf(result, "editor.markdown.bold")).toEqual(["Mod-i"]);
+    expect(assigned(result, "editor.markdown.bold")).toEqual(["Mod-b", "Mod-i"]);
     expect(keysOf(result, "editor.markdown.italic")).toEqual([null]);
   });
 
@@ -465,7 +511,7 @@ describe("resolveEffectiveKeybindings (#645)", () => {
       ]);
       expect(result.diagnostics).toEqual([]);
       // The same canonical key is stored; platforms resolve Mod at use sites.
-      expect(keysOf(result, "editor.markdown.bold")).toEqual(["Mod-Alt-9"]);
+      expect(assigned(result, "editor.markdown.bold")).toEqual(["Mod-b", "Mod-Alt-9"]);
     }
   });
 

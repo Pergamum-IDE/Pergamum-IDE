@@ -112,7 +112,7 @@ describe("loadKeybindings (#645)", () => {
       loaded.effective.keybindings
         .filter((b) => b.command === "editor.markdown.bold")
         .map((b) => b.key)
-    ).toEqual(["Mod-Alt-9"]);
+    ).toEqual(["Mod-b", "Mod-Alt-9"]);
   });
 
   it("no file = exactly the defaults", async () => {

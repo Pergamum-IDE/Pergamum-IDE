@@ -691,6 +691,9 @@ export async function installApplicationMenu(
   Menu.setApplicationMenu(
     createApplicationMenu(settings.workbench.language, options)
   );
+  // A rebuilt menu starts with every item enabled: restore what the renderer
+  // had reported.
+  applyApplicationMenuEnablement({ ...lastMenuEnablement });
 }
 
 function isApplicationMenuEnablementMap(
@@ -715,9 +718,16 @@ function isApplicationMenuEnablementMap(
  * active tab, which makes `editor.kind.markdown` false) is reflected
  * immediately without flicker or losing menu state.
  */
+/**
+ * The last enablement the renderer reported, so a rebuilt menu (#647: after a
+ * keybinding change) gets the same enabled / disabled items back.
+ */
+const lastMenuEnablement: Record<string, boolean> = {};
+
 export function applyApplicationMenuEnablement(
   enablement: ApplicationMenuEnablementMap
 ): void {
+  Object.assign(lastMenuEnablement, enablement);
   const menu = Menu.getApplicationMenu();
 
   if (!menu) {

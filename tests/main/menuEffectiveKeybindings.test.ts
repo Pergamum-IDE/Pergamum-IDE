@@ -64,6 +64,7 @@ describe("menu accelerators follow the effective keybindings (#645)", () => {
 
   it("a user override changes the menu accelerator (Save: Mod-s -> Mod-Alt-9)", () => {
     const items = menu("win32", rows("win32", [
+      { key: "Mod-s", command: "-editor.document.save" },
       { key: "Mod-Alt-9", command: "editor.document.save" }
     ]));
     const save = items.find((item) => item.id === "editor.document.save");
@@ -76,7 +77,10 @@ describe("menu accelerators follow the effective keybindings (#645)", () => {
       "linux",
       undefined,
       undefined,
-      rows("linux", [{ key: "Mod-Alt-9", command: "editor.file.new" }])
+      rows("linux", [
+        { key: "Mod-n", command: "-editor.file.new" },
+        { key: "Mod-Alt-9", command: "editor.file.new" }
+      ])
     );
     expect(lookup.get("editor.file.new")).toBe("CommandOrControl+Alt+9");
     expect(lookup.get("editor.document.save")).toBe("CommandOrControl+S");
@@ -102,6 +106,7 @@ describe("menu accelerators follow the effective keybindings (#645)", () => {
 
   it("replacing the primary keeps the alias (palette: Mod-p -> Mod-Alt-9, F1 stays)", () => {
     const accels = accelerators(menu("win32", rows("win32", [
+      { key: "Mod-p", command: "-workbench.commandPalette.open" },
       { key: "Mod-Alt-9", command: "workbench.commandPalette.open" }
     ])));
     expect(accels).toContain("CommandOrControl+Alt+9");

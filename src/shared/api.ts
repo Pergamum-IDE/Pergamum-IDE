@@ -120,6 +120,9 @@ import type { ColdStartLaunchTarget } from "./sessionRestore";
 import type {
   KeybindingDiagnostic,
   KeyboardShortcutRow,
+  KeybindingEditConflict,
+  KeybindingEditFailureReason,
+  KeybindingEditRequest,
   PergamumPlatform,
   ResolvedKeybinding,
   UserKeybindingEntry
@@ -396,8 +399,50 @@ export const KEYBINDINGS_CHANNELS = {
   getEffectiveKeybindings: "keybindings:getEffectiveKeybindings",
   saveUserKeybindings: "keybindings:saveUserKeybindings",
   getKeyboardShortcutItems: "keybindings:getKeyboardShortcutItems",
-  openKeybindingsJsonLocation: "keybindings:openKeybindingsJsonLocation"
+  openKeybindingsJsonLocation: "keybindings:openKeybindingsJsonLocation",
+  applyKeybindingChange: "keybindings:applyKeybindingChange",
+  setCaptureMode: "keybindings:setCaptureMode",
+  /** main -> renderer: a key pressed while the capture mode is on. */
+  captureInput: "keybindings:captureInput"
 } as const;
+
+/**
+ * #647: one key press forwarded by the main process while the Keyboard
+ * Shortcuts capture dialog is open. Only the key identity and modifiers; never
+ * text, selection or paths.
+ */
+export interface KeybindingCaptureInput {
+  readonly key: string;
+  readonly code: string;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly altKey: boolean;
+  readonly shiftKey: boolean;
+  readonly repeat: boolean;
+}
+
+export interface SetKeybindingCaptureModeResult {
+  readonly ok: boolean;
+}
+
+export type ApplyKeybindingChangeFailureReason =
+  | KeybindingEditFailureReason
+  | "fileInvalid"
+  | "saveFailed";
+
+export interface ApplyKeybindingChangeResult {
+  readonly ok: boolean;
+  readonly platform: PergamumPlatform;
+  /** On success: the refreshed list, the new effective keybindings, diagnostics. */
+  readonly items?: readonly KeyboardShortcutRow[];
+  readonly keybindings?: readonly ResolvedKeybinding[];
+  readonly diagnostics: readonly KeybindingDiagnostic[];
+  /** On failure: nothing was saved. */
+  readonly failure?: {
+    readonly reason: ApplyKeybindingChangeFailureReason;
+    readonly conflict?: KeybindingEditConflict;
+  };
+}
 
 /**
  * #646: what the Keyboard Shortcuts screen shows - the keybindings IN EFFECT
@@ -1604,6 +1649,19 @@ export interface PergamumApi {
     getKeyboardShortcutItems: () => Promise<GetKeyboardShortcutItemsResult>;
     /** #646: opens the folder holding keybindings.json in the OS file manager. */
     openKeybindingsJsonLocation: () => Promise<OpenKeybindingsJsonLocationResult>;
+    /** #647: one change / unbind / reset; validated and saved in main. */
+    applyKeybindingChange: (
+      request: KeybindingEditRequest
+    ) => Promise<ApplyKeybindingChangeResult>;
+    /**
+     * #647: while on, main swallows every key press (so no menu accelerator or
+     * command fires) and forwards it via `onCaptureInput`.
+     */
+    setCaptureMode: (enabled: boolean) => Promise<SetKeybindingCaptureModeResult>;
+    /** Returns the unsubscribe function. */
+    onCaptureInput: (
+      listener: (input: KeybindingCaptureInput) => void
+    ) => () => void;
   };
   /**
    * #272: continuous Session persistence (the "write it out" side only —

@@ -35,6 +35,21 @@ export {
   type KeyboardShortcutRow
 } from "./listing";
 export {
+  captureKeyEvent,
+  keyboardEventToKeybindingNotation,
+  type CapturedKeyInput,
+  type CapturedKeyResult
+} from "./capture";
+export {
+  applyKeybindingEdit,
+  type KeybindingEditConflict,
+  type KeybindingEditFailureReason,
+  type KeybindingEditKind,
+  type KeybindingEditRequest,
+  type KeybindingEditResult,
+  type KeybindingEditTarget
+} from "./userEdit";
+export {
   normalizeUserKeyNotation,
   parseUserKeybindingsJson,
   resolveEffectiveKeybindings,

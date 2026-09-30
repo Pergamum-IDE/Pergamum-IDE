@@ -15532,3 +15532,78 @@ label.settingsItemHeader {
 .keyboardShortcutCommandId {
   font-size: 11px;
 }
+
+/* #647: Keyboard Shortcuts editing (row actions + capture dialog). */
+.keyboardShortcutActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.keyboardShortcutActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  color: var(--pg-color-button-foreground);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.keyboardShortcutActionButton:hover:not(:disabled),
+.keyboardShortcutActionButton:focus-visible {
+  background: var(--pg-color-button-hover-background);
+  border-color: var(--pg-color-button-border);
+  outline: none;
+}
+
+.keyboardShortcutActionButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.keyboardShortcutActionButton svg {
+  inline-size: 14px;
+  block-size: 14px;
+}
+
+.keyboardShortcutUnassignedDefault {
+  font-size: 12px;
+  color: var(--pg-color-surface-muted);
+  font-style: italic;
+}
+
+.keyboardShortcutCaptureBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.keyboardShortcutCapturePrompt {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.keyboardShortcutCaptureMeta,
+.keyboardShortcutCaptureHint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutCaptureError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pg-color-status-error);
+}
+
+.keyboardShortcutNoticeDetails {
+  margin: 8px 0 0;
+  padding-inline-start: 18px;
+  font-size: 13px;
+}

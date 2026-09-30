@@ -4,7 +4,7 @@ import {
   previewToEditorScrollSyncAnnotation,
   transactionRequestsScrollIntoView
 } from "./previewScrollSyncAnnotation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import {
   Compartment,
   EditorSelection,
@@ -127,10 +127,15 @@ import {
   unpublishCurrentActiveEditorSelectionAccess
 } from "./find/activeEditorSelectionAccess";
 import {
+  createEditorKeymapExtension,
   createMarkdownEditorDocumentState,
   readOnlyCompartmentContent,
   type MarkdownEditorDocumentState
 } from "./markdownEditorDocumentState";
+import {
+  getEffectiveKeybindingsRevision,
+  subscribeEffectiveKeybindings
+} from "./keybindings/effectiveKeybindingStore";
 import {
   createSelectionHighlightExtension,
   selectionHighlightCompartment
@@ -909,6 +914,7 @@ export function MarkdownEditor({
   // never an EditorView rebuild.
   const whitespaceCompartmentRef = useRef<Compartment | null>(null);
   const tabCaptureCompartmentRef = useRef<Compartment | null>(null);
+  const keymapCompartmentRef = useRef<Compartment | null>(null);
   const captureTabInEditorRef = useRef(captureTabInEditor);
   const fencedCodeIndentUnitCompartmentRef = useRef<Compartment | null>(null);
   const fencedCodeIndentUnitRef = useRef(fencedCodeIndentUnit);
@@ -1095,6 +1101,11 @@ export function MarkdownEditor({
   }
   const tabCaptureCompartment = tabCaptureCompartmentRef.current;
 
+  if (!keymapCompartmentRef.current) {
+    keymapCompartmentRef.current = new Compartment();
+  }
+  const keymapCompartment = keymapCompartmentRef.current;
+
   if (!fencedCodeIndentUnitCompartmentRef.current) {
     fencedCodeIndentUnitCompartmentRef.current = new Compartment();
   }
@@ -1240,6 +1251,7 @@ export function MarkdownEditor({
       findGutterMarkerCompartment: activeFindGutterMarkerCompartment,
       findGutterMarkersRef,
       tabCaptureCompartment,
+      keymapCompartment,
       captureTabInEditorRef,
       fencedCodeIndentUnitCompartment,
       fencedCodeIndentUnitRef,
@@ -1277,6 +1289,24 @@ export function MarkdownEditor({
       syntaxCheckerOptions: currentSyntaxCheckerOptionsRef.current,
       createUpdateListenerExtension
     });
+  }
+
+  // #647: the inputs of the editor keymap extension, the same ones the
+  // document state was built with (live refs + this instance's ownership of
+  // the optional shortcut families).
+  function editorKeymapOptions() {
+    return {
+      glossaryCompletionRef,
+      readOnlyRef,
+      activeFindDiagnostics: {
+        editorInstanceId: activeFindEditorInstanceId,
+        expectActiveFindSurface: (activeFind ?? null) !== null
+      },
+      glossarySelectionShortcutEnabled: (glossarySelectionShortcut ?? null) !== null,
+      emphasisMarkShortcutEnabled: (emphasisMarkShortcut ?? null) !== null,
+      rubyShortcutEnabled: (rubyShortcut ?? null) !== null,
+      markdownToolbarShortcutEnabled: (markdownToolbarShortcut ?? null) !== null
+    };
   }
 
   // #392: the Settings-driven compartments (readOnly / line-ending marker
@@ -1318,6 +1348,8 @@ export function MarkdownEditor({
       tabCaptureCompartment.reconfigure(
         createTabCaptureKeymapExtension(captureTabInEditorRef.current)
       ),
+      // #647: a rebinding made while this document was cached reaches it here.
+      keymapCompartment.reconfigure(createEditorKeymapExtension(editorKeymapOptions())),
       fencedCodeIndentUnitCompartment.reconfigure(
         fencedCodeIndentUnitFacet.of(fencedCodeIndentUnitRef.current)
       ),
@@ -2295,6 +2327,29 @@ export function MarkdownEditor({
       )
     });
   }, [findGutterMarkers]);
+
+  // #647: rebuild this editor's keymap when the effective keybindings are
+  // replaced (a rebinding saved from the Keyboard Shortcuts screen). Cached
+  // documents pick it up when they are next activated (reconcileSettingsEffects).
+  const keybindingsRevision = useSyncExternalStore(
+    subscribeEffectiveKeybindings,
+    getEffectiveKeybindingsRevision,
+    getEffectiveKeybindingsRevision
+  );
+  useEffect(() => {
+    const view = viewRef.current;
+
+    if (!view) {
+      return;
+    }
+
+    view.dispatch({
+      effects: keymapCompartment.reconfigure(
+        createEditorKeymapExtension(editorKeymapOptions())
+      )
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keybindingsRevision]);
 
   useEffect(() => {
     captureTabInEditorRef.current = captureTabInEditor;

@@ -7,10 +7,11 @@
  * or there is no keybindings.json - every consumer reads the shipped defaults,
  * so behavior is identical to before #645.
  *
- * Set-once by design: there is no live reload, no subscription and no mutation
- * after startup. Consumers key their caches on the returned rows array, so a
- * reset / replacement is picked up without any invalidation hook. The reset
- * API exists for tests.
+ * Replaced only at startup and after a save from the Keyboard Shortcuts screen
+ * (#647): there is no file watcher and no live reload of outside edits.
+ * Consumers key their caches on the returned rows array, so a replacement is
+ * picked up without any invalidation hook; the editors rebuild their keymaps
+ * from the revision counter. The reset API exists for tests.
  */
 
 import {
@@ -18,6 +19,34 @@ import {
   type PergamumPlatform,
   type ResolvedKeybinding
 } from "../../shared/keybindings";
+
+let revision = 0;
+const listeners = new Set<() => void>();
+
+function changed(): void {
+  revision += 1;
+  for (const listener of [...listeners]) {
+    listener();
+  }
+}
+
+/**
+ * #647: bumped whenever the effective keybindings are replaced (after a save
+ * from the Keyboard Shortcuts screen), so the editors can rebuild their
+ * keymaps. Suitable for `useSyncExternalStore`.
+ */
+export function getEffectiveKeybindingsRevision(): number {
+  return revision;
+}
+
+export function subscribeEffectiveKeybindings(
+  listener: () => void
+): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 interface StoredKeybindings {
   readonly platform: PergamumPlatform;
@@ -36,11 +65,13 @@ export function setEffectiveKeybindings(
   rows: readonly ResolvedKeybinding[]
 ): void {
   stored = { platform, rows };
+  changed();
 }
 
 /** Back to the shipped defaults (tests). */
 export function resetEffectiveKeybindings(): void {
   stored = null;
+  changed();
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   buildLineChange,
   canIndentEditorState,
   canOutdentEditorState,
+  EDITOR_INDENT_COMMAND_IDS,
   editorIndentKeybindingHandlers,
   fencedCodeIndentUnitFacet,
   indentCommand,
@@ -15,6 +16,14 @@ import {
 } from "../../src/renderer/indentCommands";
 import { classifyLine } from "../../src/renderer/indentLineContext";
 import { createMarkdownEditorBaseSetup } from "../../src/renderer/markdownEditorCodeMirrorSetup";
+import { keymapFor } from "./helpers/editorKeymapHarness";
+
+/** #647: Mod-] / Mod-[ run through the catalog-derived editor keymap. */
+const indentKeymap = () =>
+  keymapFor({
+    handlers: editorIndentKeybindingHandlers,
+    commandIds: EDITOR_INDENT_COMMAND_IDS
+  });
 import { documentIsMarkdownFacet } from "../../src/renderer/plainTextIndentCommands";
 import type { FencedCodeIndentUnit } from "../../src/shared/settings";
 
@@ -788,7 +797,7 @@ describe("indentCommand / outdentCommand as CodeMirror Commands (#463)", () => {
   });
 });
 
-describe("editorIndentKeymap wired into the base CodeMirror setup (#463)", () => {
+describe("editor.indent / editor.outdent wired through the editor keymap (#463, #647)", () => {
   function mountView(input: { doc?: string; cursor?: number; readOnly?: boolean } = {}): EditorView {
     return new EditorView({
       parent: document.body,
@@ -797,6 +806,7 @@ describe("editorIndentKeymap wired into the base CodeMirror setup (#463)", () =>
         selection: EditorSelection.single(input.cursor ?? 3),
         extensions: [
           ...createMarkdownEditorBaseSetup({ undoHistoryMinDepth: 100 }),
+          indentKeymap(),
           ...(input.readOnly ? [EditorState.readOnly.of(true)] : [])
         ]
       })
@@ -930,7 +940,8 @@ describe("fencedCodeIndentUnit live setting integration (#474 blocker remediatio
           ...createMarkdownEditorBaseSetup({
             undoHistoryMinDepth: 100,
             fencedCodeIndentUnit: input.unit ?? "spaces4"
-          })
+          }),
+          indentKeymap()
         ]
       })
     });

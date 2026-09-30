@@ -115,6 +115,16 @@ export interface ResolvedKeybinding {
   readonly when: string | null;
   readonly description: string;
   readonly handlerStatus: CommandHandlerStatus;
+  /**
+   * #647: where an EFFECTIVE row comes from. Absent = an untouched default
+   * (so `resolveDefaultKeybindings` and an empty overlay stay identical).
+   */
+  readonly origin?: "default" | "user";
+  /**
+   * #647: on an unassigned row that stands for a default binding the user
+   * unbound, the default key it would restore (canonical notation).
+   */
+  readonly defaultKey?: string;
 }
 
 /**
@@ -186,7 +196,9 @@ export type KeybindingDiagnosticCode =
   | "duplicateUserEntry"
   | "unsupportedWhen"
   | "unbindTargetNotFound"
-  | "fileReadError";
+  | "fileReadError"
+  | "fileWriteError"
+  | "fileInvalid";
 
 export interface KeybindingDiagnostic {
   readonly code: KeybindingDiagnosticCode;

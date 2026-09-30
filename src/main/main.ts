@@ -30,6 +30,8 @@ import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
 import { installReloadShortcutGuard } from "./reloadGuard";
 import { registerKeybindingsIpc } from "./keybindingsIpc";
 import { loadKeybindings, setStartupKeybindings } from "./keybindingsStore";
+import { installKeybindingCapture } from "./keybindingCapture";
+import type { ResolvedKeybinding } from "../shared/keybindings";
 import { nodePlatformToPergamumPlatform } from "./menuAccelerators";
 import {
   currentActiveProjectFilePath,
@@ -205,6 +207,8 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
   // #644: swallow Chromium's reload / forceReload keys that no renderer
   // command uses (plain Mod-R is left alone: it is Ruby insertion).
   installReloadShortcutGuard(mainWindow.webContents);
+  // #647: key capture for the Keyboard Shortcuts editor (off until asked).
+  installKeybindingCapture(mainWindow.webContents);
 
   const restoredZoomFactor =
     coldStartSessionState?.zoomFactor !== undefined
@@ -381,14 +385,19 @@ app.whenReady().then(async () => {
     nodePlatformToPergamumPlatform(process.platform)
   );
   setStartupKeybindings(loadedKeybindings);
-  await installApplicationMenu({
+  const applicationMenuOptions = (
+    keybindingRows: readonly ResolvedKeybinding[]
+  ) => ({
     getMainWindow: () => mainWindow,
     requestApplicationQuit: () => {
       windowLifecycleController?.requestApplicationQuit();
     },
     debugLogger,
-    keybindingRows: loadedKeybindings.effective.keybindings
+    keybindingRows
   });
+  await installApplicationMenu(
+    applicationMenuOptions(loadedKeybindings.effective.keybindings)
+  );
   registerApplicationMenuIpc();
   registerDebugLogIpc(debugLogger);
   registerContextMenuIpc(debugLogger);
@@ -420,7 +429,14 @@ app.whenReady().then(async () => {
       )
   );
   registerSettingsIpc();
-  registerKeybindingsIpc();
+  registerKeybindingsIpc(process.platform, {
+    // #647: a saved keybinding change rebuilds the menu with its accelerators.
+    onKeybindingsApplied: async (loaded) => {
+      await installApplicationMenu(
+        applicationMenuOptions(loaded.effective.keybindings)
+      );
+    }
+  });
   registerFontCacheIpc();
   registerJapaneseLintIpc();
   registerJapaneseMachineCheckIpc();

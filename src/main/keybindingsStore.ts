@@ -13,12 +13,16 @@ import { app } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
+  applyKeybindingEdit,
   normalizeUserKeyNotation,
   parseUserKeybindingsJson,
   resolveEffectiveKeybindings,
   serializeUserKeybindingsJson,
   type EffectiveKeybindingResult,
   type KeybindingDiagnostic,
+  type KeybindingEditConflict,
+  type KeybindingEditFailureReason,
+  type KeybindingEditRequest,
   type ParsedUserKeybindings,
   type PergamumPlatform,
   type UserKeybindingEntry
@@ -148,4 +152,78 @@ export async function saveUserKeybindings(
   }
   await writeUserKeybindings(normalized, directory);
   return { ok: true, diagnostics };
+}
+
+export type ApplyKeybindingChangeOutcome =
+  | {
+      readonly ok: true;
+      /** The keybindings now in effect (re-resolved from the saved file). */
+      readonly loaded: LoadedKeybindings;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: KeybindingEditFailureReason | "fileInvalid" | "saveFailed";
+      readonly diagnostics: KeybindingDiagnostic[];
+      readonly conflict?: KeybindingEditConflict;
+    };
+
+/**
+ * #647: one Keyboard Shortcuts edit (change / unbind / reset).
+ *
+ * 1. Reads the user entries from keybindings.json. A malformed / unreadable
+ *    file is NEVER overwritten: the edit is refused (`fileInvalid`).
+ * 2. Applies the edit with the shared helpers (conflict + reserved checks).
+ * 3. Only then writes atomically, re-resolves the effective keybindings and
+ *    makes them the applied set. Any failure leaves the file and the applied
+ *    set untouched.
+ */
+export async function applyKeybindingChange(
+  request: KeybindingEditRequest,
+  platform: PergamumPlatform,
+  directory?: string
+): Promise<ApplyKeybindingChangeOutcome> {
+  const parsed = await readUserKeybindings(directory);
+  const fileProblems = parsed.diagnostics.filter(
+    (diagnostic) =>
+      diagnostic.code === "jsonParseError" ||
+      diagnostic.code === "rootMustBeArray" ||
+      diagnostic.code === "fileReadError"
+  );
+  if (fileProblems.length > 0) {
+    return { ok: false, reason: "fileInvalid", diagnostics: fileProblems };
+  }
+
+  const edit = applyKeybindingEdit({
+    platform,
+    entries: parsed.entries,
+    request
+  });
+  if (!edit.ok) {
+    return {
+      ok: false,
+      reason: edit.reason,
+      diagnostics: edit.diagnostics,
+      ...(edit.conflict === undefined ? {} : { conflict: edit.conflict })
+    };
+  }
+
+  try {
+    await writeUserKeybindings(edit.entries, directory);
+  } catch {
+    return {
+      ok: false,
+      reason: "saveFailed",
+      diagnostics: [
+        {
+          code: "fileWriteError",
+          severity: "error",
+          message: "keybindings.json could not be saved"
+        }
+      ]
+    };
+  }
+
+  const loaded = await loadKeybindings(platform, directory);
+  setStartupKeybindings(loaded);
+  return { ok: true, loaded };
 }

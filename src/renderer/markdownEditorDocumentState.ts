@@ -71,6 +71,7 @@ import { ACTIVE_FIND_OPEN_COMMAND_ID, ACTIVE_FIND_REPLACE_COMMAND_ID } from "./f
 import { GLOSSARY_COMPLETION_COMMAND_ID } from "./glossaryCompletion";
 import { TAB_CAPTURE_TOGGLE_COMMAND_ID } from "./tabCaptureKeymapExtension";
 import { RENAME_DOCUMENT_COMMAND_ID } from "./editorRenameShortcut";
+import { EDITOR_INDENT_COMMAND_IDS } from "./indentCommands";
 import { createActiveFindGutterMarkerExtension } from "./find/activeFindGutterMarkerExtension";
 import { activeFindHighlightField } from "./find/activeFindHighlightExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
@@ -139,6 +140,8 @@ export interface MarkdownEditorDocumentStateOptions {
   readonly findGutterMarkerCompartment: Compartment;
   readonly findGutterMarkersRef: LiveRef<boolean>;
   readonly tabCaptureCompartment?: Compartment;
+  /** #647: holds the editor keymap so it can be reconfigured on a rebinding. */
+  readonly keymapCompartment?: Compartment;
   readonly captureTabInEditorRef?: LiveRef<boolean>;
   readonly fencedCodeIndentUnitCompartment?: Compartment;
   readonly fencedCodeIndentUnitRef?: LiveRef<FencedCodeIndentUnit>;
@@ -260,6 +263,58 @@ export function readOnlyCompartmentContent(readOnly: boolean): Extension[] {
  * per document: it is that document's own undo-integrated tracked data, not a
  * shared slot.
  */
+/** The options the editor keymap extension is built from (#647). */
+export type EditorKeymapExtensionOptions = Pick<
+  MarkdownEditorDocumentStateOptions,
+  | "glossaryCompletionRef"
+  | "readOnlyRef"
+  | "activeFindDiagnostics"
+  | "glossarySelectionShortcutEnabled"
+  | "emphasisMarkShortcutEnabled"
+  | "rubyShortcutEnabled"
+  | "markdownToolbarShortcutEnabled"
+>;
+
+/**
+ * #641 / #647: the catalog-derived editor keymap. Always-on commands run on
+ * every editor (each handler is inert without its published config); the
+ * Markdown / Ctrl+G families are included only for the instances that own
+ * them. Rebuilt (and reconfigured into the compartment) when the effective
+ * keybindings change.
+ */
+export function createEditorKeymapExtension(
+  options: EditorKeymapExtensionOptions
+): Extension {
+  return createPergamumEditorKeymapExtension({
+    handlers: createDefaultEditorKeybindingHandlers({
+      glossaryCompletion: {
+        getConfig: () => options.glossaryCompletionRef.current,
+        isReadOnly: () => options.readOnlyRef.current
+      },
+      activeFindDiagnostics: options.activeFindDiagnostics
+    }),
+    stopPropagationCommandIds: EDITOR_KEYMAP_STOP_PROPAGATION_COMMAND_IDS,
+    commandIds: [
+      ACTIVE_FIND_OPEN_COMMAND_ID,
+      ACTIVE_FIND_REPLACE_COMMAND_ID,
+      GLOSSARY_COMPLETION_COMMAND_ID,
+      TAB_CAPTURE_TOGGLE_COMMAND_ID,
+      RENAME_DOCUMENT_COMMAND_ID,
+      ...EDITOR_INDENT_COMMAND_IDS,
+      ...(options.glossarySelectionShortcutEnabled
+        ? [GLOSSARY_SELECTION_COMMAND_ID]
+        : []),
+      ...(options.emphasisMarkShortcutEnabled
+        ? [editorCommandIds.insertEmphasisMark]
+        : []),
+      ...(options.rubyShortcutEnabled ? [editorCommandIds.insertRuby] : []),
+      ...(options.markdownToolbarShortcutEnabled
+        ? MARKDOWN_TOOLBAR_KEYBINDING_COMMAND_IDS
+        : [])
+    ]
+  });
+}
+
 export function createMarkdownEditorDocumentState(
   options: MarkdownEditorDocumentStateOptions
 ): MarkdownEditorDocumentState {
@@ -337,38 +392,12 @@ export function createMarkdownEditorDocumentState(
       // actually belongs to; every other MarkdownEditor's state (e.g. the
       // Glossary description field) gets no keydown handler at all, so Ctrl+G
       // cannot fire there no matter what the module-level slot holds.
-      // #641: every CodeMirror editor shortcut, keys from the keybinding
-      // catalog. Always-on commands run on every editor (each handler is
-      // inert without its published config); the Markdown / Ctrl+G families
-      // are included only for the instances that own them (see the
-      // `*ShortcutEnabled` options above).
-      createPergamumEditorKeymapExtension({
-        handlers: createDefaultEditorKeybindingHandlers({
-          glossaryCompletion: {
-            getConfig: () => options.glossaryCompletionRef.current,
-            isReadOnly: () => options.readOnlyRef.current
-          },
-          activeFindDiagnostics: options.activeFindDiagnostics
-        }),
-        stopPropagationCommandIds: EDITOR_KEYMAP_STOP_PROPAGATION_COMMAND_IDS,
-        commandIds: [
-          ACTIVE_FIND_OPEN_COMMAND_ID,
-          ACTIVE_FIND_REPLACE_COMMAND_ID,
-          GLOSSARY_COMPLETION_COMMAND_ID,
-          TAB_CAPTURE_TOGGLE_COMMAND_ID,
-          RENAME_DOCUMENT_COMMAND_ID,
-          ...(options.glossarySelectionShortcutEnabled
-            ? [GLOSSARY_SELECTION_COMMAND_ID]
-            : []),
-          ...(options.emphasisMarkShortcutEnabled
-            ? [editorCommandIds.insertEmphasisMark]
-            : []),
-          ...(options.rubyShortcutEnabled ? [editorCommandIds.insertRuby] : []),
-          ...(options.markdownToolbarShortcutEnabled
-            ? MARKDOWN_TOOLBAR_KEYBINDING_COMMAND_IDS
-            : [])
-        ]
-      }),
+      // #641 / #647: every CodeMirror editor shortcut, keys from the effective
+      // keybindings, in a compartment so a saved rebinding can be applied to
+      // open and cached editors without rebuilding them.
+      (options.keymapCompartment ?? new Compartment()).of(
+        createEditorKeymapExtension(options)
+      ),
       // #424 Slice 2: inert until the Find panel dispatches its first
       // "mark all" effect; safe on every document's state.
       activeFindHighlightField,
