@@ -3,6 +3,7 @@
  * Keyboard Shortcuts UI. Read-only; nothing here executes commands.
  */
 
+import { formatKeybindingLabel } from "./format";
 import { resolveDefaultKeybindings, defaultKeybindingCatalog } from "./resolve";
 import type {
   CommandHandlerStatus,
@@ -90,4 +91,63 @@ export function listResolvedKeyboardShortcutItems(
       bindings
     };
   });
+}
+
+/**
+ * One row per binding for the Keyboard Shortcuts screen (#646): a command with
+ * several keys (Mod-p and F1) yields several rows; a command with no key on
+ * the platform yields one `key: null` row. Commands with no runtime handler
+ * (`notYetRegistered`) are left out, so nothing listed is a no-op.
+ */
+export interface KeyboardShortcutRow {
+  readonly commandId: string;
+  readonly title: string;
+  readonly category: string;
+  readonly description: string;
+  readonly scope: KeybindingScope;
+  readonly executionHost: KeybindingExecutionHost;
+  readonly source: KeybindingSource;
+  readonly readonly: boolean;
+  readonly readonlyReason: KeybindingReadonlyReason | null;
+  readonly handlerStatus: CommandHandlerStatus;
+  readonly when: string | null;
+  /** Canonical catalog notation, or null when unassigned. */
+  readonly key: string | null;
+  /** Platform-aware label (`Ctrl+S` / `Cmd+S`), or null when unassigned. */
+  readonly keyLabel: string | null;
+}
+
+/**
+ * Display rows from resolved keybindings (the effective set), sorted by
+ * category, title, commandId, then the order of the keys within a command.
+ */
+export function listKeyboardShortcutRows(
+  rows: readonly ResolvedKeybinding[],
+  platform: PergamumPlatform
+): KeyboardShortcutRow[] {
+  return rows
+    .map((row, position) => ({ row, position }))
+    .filter(({ row }) => row.handlerStatus !== "notYetRegistered")
+    .sort(
+      (a, b) =>
+        compareText(a.row.category, b.row.category) ||
+        compareText(a.row.title, b.row.title) ||
+        compareText(a.row.command, b.row.command) ||
+        a.position - b.position
+    )
+    .map(({ row }) => ({
+      commandId: row.command,
+      title: row.title,
+      category: row.category,
+      description: row.description,
+      scope: row.scope,
+      executionHost: row.executionHost,
+      source: row.source,
+      readonly: row.readonly,
+      readonlyReason: row.readonlyReason,
+      handlerStatus: row.handlerStatus,
+      when: row.when,
+      key: row.key,
+      keyLabel: row.key === null ? null : formatKeybindingLabel(row.key, platform)
+    }));
 }

@@ -111,6 +111,7 @@ describe("application menu", () => {
       editorCommandIds.saveAs,
       editorCommandIds.saveAs,
       projectSettingsCommandIds.open,
+      workspaceCommandIds.openKeyboardShortcuts,
       workspaceCommandIds.openApplicationSettings,
       workspaceCommandIds.openApplicationSettings,
       applicationCommandIds.quitApplication

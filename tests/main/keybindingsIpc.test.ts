@@ -211,10 +211,14 @@ describe("preload / API surface and #645 scope safety", () => {
     }
   });
 
-  it("adds no Keyboard Shortcuts UI component to the renderer", () => {
+  it("adds no shortcut-editing / key-capture component to the renderer", () => {
+    // (#646 added the view-only Keyboard Shortcuts screen; nothing may edit.)
     const names = readdirSync("src/renderer", { recursive: true }) as string[];
-    expect(names.filter((name) => /(^|[\\/])KeyboardShortcuts\w*\.tsx$/.test(name))).toEqual([]);
-    expect(names.filter((name) => /Keybindings?(Editor|Dialog|Panel|Settings)\w*\.tsx$/.test(name))).toEqual([]);
+    expect(
+      names.filter((name) =>
+        /(KeyCapture|KeyRecorder|ShortcutEditor|KeybindingsEditor|KeybindingEditor|KeybindingsJsonEditor)\w*\.tsx?$/.test(name)
+      )
+    ).toEqual([]);
   });
 
   it("the file is read at startup only (main.ts loads it once, before the menu)", () => {

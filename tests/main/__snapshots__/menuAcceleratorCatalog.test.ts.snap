@@ -114,6 +114,10 @@ exports[`application menu accelerators come from the catalog (#642) > darwin: me
         "label": "Project Settings...",
       },
       {
+        "id": "workspace.keyboardShortcuts.open",
+        "label": "Keyboard Shortcuts...",
+      },
+      {
         "id": "workspace.applicationSettings.open",
         "label": "Application Settings...",
       },
@@ -382,6 +386,10 @@ exports[`application menu accelerators come from the catalog (#642) > linux: men
         "label": "Project Settings...",
       },
       {
+        "id": "workspace.keyboardShortcuts.open",
+        "label": "Keyboard Shortcuts...",
+      },
+      {
         "id": "workspace.applicationSettings.open",
         "label": "Application Settings...",
       },
@@ -628,6 +636,10 @@ exports[`application menu accelerators come from the catalog (#642) > win32: men
       {
         "id": "project.settings.open",
         "label": "Project Settings...",
+      },
+      {
+        "id": "workspace.keyboardShortcuts.open",
+        "label": "Keyboard Shortcuts...",
       },
       {
         "id": "workspace.applicationSettings.open",

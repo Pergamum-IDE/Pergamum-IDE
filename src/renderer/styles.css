@@ -15300,3 +15300,235 @@ label.settingsItemHeader {
   text-align: end;
   font-variant-numeric: tabular-nums;
 }
+
+/* #646: Keyboard Shortcuts special tab (view only). Logical properties; theme
+   tokens only. */
+.keyboardShortcutsTab {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--pg-color-surface-background);
+  color: var(--pg-color-surface-foreground);
+  padding-block: 28px;
+  padding-inline: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.keyboardShortcutsHeader {
+  border-block-end: 1px solid var(--pg-color-panel-divider);
+  padding-block-end: 12px;
+}
+
+.keyboardShortcutsTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--pg-color-text-strong);
+}
+
+.keyboardShortcutsDescription,
+.keyboardShortcutsRestartNote {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutsToolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-inline-size: 900px;
+}
+
+.keyboardShortcutsSearch {
+  flex: 1;
+  min-inline-size: 0;
+  padding-block: 6px;
+  padding-inline: 10px;
+  font-size: 13px;
+  color: var(--pg-color-surface-foreground);
+  background: var(--pg-color-input-background);
+  border: 1px solid var(--pg-color-input-border);
+  border-radius: 4px;
+}
+
+.keyboardShortcutsOpenLocation {
+  flex-shrink: 0;
+  padding-block: 6px;
+  padding-inline: 12px;
+  font-size: 12px;
+  color: var(--pg-color-button-foreground);
+  background: var(--pg-color-button-background);
+  border: 1px solid var(--pg-color-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.keyboardShortcutsOpenLocation:hover {
+  background: var(--pg-color-button-hover-background);
+}
+
+.keyboardShortcutsStatus {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutsError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pg-color-status-error);
+}
+
+.keyboardShortcutsDiagnostics {
+  max-inline-size: 900px;
+  padding-block: 10px;
+  padding-inline: 14px;
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 6px;
+  background: var(--pg-color-surface-subtle);
+}
+
+.keyboardShortcutsDiagnostics-error {
+  border-color: var(--pg-color-status-error);
+}
+
+.keyboardShortcutsDiagnostics-warning {
+  border-color: var(--pg-color-status-warning);
+}
+
+.keyboardShortcutsDiagnosticsSummary {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.keyboardShortcutsDiagnosticsList {
+  margin: 0;
+  padding-inline-start: 18px;
+  font-size: 12px;
+}
+
+.keyboardShortcutsDiagnosticSeverity {
+  font-weight: 700;
+}
+
+.keyboardShortcutsDiagnosticSeverity-error {
+  color: var(--pg-color-status-error);
+}
+
+.keyboardShortcutsDiagnosticSeverity-warning {
+  color: var(--pg-color-status-warning);
+}
+
+.keyboardShortcutsDiagnosticCommand,
+.keyboardShortcutsDiagnosticKey {
+  margin-inline-start: 8px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-inline-size: 900px;
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 6px;
+}
+
+.keyboardShortcutRow {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-block: 8px;
+  padding-inline: 14px;
+  border-block-end: 1px solid var(--pg-color-panel-divider);
+}
+
+.keyboardShortcutRow:last-child {
+  border-block-end: none;
+}
+
+.keyboardShortcutRow:hover,
+.keyboardShortcutRow:focus-visible {
+  background: var(--pg-color-surface-hover);
+  outline: none;
+}
+
+.keyboardShortcutRowMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.keyboardShortcutTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pg-color-text-strong);
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.keyboardShortcutRowBadges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.keyboardShortcutKey {
+  padding-block: 1px;
+  padding-inline: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--pg-color-surface-foreground);
+  background: var(--pg-color-panel-background);
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 4px;
+}
+
+.keyboardShortcutUnassigned {
+  font-size: 12px;
+  color: var(--pg-color-surface-muted);
+  font-style: italic;
+}
+
+.keyboardShortcutReadonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutReadonlyIcon {
+  display: inline-flex;
+  inline-size: 12px;
+  block-size: 12px;
+}
+
+.keyboardShortcutReadonlyIcon svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.keyboardShortcutRowMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 14px;
+  row-gap: 2px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutCommandId {
+  font-size: 11px;
+}

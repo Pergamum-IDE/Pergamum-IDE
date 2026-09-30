@@ -8,6 +8,8 @@ export interface WelcomeSurfaceInput {
   // leave the Welcome surface covering it. Optional so existing callers that
   // never open it need no change.
   readonly isDebugLogTabOpen?: boolean;
+  // #646: the Keyboard Shortcuts special tab counts as an open tab too.
+  readonly isKeyboardShortcutsTabOpen?: boolean;
 }
 
 /**
@@ -22,7 +24,8 @@ export function shouldShowWelcomeSurface(input: WelcomeSurfaceInput): boolean {
   return (
     input.openDocumentsState.documents.length === 0 &&
     !input.isSettingsTabOpen &&
-    !input.isDebugLogTabOpen
+    !input.isDebugLogTabOpen &&
+    !input.isKeyboardShortcutsTabOpen
   );
 }
 
@@ -48,7 +51,8 @@ export function shouldShowFullScreenWelcomeSurface(
     shouldShowWelcomeSurface({
       openDocumentsState: input.openDocumentsState,
       isSettingsTabOpen: input.isSettingsTabOpen,
-      isDebugLogTabOpen: input.isDebugLogTabOpen
+      isDebugLogTabOpen: input.isDebugLogTabOpen,
+      isKeyboardShortcutsTabOpen: input.isKeyboardShortcutsTabOpen
     }) && !input.projectIsOpen
   );
 }

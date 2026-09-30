@@ -6,18 +6,23 @@
  * and rejects (with diagnostics, writing nothing) a set that has any error.
  */
 
-import { ipcMain } from "electron";
+import { ipcMain, shell } from "electron";
 import {
   KEYBINDINGS_CHANNELS,
   type GetEffectiveKeybindingsResult,
+  type GetKeyboardShortcutItemsResult,
   type GetUserKeybindingsResult,
+  type OpenKeybindingsJsonLocationResult,
   type SaveUserKeybindingsResult
 } from "../shared/api";
-import type {
-  KeybindingDiagnostic,
-  UserKeybindingEntry
+import {
+  listKeyboardShortcutRows,
+  type KeybindingDiagnostic,
+  type UserKeybindingEntry
 } from "../shared/keybindings";
 import {
+  ensureKeybindingsDirectory,
+  getStartupKeybindings,
   loadKeybindings,
   readUserKeybindings,
   saveUserKeybindings
@@ -56,10 +61,18 @@ const invalidRequestDiagnostic: KeybindingDiagnostic = {
     "The keybindings request must be an array of { key, command, when? } objects"
 };
 
+export interface KeybindingsIpcDependencies {
+  /** Opens a directory in the OS file manager; resolves "" on success. */
+  readonly openDirectory?: (directory: string) => Promise<string>;
+}
+
 export function registerKeybindingsIpc(
-  platformSource: NodeJS.Platform = process.platform
+  platformSource: NodeJS.Platform = process.platform,
+  dependencies: KeybindingsIpcDependencies = {}
 ): void {
   const platform = nodePlatformToPergamumPlatform(platformSource);
+  const openDirectory =
+    dependencies.openDirectory ?? ((directory: string) => shell.openPath(directory));
 
   ipcMain.handle(
     KEYBINDINGS_CHANNELS.getUserKeybindings,
@@ -89,6 +102,33 @@ export function registerKeybindingsIpc(
         return { ok: false, diagnostics: [invalidRequestDiagnostic] };
       }
       return saveUserKeybindings(entries, platform);
+    }
+  );
+
+  ipcMain.handle(
+    KEYBINDINGS_CHANNELS.getKeyboardShortcutItems,
+    async (): Promise<GetKeyboardShortcutItemsResult> => {
+      // What is in effect: the startup load (a fresh read only as a fallback).
+      const loaded = getStartupKeybindings() ?? (await loadKeybindings(platform));
+      return {
+        platform,
+        items: listKeyboardShortcutRows(loaded.effective.keybindings, platform),
+        diagnostics: loaded.diagnostics
+      };
+    }
+  );
+
+  ipcMain.handle(
+    KEYBINDINGS_CHANNELS.openKeybindingsJsonLocation,
+    async (): Promise<OpenKeybindingsJsonLocationResult> => {
+      // The path stays in main; the renderer only learns whether it worked.
+      try {
+        const directory = await ensureKeybindingsDirectory();
+        const failure = await openDirectory(directory);
+        return { ok: failure === "" };
+      } catch {
+        return { ok: false };
+      }
     }
   );
 }
