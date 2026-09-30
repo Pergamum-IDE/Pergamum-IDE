@@ -6616,6 +6616,8 @@ label.settingsItemHeader {
   top: var(--file-explorer-context-menu-y, 0);
   left: var(--file-explorer-context-menu-x, 0);
   min-width: 160px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: 4px;
   border: 1px solid var(--workspace-sidebar-border, rgba(127, 127, 127, 0.3));
   border-radius: 6px;
