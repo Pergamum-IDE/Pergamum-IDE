@@ -3,10 +3,16 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createRubyKeymapExtension,
-  isRubyShortcutTrigger,
+  createRubyKeybindingHandlers,
   type MarkdownEditorRubyShortcutConfig
 } from "../../src/renderer/editorRubyShortcuts";
+import { handlerFires, keymapFor } from "./helpers/editorKeymapHarness";
+
+const RUBY_COMMAND = "editor.markdown.insertRuby";
+const isRubyShortcutTrigger = (
+  event: KeyboardEvent,
+  platform?: "darwin" | "win32" | "linux"
+): boolean => handlerFires(RUBY_COMMAND, event, platform);
 
 let view: EditorView | null = null;
 
@@ -34,7 +40,10 @@ function createView(input: {
         : undefined,
       extensions: [
         EditorState.readOnly.of(input.readOnly ?? false),
-        createRubyKeymapExtension({ getConfig: () => input.config })
+        keymapFor({
+          handlers: createRubyKeybindingHandlers(() => input.config),
+          commandIds: [RUBY_COMMAND]
+        })
       ]
     })
   });
@@ -68,7 +77,9 @@ describe("isRubyShortcutTrigger", () => {
   });
 
   it("returns true for uppercase R", () => {
-    expect(isRubyShortcutTrigger(rKeydown({ key: "R", ctrlKey: true }))).toBe(true);
+    // Real browsers also report keyCode 82; CodeMirror falls back to it when
+    // CapsLock makes `key` uppercase.
+    expect(isRubyShortcutTrigger(rKeydown({ key: "R", ctrlKey: true, keyCode: 82 }))).toBe(true);
   });
 
   it("returns false if Alt or Shift is pressed", () => {
@@ -86,7 +97,7 @@ describe("isRubyShortcutTrigger", () => {
   });
 });
 
-describe("createRubyKeymapExtension", () => {
+describe("Ruby shortcut via the catalog-derived editor keymap", () => {
   it("does nothing when config is null", () => {
     const v = createView({ config: null, selection: { anchor: 0, head: 5 } });
     const event = rKeydown();

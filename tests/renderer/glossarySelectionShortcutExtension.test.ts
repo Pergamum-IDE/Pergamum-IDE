@@ -4,9 +4,11 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createGlossarySelectionShortcutKeymapExtension,
+  GLOSSARY_SELECTION_COMMAND_ID,
+  createGlossarySelectionKeybindingHandlers,
   type MarkdownEditorGlossarySelectionShortcutConfig
 } from "../../src/renderer/glossarySelectionShortcutExtension";
+import { keymapFor } from "./helpers/editorKeymapHarness";
 import { createMarkdownEditorBaseSetup } from "../../src/renderer/markdownEditorCodeMirrorSetup";
 
 let view: EditorView | null = null;
@@ -34,8 +36,11 @@ function createView(input: {
         ...(input.withBaseSetup
           ? createMarkdownEditorBaseSetup({ undoHistoryMinDepth: 100 })
           : []),
-        createGlossarySelectionShortcutKeymapExtension({
-          getConfig: () => input.config
+        keymapFor({
+          handlers: createGlossarySelectionKeybindingHandlers(
+            () => input.config
+          ),
+          commandIds: [GLOSSARY_SELECTION_COMMAND_ID]
         })
       ]
     })
@@ -55,7 +60,7 @@ function glossaryKeydown(overrides: Partial<KeyboardEventInit> = {}): KeyboardEv
   });
 }
 
-describe("createGlossarySelectionShortcutKeymapExtension (#436 Slice 12)", () => {
+describe("Glossary selection shortcut via the catalog-derived editor keymap (#436 Slice 12)", () => {
   it("Ctrl+G calls requestOpen with the raw selected text and preventDefaults", () => {
     const requestOpen = vi.fn();
     const testView = createView({

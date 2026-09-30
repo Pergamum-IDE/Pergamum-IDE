@@ -4,9 +4,22 @@ import { EditorView } from "@codemirror/view";
 import { searchPanelOpen } from "@codemirror/search";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createActiveFindKeymapExtension,
+  ACTIVE_FIND_OPEN_COMMAND_ID,
+  ACTIVE_FIND_REPLACE_COMMAND_ID,
+  createActiveFindKeybindingHandlers,
   type MarkdownEditorActiveFindConfig
 } from "../../src/renderer/find/activeFindKeymapExtension";
+import { keymapFor } from "./helpers/editorKeymapHarness";
+
+function createActiveFindKeymapExtension(input: {
+  getConfig: () => MarkdownEditorActiveFindConfig | null;
+  diagnostics?: { editorInstanceId: string; expectActiveFindSurface: boolean };
+}) {
+  return keymapFor({
+    handlers: createActiveFindKeybindingHandlers(input),
+    commandIds: [ACTIVE_FIND_OPEN_COMMAND_ID, ACTIVE_FIND_REPLACE_COMMAND_ID]
+  });
+}
 import { createMarkdownEditorBaseSetup } from "../../src/renderer/markdownEditorCodeMirrorSetup";
 import { stubRuntimePlatform } from "./helpers/runtimePlatform";
 
@@ -66,7 +79,7 @@ function replaceKeydown(overrides: Partial<KeyboardEventInit> = {}): KeyboardEve
   });
 }
 
-describe("createActiveFindKeymapExtension (#424)", () => {
+describe("Active Find shortcuts via the catalog-derived editor keymap (#424, #641)", () => {
   it("Ctrl+F opens in search mode, Ctrl+H opens in replace mode; both preventDefault", () => {
     const requestOpen = vi.fn();
     const testView = createView({ config: { requestOpen } });

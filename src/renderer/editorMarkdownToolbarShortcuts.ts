@@ -17,10 +17,9 @@
  * (and republished) whenever that gate's value changes.
  */
 
-import { Prec, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
-import type { PergamumPlatform } from "../shared/keybindings";
-import { getRuntimePlatform, isModKey } from "./platformModifier";
+import type { EditorView } from "@codemirror/view";
+import { editorCommandIds } from "../shared/commandIds";
+import type { EditorKeybindingHandlers } from "./keybindings/codeMirrorKeymap";
 
 export interface MarkdownEditorToolbarShortcutConfig {
   readonly isEnabled: boolean;
@@ -67,161 +66,81 @@ export function getCurrentMarkdownToolbarShortcutConfig(): MarkdownEditorToolbar
   return currentMarkdownToolbarShortcutConfig;
 }
 
-type MarkdownToolbarShortcutTrigger =
-  | "bold"
-  | "italic"
-  | "strikethrough"
-  | "heading"
-  | "link"
-  | "horizontalRule"
-  | "codeBlock"
-  | "insertBlockquote"
-  | "insertImage"
-  | "insertTable"
-  | "toggleSyntaxChecker";
+/**
+ * #641: the catalog commands this family handles. The keys come from the
+ * keybinding catalog (see keybindings/codeMirrorKeymap.ts), not from here.
+ */
+export const MARKDOWN_TOOLBAR_KEYBINDING_COMMAND_IDS: readonly string[] = [
+  editorCommandIds.bold,
+  editorCommandIds.italic,
+  editorCommandIds.strikethrough,
+  editorCommandIds.heading,
+  editorCommandIds.link,
+  editorCommandIds.insertHorizontalRule,
+  editorCommandIds.insertCodeBlock,
+  editorCommandIds.insertBlockquote,
+  editorCommandIds.insertImage,
+  editorCommandIds.insertTable,
+  editorCommandIds.toggleSyntaxChecker
+];
 
-export function matchMarkdownToolbarShortcutTrigger(
-  event: KeyboardEvent,
-  platform: PergamumPlatform = getRuntimePlatform()
-): MarkdownToolbarShortcutTrigger | null {
-  // Mod = Ctrl (win32/linux) or Cmd (darwin). On darwin a bare Ctrl+letter
-  // is left to the OS text-editing keys (#636).
-  if (!isModKey(event, platform)) {
-    return null;
-  }
-
-  if (event.altKey) {
-    // darwin: Cmd+Option+Q inserts a blockquote (Cmd+Shift+Q is log out).
-    // `event.key` is a composed character under Option, so use `code`.
-    return platform === "darwin" && !event.shiftKey && event.code === "KeyQ"
-      ? "insertBlockquote"
-      : null;
-  }
-
-  const key = event.key.toLowerCase();
-
-  if (event.shiftKey) {
-    switch (key) {
-      case "x":
-        return "strikethrough";
-      case "l":
-        return "horizontalRule";
-      case "b":
-        return "codeBlock";
-      case "q":
-        // darwin uses Cmd+Option+Q instead (see above).
-        return platform === "darwin" ? null : "insertBlockquote";
-      case "i":
-        return "insertImage";
-      case "c":
-        return "toggleSyntaxChecker";
-      default:
-        return null;
-    }
-  }
-
-  switch (key) {
-    case "b":
-      return "bold";
-    case "i":
-      return "italic";
-    case "k":
-      return "link";
-    case "l":
-      return "heading";
-    case "t":
-      return "insertTable";
-    default:
-      return null;
-  }
-}
-
-export function createMarkdownToolbarShortcutKeymapExtension(input?: {
-  readonly getConfig?: () => MarkdownEditorToolbarShortcutConfig | null;
-}): Extension {
-  let localComposing = false;
-
-  const getConfig =
-    input?.getConfig ?? getCurrentMarkdownToolbarShortcutConfig;
-
-  return Prec.highest(
-    EditorView.domEventHandlers({
-      compositionstart(): boolean {
-        localComposing = true;
+/**
+ * commandId -> existing toolbar callback. Every handler keeps the former
+ * gates: a published, enabled config (Markdown document, not a special tab)
+ * and a writable editor. A gate that fails returns `false`, so the key falls
+ * through untouched.
+ */
+export function createMarkdownToolbarKeybindingHandlers(
+  getConfig: () => MarkdownEditorToolbarShortcutConfig | null = getCurrentMarkdownToolbarShortcutConfig
+): EditorKeybindingHandlers {
+  const run =
+    (
+      action: (
+        config: MarkdownEditorToolbarShortcutConfig,
+        view: EditorView
+      ) => void
+    ) =>
+    (view: EditorView): boolean => {
+      const config = getConfig();
+      if (!config || !config.isEnabled) {
         return false;
-      },
-      compositionend(): boolean {
-        localComposing = false;
-        return false;
-      },
-      keydown(event, view): boolean {
-        const trigger = matchMarkdownToolbarShortcutTrigger(
-          event,
-          getRuntimePlatform()
-        );
-        if (!trigger) {
-          return false;
-        }
-
-        const config = getConfig();
-        if (!config || !config.isEnabled) {
-          return false;
-        }
-
-        if (event.isComposing || view.composing || localComposing) {
-          return false;
-        }
-
-        if (view.state.readOnly) {
-          return false;
-        }
-
-        event.preventDefault();
-
-        switch (trigger) {
-          case "bold":
-            config.applyBold();
-            break;
-          case "italic":
-            config.applyItalic();
-            break;
-          case "strikethrough":
-            config.applyStrikethrough();
-            break;
-          case "heading":
-            config.requestOpenHeadingSelector();
-            break;
-          case "horizontalRule":
-            config.insertHorizontalRule();
-            break;
-          case "codeBlock":
-            config.insertCodeBlock();
-            break;
-          case "insertBlockquote":
-            config.insertBlockquote();
-            break;
-          case "insertImage":
-            config.requestInsertImage();
-            break;
-          case "insertTable":
-            config.requestOpenTablePicker?.();
-            break;
-          case "toggleSyntaxChecker":
-            config.toggleSyntaxChecker?.();
-            break;
-          case "link": {
-            const selection = view.state.selection.main;
-            const selectedText = view.state.sliceDoc(
-              selection.from,
-              selection.to
-            );
-            config.requestOpenLinkDialog(selectedText, view.contentDOM);
-            break;
-          }
-        }
-
-        return true;
       }
+      if (view.state.readOnly) {
+        return false;
+      }
+      action(config, view);
+      return true;
+    };
+
+  return {
+    [editorCommandIds.bold]: run((config) => config.applyBold()),
+    [editorCommandIds.italic]: run((config) => config.applyItalic()),
+    [editorCommandIds.strikethrough]: run((config) =>
+      config.applyStrikethrough()
+    ),
+    [editorCommandIds.heading]: run((config) =>
+      config.requestOpenHeadingSelector()
+    ),
+    [editorCommandIds.insertHorizontalRule]: run((config) =>
+      config.insertHorizontalRule()
+    ),
+    [editorCommandIds.insertCodeBlock]: run((config) =>
+      config.insertCodeBlock()
+    ),
+    [editorCommandIds.insertBlockquote]: run((config) =>
+      config.insertBlockquote()
+    ),
+    [editorCommandIds.insertImage]: run((config) => config.requestInsertImage()),
+    [editorCommandIds.insertTable]: run((config) =>
+      config.requestOpenTablePicker?.()
+    ),
+    [editorCommandIds.toggleSyntaxChecker]: run((config) =>
+      config.toggleSyntaxChecker?.()
+    ),
+    [editorCommandIds.link]: run((config, view) => {
+      const selection = view.state.selection.main;
+      const selectedText = view.state.sliceDoc(selection.from, selection.to);
+      config.requestOpenLinkDialog(selectedText, view.contentDOM);
     })
-  );
+  };
 }

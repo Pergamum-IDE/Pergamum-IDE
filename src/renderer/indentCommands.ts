@@ -31,7 +31,8 @@ import {
   type Line,
   type Text
 } from "@codemirror/state";
-import type { Command, EditorView, KeyBinding } from "@codemirror/view";
+import type { Command, EditorView } from "@codemirror/view";
+import { editorCommandIds } from "../shared/commandIds";
 import {
   buildBlockquoteText,
   canIndentListItem,
@@ -402,16 +403,26 @@ export const outdentCommand: Command = (view) => {
 };
 
 /**
- * Replaces `defaultKeymap`'s own `Mod-]` / `Mod-[` (bound to the generic,
- * Markdown-unaware `indentMore` / `indentLess`) with the context-aware
- * commands above. Deliberately does NOT bind `Tab` / `Shift-Tab` - Issue
+ * #641: commandId -> command for `editor.indent` / `editor.outdent`. The keys
+ * (Mod-] / Mod-[) come from the keybinding catalog; the base CodeMirror setup
+ * builds the bindings. They replace `defaultKeymap`'s own `Mod-]` / `Mod-[`
+ * (bound to the generic, Markdown-unaware `indentMore` / `indentLess`) with
+ * the context-aware commands above. Deliberately does NOT bind `Tab` / `Shift-Tab` - Issue
  * #463 is the command foundation only; Tab capture is
  * `editor.captureTabInEditor`, a separate, not-yet-implemented opt-in
  * (ADR-0014 決定2).
  */
-export const editorIndentKeymap: readonly KeyBinding[] = [
-  { key: "Mod-]", run: indentCommand },
-  { key: "Mod-[", run: outdentCommand }
+export const editorIndentKeybindingHandlers: Readonly<
+  Record<string, Command>
+> = {
+  [editorCommandIds.indent]: indentCommand,
+  [editorCommandIds.outdent]: outdentCommand
+};
+
+/** The catalog commands {@link editorIndentKeybindingHandlers} covers. */
+export const EDITOR_INDENT_COMMAND_IDS: readonly string[] = [
+  editorCommandIds.indent,
+  editorCommandIds.outdent
 ];
 
 /**

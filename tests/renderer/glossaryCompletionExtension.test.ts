@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { keymapFor } from "./helpers/editorKeymapHarness";
+import { GLOSSARY_COMPLETION_COMMAND_ID } from "../../src/renderer/glossaryCompletion";
 import {
   acceptCompletion,
   completionStatus,
@@ -11,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { GlossaryEntry } from "../../src/shared/glossary";
 import {
   createGlossaryCompletionExtension,
+  createGlossaryCompletionKeybindingHandlers,
   type MarkdownEditorGlossaryCompletionConfig
 } from "../../src/renderer/glossaryCompletionExtension";
 
@@ -70,6 +73,14 @@ function createTestView(input: {
         createGlossaryCompletionExtension({
           getConfig: () => currentConfig,
           isReadOnly: () => readOnly
+        }),
+        // #641: the trigger key comes from the catalog-derived editor keymap.
+        keymapFor({
+          handlers: createGlossaryCompletionKeybindingHandlers({
+            getConfig: () => currentConfig,
+            isReadOnly: () => readOnly
+          }),
+          commandIds: [GLOSSARY_COMPLETION_COMMAND_ID]
         })
       ]
     })

@@ -28,14 +28,14 @@ import {
 } from "@codemirror/autocomplete";
 import { Prec, type Extension } from "@codemirror/state";
 import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
-import { getRuntimePlatform } from "./platformModifier";
+import type { EditorKeybindingHandlers } from "./keybindings/codeMirrorKeymap";
 import type { GlossaryEntry } from "../shared/glossary";
 import {
   GLOSSARY_COMPLETION_SUFFIX_LOOKBACK,
   collectGlossaryCompletionAtoms,
   extractGlossaryCompletionPrefix,
   filterGlossaryCompletionCandidates,
-  isGlossaryCompletionShortcutEvent,
+  GLOSSARY_COMPLETION_COMMAND_ID,
   toGlossaryCompletionDisplayItem
 } from "./glossaryCompletion";
 
@@ -118,49 +118,26 @@ const glossaryCompletionKeymapWithoutCtrlSpace: readonly KeyBinding[] = [
   { key: "Enter", run: acceptCompletion }
 ];
 
-function isGlossaryCompletionTriggerEvent(event: KeyboardEvent): boolean {
-  return isGlossaryCompletionShortcutEvent(event, getRuntimePlatform());
-}
-
-function createGlossaryCompletionTrigger(
-  getConfig: () => MarkdownEditorGlossaryCompletionConfig | null,
-  isReadOnly: () => boolean
-): Extension {
-  // Belt-and-braces third signal alongside event.isComposing / view.composing
-  // (see module doc comment) - tracked locally since compositionstart fires
-  // before view.composing flips true.
-  let localComposing = false;
-
-  return Prec.highest(
-    EditorView.domEventHandlers({
-      compositionstart(): boolean {
-        localComposing = true;
+/**
+ * #641: commandId -> handler that opens glossary completion. The key comes
+ * from the keybinding catalog. Inert (returns `false`) when the editor has no
+ * glossary config or is read-only; the editor keymap dispatcher already
+ * withholds every shortcut during IME composition, so the IME keeps Ctrl+Space
+ * while composing.
+ */
+export function createGlossaryCompletionKeybindingHandlers(input: {
+  readonly getConfig: () => MarkdownEditorGlossaryCompletionConfig | null;
+  readonly isReadOnly: () => boolean;
+}): EditorKeybindingHandlers {
+  return {
+    [GLOSSARY_COMPLETION_COMMAND_ID]: (view: EditorView): boolean => {
+      if (!input.getConfig() || input.isReadOnly()) {
         return false;
-      },
-      compositionend(): boolean {
-        localComposing = false;
-        return false;
-      },
-      keydown(event, view): boolean {
-        if (!isGlossaryCompletionTriggerEvent(event)) {
-          return false;
-        }
-
-        if (!getConfig() || isReadOnly()) {
-          return false;
-        }
-
-        if (event.isComposing || view.composing || localComposing) {
-          // IME/ATOK owns Ctrl+Space while composing - never preventDefault
-          // or stopPropagation; let the event through untouched.
-          return false;
-        }
-
-        startCompletion(view);
-        return true;
       }
-    })
-  );
+      startCompletion(view);
+      return true;
+    }
+  };
 }
 
 /**
@@ -187,7 +164,6 @@ export function createGlossaryCompletionExtension(input: {
       defaultKeymap: false,
       icons: false
     }),
-    Prec.highest(keymap.of(glossaryCompletionKeymapWithoutCtrlSpace)),
-    createGlossaryCompletionTrigger(input.getConfig, input.isReadOnly)
+    Prec.highest(keymap.of(glossaryCompletionKeymapWithoutCtrlSpace))
   ];
 }

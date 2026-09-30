@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { NATIVE_SEARCH_PANEL_KEYS } from "../../src/renderer/markdownEditorCodeMirrorSetup";
 import { readFileSync } from "node:fs";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -1205,9 +1206,10 @@ describe("Ctrl+F native search panel suppression wiring (#424 Slice 1)", () => {
   );
 
   it("filters the panel-opener keys out of searchKeymap but keeps the rest", () => {
-    expect(setupSource).toContain('"Mod-f"');
-    expect(setupSource).toContain('"F3"');
-    expect(setupSource).toContain('"Mod-g"');
+    // #641: the opener keys come from the keybinding catalog, not literals.
+    expect(setupSource).toContain("NATIVE_SEARCH_PANEL_KEYS");
+    expect(setupSource).toContain("listCommonDefaultKeys");
+    expect([...NATIVE_SEARCH_PANEL_KEYS].sort()).toEqual(["F3", "Mod-f", "Mod-g"]);
     expect(setupSource).toContain("searchKeymapWithoutPanelOpeners");
     expect(setupSource).toContain("...searchKeymapWithoutPanelOpeners");
     // the raw spread is gone

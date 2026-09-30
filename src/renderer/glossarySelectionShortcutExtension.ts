@@ -34,10 +34,8 @@
  * uses "+G". `Prec.highest` still guarantees priority regardless.
  */
 
-import { Prec, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
-import type { PergamumPlatform } from "../shared/keybindings";
-import { getRuntimePlatform, isModKey } from "./platformModifier";
+import type { EditorView } from "@codemirror/view";
+import type { EditorKeybindingHandlers } from "./keybindings/codeMirrorKeymap";
 
 export interface MarkdownEditorGlossarySelectionShortcutConfig {
   /** The active Markdown editor's current PRIMARY selection, verbatim
@@ -70,71 +68,29 @@ export function getCurrentGlossarySelectionShortcutConfig(): MarkdownEditorGloss
   return currentGlossarySelectionShortcutConfig;
 }
 
+/** The catalog command `Mod-g` belongs to. */
+export const GLOSSARY_SELECTION_COMMAND_ID = "glossary.entry.openFromSelection";
+
 /**
- * Mod+G (Ctrl+G on win32/linux, Cmd+G on darwin), no Shift/Alt. Ctrl+Cmd+G
- * never counts, and on darwin a bare Ctrl+G is left to the OS (#636).
+ * #641: commandId -> existing `requestOpen` callback. The key comes from the
+ * keybinding catalog. No published config -> the key falls through; an empty
+ * selection passes an empty string (no normalization here).
  */
-export function isGlossarySelectionShortcutTrigger(
-  event: KeyboardEvent,
-  platform: PergamumPlatform = getRuntimePlatform()
-): boolean {
-  return (
-    !event.altKey &&
-    !event.shiftKey &&
-    isModKey(event, platform) &&
-    event.code === "KeyG"
-  );
-}
-
-export function createGlossarySelectionShortcutKeymapExtension(input?: {
-  /**
-   * Override for the current-config lookup. Production passes nothing — the
-   * keymap reads the module-level {@link getCurrentGlossarySelectionShortcutConfig}
-   * slot. Unit tests pass an explicit accessor to isolate from that global.
-   */
-  readonly getConfig?: () => MarkdownEditorGlossarySelectionShortcutConfig | null;
-}): Extension {
-  // IME safety mirrors activeFindKeymapExtension.ts / glossaryCompletionExtension.ts:
-  // compositionstart fires before view.composing flips true.
-  let localComposing = false;
-
-  const getConfig = input?.getConfig ?? getCurrentGlossarySelectionShortcutConfig;
-
-  return Prec.highest(
-    EditorView.domEventHandlers({
-      compositionstart(): boolean {
-        localComposing = true;
+export function createGlossarySelectionKeybindingHandlers(
+  getConfig: () => MarkdownEditorGlossarySelectionShortcutConfig | null = getCurrentGlossarySelectionShortcutConfig
+): EditorKeybindingHandlers {
+  return {
+    [GLOSSARY_SELECTION_COMMAND_ID]: (view: EditorView): boolean => {
+      const config = getConfig();
+      if (!config) {
         return false;
-      },
-      compositionend(): boolean {
-        localComposing = false;
-        return false;
-      },
-      keydown(event, view): boolean {
-        if (!isGlossarySelectionShortcutTrigger(event)) {
-          return false;
-        }
-
-        const config = getConfig();
-
-        if (!config) {
-          return false;
-        }
-
-        if (event.isComposing || view.composing || localComposing) {
-          // The IME owns the key while composing — pass it through untouched.
-          return false;
-        }
-
-        const selection = view.state.selection.main;
-        const selectedText = selection.empty
-          ? ""
-          : view.state.sliceDoc(selection.from, selection.to);
-
-        event.preventDefault();
-        config.requestOpen(selectedText);
-        return true;
       }
-    })
-  );
+      const selection = view.state.selection.main;
+      const selectedText = selection.empty
+        ? ""
+        : view.state.sliceDoc(selection.from, selection.to);
+      config.requestOpen(selectedText);
+      return true;
+    }
+  };
 }

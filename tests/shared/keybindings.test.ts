@@ -231,7 +231,8 @@ describe("key formatting (#639)", () => {
   it("converts to CodeMirror keys", () => {
     expect(toCodeMirrorKey("Shift-Alt-m", "darwin")).toBe("Alt-Shift-m");
     expect(toCodeMirrorKey("Mod-s", "win32")).toBe("Ctrl-s");
-    expect(toCodeMirrorKey("Mod-s", "darwin")).toBe("Mod-s");
+    expect(toCodeMirrorKey("Mod-s", "darwin")).toBe("Cmd-s");
+    expect(toCodeMirrorKey("Ctrl-Mod-f", "darwin")).toBe("Ctrl-Cmd-f");
     expect(toCodeMirrorKey("Ctrl-Mod-f", "win32")).toBe("Ctrl-f");
   });
 

@@ -32,10 +32,14 @@
  * base keymap on Windows / Linux (the emacs-style `Ctrl-h` is `mac:` only).
  */
 
-import { Prec, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import type { PergamumPlatform } from "../../shared/keybindings";
-import { getRuntimePlatform, isModKey } from "../platformModifier";
+import type { EditorKeybindingHandlers } from "../keybindings/codeMirrorKeymap";
+import {
+  eventMatchesCatalogCommand,
+  type CatalogKeyEvent
+} from "../keybindings/catalogKeyMatch";
+import { getRuntimePlatform } from "../platformModifier";
 import { logRendererDebugEvent } from "../debugLog";
 
 export type ActiveFindPanelMode = "search" | "replace";
@@ -115,58 +119,43 @@ export function nextActiveFindEditorInstanceId(): string {
 }
 
 /**
- * `"search"` for Mod+F; `"replace"` for Ctrl+H on win32/linux and for
- * Cmd+Option+F on darwin (Cmd+H hides the app there, so it is not used).
- * Mod is Ctrl on win32/linux and Cmd on darwin; bare Ctrl+F / Ctrl+H on
- * darwin are OS text-editing keys and are not consumed (#636).
+ * `"search"` for the catalog's `editor.find.open` key and `"replace"` for
+ * `editor.find.replace.open` (Mod-f / Mod-h, darwin Mod-Alt-f - Cmd+H hides
+ * the app there). Used where the shortcut is recognized outside the editor
+ * keymap (the Find panel's own inputs). Mod is Ctrl on win32/linux and Cmd on
+ * darwin; a bare Ctrl+F / Ctrl+H on darwin is an OS text-editing key and is
+ * not consumed (#636, #641).
  */
 export function activeFindModeForKeyEvent(
-  event: KeyboardEvent | ReactLikeKeyEvent,
+  event: KeyboardEvent | CatalogKeyEvent,
   platform: PergamumPlatform = getRuntimePlatform()
 ): ActiveFindPanelMode | null {
-  if (!isModKey(event, platform) || event.shiftKey) {
-    return null;
-  }
-  if (platform === "darwin") {
-    if (event.code !== "KeyF") {
-      return null;
-    }
-    return event.altKey ? "replace" : "search";
-  }
-  if (event.altKey) {
-    return null;
-  }
-  if (event.code === "KeyF") {
+  if (eventMatchesCatalogCommand(event, "editor.find.open", platform)) {
     return "search";
   }
-  if (event.code === "KeyH") {
+  if (eventMatchesCatalogCommand(event, "editor.find.replace.open", platform)) {
     return "replace";
   }
   return null;
 }
 
-interface ReactLikeKeyEvent {
-  readonly ctrlKey: boolean;
-  readonly metaKey: boolean;
-  readonly shiftKey: boolean;
-  readonly altKey: boolean;
-  readonly code: string;
-}
+export const ACTIVE_FIND_OPEN_COMMAND_ID = "editor.find.open";
+export const ACTIVE_FIND_REPLACE_COMMAND_ID = "editor.find.replace.open";
 
-function findTriggerMode(event: KeyboardEvent): ActiveFindPanelMode | null {
-  return activeFindModeForKeyEvent(event, getRuntimePlatform());
-}
-
-export function createActiveFindKeymapExtension(input?: {
+/**
+ * #641: commandId -> existing `requestOpen` callback for Find / Replace. The
+ * keys come from the keybinding catalog.
+ */
+export function createActiveFindKeybindingHandlers(input?: {
   /**
    * Override for the current-config lookup. Production passes nothing — the
-   * keymap reads the module-level {@link getCurrentActiveFindConfig} slot.
+   * handlers read the module-level {@link getCurrentActiveFindConfig} slot.
    * Unit tests pass an explicit accessor to isolate from that global.
    */
   readonly getConfig?: () => MarkdownEditorActiveFindConfig | null;
   /**
    * Diagnostics context. `editorInstanceId` is the id of the MarkdownEditor
-   * that built this extension. `expectActiveFindSurface` is `true` only for
+   * that built these handlers. `expectActiveFindSurface` is `true` only for
    * the editor that IS the active-document Find surface — so a
    * `activeFind.shortcut.routeFailed` debug log fires only when routing
    * genuinely broke, never for the (by design inert) Glossary description
@@ -176,70 +165,50 @@ export function createActiveFindKeymapExtension(input?: {
     readonly editorInstanceId: string;
     readonly expectActiveFindSurface: boolean;
   };
-}): Extension {
-  // Belt-and-braces third IME signal — compositionstart fires before
-  // view.composing flips true (see glossaryCompletionExtension.ts).
-  let localComposing = false;
-
+}): EditorKeybindingHandlers {
   const getConfig = input?.getConfig ?? getCurrentActiveFindConfig;
   const diagnostics = input?.diagnostics;
 
-  return Prec.highest(
-    EditorView.domEventHandlers({
-      compositionstart(): boolean {
-        localComposing = true;
+  const open =
+    (mode: ActiveFindPanelMode) =>
+    (view: EditorView): boolean => {
+      const config = getConfig();
+
+      if (!config) {
+        // #425 follow-up: only a genuine routing failure — the editor that
+        // should own the Active Find binding somehow has none. The Glossary
+        // description field (expectActiveFindSurface:false) is silently inert.
+        if (diagnostics?.expectActiveFindSurface) {
+          logRendererDebugEvent({
+            level: "warn",
+            event: "activeFind.shortcut.routeFailed",
+            details: {
+              reason: "no_active_find_binding",
+              activeFindMode: mode,
+              activeFindEditorInstanceId: diagnostics.editorInstanceId
+            }
+          });
+        }
         return false;
-      },
-      compositionend(): boolean {
-        localComposing = false;
-        return false;
-      },
-      keydown(event, view): boolean {
-        const mode = findTriggerMode(event);
-        if (mode === null) {
-          return false;
-        }
-
-        const config = getConfig();
-
-        if (!config) {
-          // #425 follow-up: only a genuine routing failure — the editor that
-          // should own the Active Find binding somehow has none. The Glossary
-          // description field (expectActiveFindSurface:false) is silently inert.
-          if (diagnostics?.expectActiveFindSurface) {
-            logRendererDebugEvent({
-              level: "warn",
-              event: "activeFind.shortcut.routeFailed",
-              details: {
-                reason: "no_active_find_binding",
-                activeFindMode: mode,
-                activeFindEditorInstanceId: diagnostics.editorInstanceId
-              }
-            });
-          }
-          return false;
-        }
-
-        if (event.isComposing || view.composing || localComposing) {
-          // The IME owns the key while composing — pass it through untouched.
-          return false;
-        }
-
-        const selection = view.state.selection.main;
-        const selectedText = selection.empty
-          ? ""
-          : view.state.sliceDoc(selection.from, selection.to);
-        const initialQuery =
-          selectedText.length > 0 &&
-          selectedText.length <= MAX_SELECTION_SEED_LENGTH &&
-          !selectedText.includes("\n")
-            ? selectedText
-            : "";
-
-        event.preventDefault();
-        config.requestOpen(mode, initialQuery);
-        return true;
       }
-    })
-  );
+
+      const selection = view.state.selection.main;
+      const selectedText = selection.empty
+        ? ""
+        : view.state.sliceDoc(selection.from, selection.to);
+      const initialQuery =
+        selectedText.length > 0 &&
+        selectedText.length <= MAX_SELECTION_SEED_LENGTH &&
+        !selectedText.includes("\n")
+          ? selectedText
+          : "";
+
+      config.requestOpen(mode, initialQuery);
+      return true;
+    };
+
+  return {
+    [ACTIVE_FIND_OPEN_COMMAND_ID]: open("search"),
+    [ACTIVE_FIND_REPLACE_COMMAND_ID]: open("replace")
+  };
 }

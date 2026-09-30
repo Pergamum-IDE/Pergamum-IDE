@@ -3,10 +3,10 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createRenameShortcutKeymapExtension,
-  isRenameShortcutTrigger,
+  createRenameKeybindingHandlers,
   type MarkdownEditorRenameShortcutConfig
 } from "../../src/renderer/editorRenameShortcut";
+import { handlerFires, keymapFor } from "./helpers/editorKeymapHarness";
 
 let view: EditorView | null = null;
 
@@ -25,7 +25,11 @@ function createView(input: {
     state: EditorState.create({
       doc,
       extensions: [
-        createRenameShortcutKeymapExtension({ getConfig: () => input.config })
+        keymapFor({
+          handlers: createRenameKeybindingHandlers(() => input.config),
+          commandIds: ["editor.document.rename"],
+          stopPropagationCommandIds: ["editor.document.rename"]
+        })
       ]
     })
   });
@@ -43,9 +47,13 @@ function f2Keydown(overrides: Partial<KeyboardEventInit> = {}): KeyboardEvent {
   });
 }
 
-describe("isRenameShortcutTrigger", () => {
+const RENAME_COMMAND = "editor.document.rename";
+const isRenameShortcutTrigger = (event: KeyboardEvent): boolean =>
+  handlerFires(RENAME_COMMAND, event);
+
+describe("F2 rename trigger (catalog key)", () => {
   it("returns true for plain F2", () => {
-    expect(f2Keydown()).satisfies(isRenameShortcutTrigger);
+    expect(isRenameShortcutTrigger(f2Keydown())).toBe(true);
   });
 
   it("returns false if Ctrl, Alt, Meta, or Shift is pressed", () => {
@@ -61,7 +69,7 @@ describe("isRenameShortcutTrigger", () => {
   });
 });
 
-describe("createRenameShortcutKeymapExtension", () => {
+describe("Rename shortcut via the catalog-derived editor keymap", () => {
   it("triggers requestRenameActiveDocument when enabled and F2 is pressed", () => {
     const requestRenameActiveDocument = vi.fn();
     const editorView = createView({
