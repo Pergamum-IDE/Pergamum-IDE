@@ -27,6 +27,7 @@ import { registerMarkdownImageLinkDiagnosticsIpc } from "./markdownImageLinkDiag
 import { registerPergamumAssetProtocol } from "./pergamumAssetProtocol";
 import { PERGAMUM_ASSET_SCHEME } from "../shared/pergamumAssetUrl";
 import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
+import { installReloadShortcutGuard } from "./reloadGuard";
 import {
   currentActiveProjectFilePath,
   currentProjectId,
@@ -197,6 +198,10 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
       sandbox: true
     }
   });
+
+  // #644: swallow Chromium's reload / forceReload keys that no renderer
+  // command uses (plain Mod-R is left alone: it is Ruby insertion).
+  installReloadShortcutGuard(mainWindow.webContents);
 
   const restoredZoomFactor =
     coldStartSessionState?.zoomFactor !== undefined

@@ -214,6 +214,7 @@ import { StatusBarZoomControls } from "./components/StatusBarZoomControls";
 import { useTabSwitchShortcuts } from "./editorTabShortcuts";
 import { useGlobalKeyboardShortcuts } from "./globalKeyboardShortcuts";
 import { rendererShortcutCommandIds } from "./keybindings/rendererShortcuts";
+import { useReloadKeyFallback } from "./reloadKeyFallback";
 import {
   publishTabCaptureToggle,
   unpublishTabCaptureToggle
@@ -5316,6 +5317,8 @@ export function App(): JSX.Element {
   }
 
   // #480: Alt+Left / Alt+Right tab switching shortcuts.
+  // #644: an unhandled reload key never falls through to Chromium's reload.
+  useReloadKeyFallback();
   useTabSwitchShortcuts({
     tabs,
     specialTabs,
