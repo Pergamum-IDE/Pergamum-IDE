@@ -3,9 +3,11 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createMarkdownToolbarShortcutKeymapExtension,
+  MARKDOWN_TOOLBAR_KEYBINDING_COMMAND_IDS,
+  createMarkdownToolbarKeybindingHandlers,
   type MarkdownEditorToolbarShortcutConfig
 } from "../../src/renderer/editorMarkdownToolbarShortcuts";
+import { keymapFor } from "./helpers/editorKeymapHarness";
 
 let view: EditorView | null = null;
 
@@ -33,8 +35,11 @@ function createView(input: {
         : undefined,
       extensions: [
         EditorState.readOnly.of(input.readOnly ?? false),
-        createMarkdownToolbarShortcutKeymapExtension({
-          getConfig: () => input.config
+        keymapFor({
+          handlers: createMarkdownToolbarKeybindingHandlers(
+            () => input.config
+          ),
+          commandIds: MARKDOWN_TOOLBAR_KEYBINDING_COMMAND_IDS
         })
       ]
     })
@@ -71,7 +76,7 @@ function keydown(overrides: Partial<KeyboardEventInit> = {}): KeyboardEvent {
   });
 }
 
-describe("createMarkdownToolbarShortcutKeymapExtension", () => {
+describe("Markdown toolbar shortcuts via the catalog-derived editor keymap", () => {
   it("does nothing when config is null", () => {
     const v = createView({ config: null });
     const event = keydown({ key: "b" });

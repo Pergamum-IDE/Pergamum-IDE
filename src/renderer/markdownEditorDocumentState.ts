@@ -59,12 +59,18 @@ import {
   createGlossaryCompletionExtension,
   type MarkdownEditorGlossaryCompletionConfig
 } from "./glossaryCompletionExtension";
-import { createActiveFindKeymapExtension } from "./find/activeFindKeymapExtension";
-import { createGlossarySelectionShortcutKeymapExtension } from "./glossarySelectionShortcutExtension";
-import { createEmphasisMarkKeymapExtension } from "./editorEmphasisShortcuts";
-import { createRubyKeymapExtension } from "./editorRubyShortcuts";
-import { createMarkdownToolbarShortcutKeymapExtension } from "./editorMarkdownToolbarShortcuts";
-import { createRenameShortcutKeymapExtension } from "./editorRenameShortcut";
+import { GLOSSARY_SELECTION_COMMAND_ID } from "./glossarySelectionShortcutExtension";
+import { editorCommandIds } from "../shared/commandIds";
+import { MARKDOWN_TOOLBAR_KEYBINDING_COMMAND_IDS } from "./editorMarkdownToolbarShortcuts";
+import { createPergamumEditorKeymapExtension } from "./keybindings/codeMirrorKeymap";
+import {
+  EDITOR_KEYMAP_STOP_PROPAGATION_COMMAND_IDS,
+  createDefaultEditorKeybindingHandlers
+} from "./keybindings/editorKeybindingHandlers";
+import { ACTIVE_FIND_OPEN_COMMAND_ID, ACTIVE_FIND_REPLACE_COMMAND_ID } from "./find/activeFindKeymapExtension";
+import { GLOSSARY_COMPLETION_COMMAND_ID } from "./glossaryCompletion";
+import { TAB_CAPTURE_TOGGLE_COMMAND_ID } from "./tabCaptureKeymapExtension";
+import { RENAME_DOCUMENT_COMMAND_ID } from "./editorRenameShortcut";
 import { createActiveFindGutterMarkerExtension } from "./find/activeFindGutterMarkerExtension";
 import { activeFindHighlightField } from "./find/activeFindHighlightExtension";
 import { createMarkdownEditorBaseSetup } from "./markdownEditorCodeMirrorSetup";
@@ -325,26 +331,44 @@ export function createMarkdownEditorDocumentState(
         getConfig: () => options.glossaryCompletionRef.current,
         isReadOnly: () => options.readOnlyRef.current
       }),
-      createActiveFindKeymapExtension({
-        diagnostics: options.activeFindDiagnostics
-      }),
       // #436 Slice 12 remediation: Ctrl+G — see glossarySelectionShortcutExtension.ts
       // and this options interface's `glossarySelectionShortcutEnabled` doc
       // comment. Included ONLY for the one editor instance the shortcut
       // actually belongs to; every other MarkdownEditor's state (e.g. the
       // Glossary description field) gets no keydown handler at all, so Ctrl+G
       // cannot fire there no matter what the module-level slot holds.
-      ...(options.glossarySelectionShortcutEnabled
-        ? [createGlossarySelectionShortcutKeymapExtension()]
-        : []),
-      ...(options.emphasisMarkShortcutEnabled
-        ? [createEmphasisMarkKeymapExtension()]
-        : []),
-      ...(options.rubyShortcutEnabled ? [createRubyKeymapExtension()] : []),
-      ...(options.markdownToolbarShortcutEnabled
-        ? [createMarkdownToolbarShortcutKeymapExtension()]
-        : []),
-      createRenameShortcutKeymapExtension(),
+      // #641: every CodeMirror editor shortcut, keys from the keybinding
+      // catalog. Always-on commands run on every editor (each handler is
+      // inert without its published config); the Markdown / Ctrl+G families
+      // are included only for the instances that own them (see the
+      // `*ShortcutEnabled` options above).
+      createPergamumEditorKeymapExtension({
+        handlers: createDefaultEditorKeybindingHandlers({
+          glossaryCompletion: {
+            getConfig: () => options.glossaryCompletionRef.current,
+            isReadOnly: () => options.readOnlyRef.current
+          },
+          activeFindDiagnostics: options.activeFindDiagnostics
+        }),
+        stopPropagationCommandIds: EDITOR_KEYMAP_STOP_PROPAGATION_COMMAND_IDS,
+        commandIds: [
+          ACTIVE_FIND_OPEN_COMMAND_ID,
+          ACTIVE_FIND_REPLACE_COMMAND_ID,
+          GLOSSARY_COMPLETION_COMMAND_ID,
+          TAB_CAPTURE_TOGGLE_COMMAND_ID,
+          RENAME_DOCUMENT_COMMAND_ID,
+          ...(options.glossarySelectionShortcutEnabled
+            ? [GLOSSARY_SELECTION_COMMAND_ID]
+            : []),
+          ...(options.emphasisMarkShortcutEnabled
+            ? [editorCommandIds.insertEmphasisMark]
+            : []),
+          ...(options.rubyShortcutEnabled ? [editorCommandIds.insertRuby] : []),
+          ...(options.markdownToolbarShortcutEnabled
+            ? MARKDOWN_TOOLBAR_KEYBINDING_COMMAND_IDS
+            : [])
+        ]
+      }),
       // #424 Slice 2: inert until the Find panel dispatches its first
       // "mark all" effect; safe on every document's state.
       activeFindHighlightField,

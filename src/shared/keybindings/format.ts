@@ -194,9 +194,12 @@ export function toElectronAccelerator(
 }
 
 /**
- * CodeMirror key string. Canonical notation is already CodeMirror style;
- * this only normalizes modifier order and, off macOS, folds Mod into Ctrl
- * so `Ctrl-Mod-x` does not name the same modifier twice.
+ * CodeMirror key string. Canonical notation is already CodeMirror style; this
+ * normalizes modifier order and resolves Mod explicitly for `platform`:
+ * `Ctrl` off macOS (so `Ctrl-Mod-x` does not name the same modifier twice)
+ * and `Cmd` on macOS. CodeMirror resolves a literal `Mod` with its own
+ * platform detection; emitting `Ctrl` / `Cmd` keeps the result independent of
+ * that detection.
  */
 export function toCodeMirrorKey(
   notation: string,
@@ -204,5 +207,8 @@ export function toCodeMirrorKey(
 ): string {
   const parsed = requireParsed(notation);
   const modifiers = effectiveModifiers(parsed.modifiers, platform);
-  return [...sortedModifiers(modifiers), parsed.key].join("-");
+  const parts = sortedModifiers(modifiers).map((modifier) =>
+    modifier === "Mod" ? "Cmd" : modifier
+  );
+  return [...parts, parsed.key].join("-");
 }

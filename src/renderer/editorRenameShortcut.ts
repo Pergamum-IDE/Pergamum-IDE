@@ -1,5 +1,4 @@
-import { Prec, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import type { EditorKeybindingHandlers } from "./keybindings/codeMirrorKeymap";
 
 export interface MarkdownEditorRenameShortcutConfig {
   readonly isEnabled: boolean;
@@ -27,55 +26,26 @@ export function getCurrentRenameShortcutConfig(): MarkdownEditorRenameShortcutCo
   return currentRenameShortcutConfig;
 }
 
+export const RENAME_DOCUMENT_COMMAND_ID = "editor.document.rename";
+
 /**
- * #587 Slice 3: F2 shortcut trigger check for editor body rename.
+ * #587 Slice 3 / #641: commandId -> handler for the F2 editor-body rename of
+ * the active document (the key comes from the keybinding catalog). Inert when
+ * no enabled config is published. The handled event also stops propagating so
+ * File Explorer's own F2 does not see it. File Explorer's F2 rename is a
+ * separate, non-catalog shortcut.
  */
-export function isRenameShortcutTrigger(event: KeyboardEvent): boolean {
-  return (
-    !event.altKey &&
-    !event.ctrlKey &&
-    !event.metaKey &&
-    !event.shiftKey &&
-    event.key === "F2"
-  );
-}
-
-export function createRenameShortcutKeymapExtension(input?: {
-  readonly getConfig?: () => MarkdownEditorRenameShortcutConfig | null;
-}): Extension {
-  let localComposing = false;
-
-  const getConfig = input?.getConfig ?? getCurrentRenameShortcutConfig;
-
-  return Prec.highest(
-    EditorView.domEventHandlers({
-      compositionstart(): boolean {
-        localComposing = true;
+export function createRenameKeybindingHandlers(
+  getConfig: () => MarkdownEditorRenameShortcutConfig | null = getCurrentRenameShortcutConfig
+): EditorKeybindingHandlers {
+  return {
+    [RENAME_DOCUMENT_COMMAND_ID]: (): boolean => {
+      const config = getConfig();
+      if (!config || !config.isEnabled) {
         return false;
-      },
-      compositionend(): boolean {
-        localComposing = false;
-        return false;
-      },
-      keydown(event): boolean {
-        if (localComposing || event.isComposing) {
-          return false;
-        }
-
-        if (!isRenameShortcutTrigger(event)) {
-          return false;
-        }
-
-        const config = getConfig();
-        if (!config || !config.isEnabled) {
-          return false;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        config.requestRenameActiveDocument();
-        return true;
       }
-    })
-  );
+      config.requestRenameActiveDocument();
+      return true;
+    }
+  };
 }

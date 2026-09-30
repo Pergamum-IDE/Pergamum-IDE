@@ -3,10 +3,16 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createEmphasisMarkKeymapExtension,
-  isEmphasisMarkShortcutTrigger,
+  createEmphasisMarkKeybindingHandlers,
   type MarkdownEditorEmphasisMarkShortcutConfig
 } from "../../src/renderer/editorEmphasisShortcuts";
+import { handlerFires, keymapFor } from "./helpers/editorKeymapHarness";
+
+const EMPHASIS_COMMAND = "editor.markdown.insertEmphasisMark";
+const isEmphasisMarkShortcutTrigger = (
+  event: KeyboardEvent,
+  platform?: "darwin" | "win32" | "linux"
+): boolean => handlerFires(EMPHASIS_COMMAND, event, platform);
 
 let view: EditorView | null = null;
 
@@ -34,7 +40,10 @@ function createView(input: {
         : undefined,
       extensions: [
         EditorState.readOnly.of(input.readOnly ?? false),
-        createEmphasisMarkKeymapExtension({ getConfig: () => input.config })
+        keymapFor({
+          handlers: createEmphasisMarkKeybindingHandlers(() => input.config),
+          commandIds: [EMPHASIS_COMMAND]
+        })
       ]
     })
   });
@@ -55,7 +64,7 @@ function periodKeydown(overrides: Partial<KeyboardEventInit> = {}): KeyboardEven
 
 describe("isEmphasisMarkShortcutTrigger", () => {
   it("returns true for Ctrl+.", () => {
-    expect(periodKeydown({ ctrlKey: true })).satisfies(isEmphasisMarkShortcutTrigger);
+    expect(isEmphasisMarkShortcutTrigger(periodKeydown({ ctrlKey: true }))).toBe(true);
   });
 
   it("returns true on darwin for Cmd+.", () => {
@@ -82,7 +91,7 @@ describe("isEmphasisMarkShortcutTrigger", () => {
   });
 });
 
-describe("createEmphasisMarkKeymapExtension", () => {
+describe("Emphasis mark shortcut via the catalog-derived editor keymap", () => {
   it("does nothing when config is null", () => {
     const v = createView({ config: null, selection: { anchor: 0, head: 5 } });
     const event = periodKeydown();

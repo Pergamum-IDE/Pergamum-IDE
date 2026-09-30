@@ -1,7 +1,6 @@
-import { Prec, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
-import type { PergamumPlatform } from "../shared/keybindings";
-import { getRuntimePlatform, isModKey } from "./platformModifier";
+import type { EditorView } from "@codemirror/view";
+import { editorCommandIds } from "../shared/commandIds";
+import type { EditorKeybindingHandlers } from "./keybindings/codeMirrorKeymap";
 
 export interface MarkdownEditorEmphasisMarkShortcutConfig {
   readonly requestOpenEmphasisMarkDialog: (input: {
@@ -35,80 +34,44 @@ export function getCurrentEmphasisMarkShortcutConfig(): MarkdownEditorEmphasisMa
 }
 
 /**
- * Trigger check for Mod+. (Ctrl+. on win32/linux, Cmd+. on darwin).
+ * #641: commandId -> existing callback for `editor.markdown.insertEmphasisMark`. The
+ * key comes from the keybinding catalog. The former gates are kept: no
+ * published config -> the key falls through; read-only / no selection /
+ * multi-line selections notify and consume the key.
  */
-export function isEmphasisMarkShortcutTrigger(
-  event: KeyboardEvent,
-  platform: PergamumPlatform = getRuntimePlatform()
-): boolean {
-  return (
-    !event.altKey &&
-    !event.shiftKey &&
-    isModKey(event, platform) &&
-    (event.key === "." || event.code === "Period")
-  );
-}
-
-export function createEmphasisMarkKeymapExtension(input?: {
-  readonly getConfig?: () => MarkdownEditorEmphasisMarkShortcutConfig | null;
-}): Extension {
-  let localComposing = false;
-
-  const getConfig = input?.getConfig ?? getCurrentEmphasisMarkShortcutConfig;
-
-  return Prec.highest(
-    EditorView.domEventHandlers({
-      compositionstart(): boolean {
-        localComposing = true;
+export function createEmphasisMarkKeybindingHandlers(
+  getConfig: () => MarkdownEditorEmphasisMarkShortcutConfig | null = getCurrentEmphasisMarkShortcutConfig
+): EditorKeybindingHandlers {
+  return {
+    [editorCommandIds.insertEmphasisMark]: (view: EditorView): boolean => {
+      const config = getConfig();
+      if (!config) {
         return false;
-      },
-      compositionend(): boolean {
-        localComposing = false;
-        return false;
-      },
-      keydown(event, view): boolean {
-        if (!isEmphasisMarkShortcutTrigger(event)) {
-          return false;
-        }
+      }
 
-        const config = getConfig();
-        if (!config) {
-          return false;
-        }
-
-        if (event.isComposing || view.composing || localComposing) {
-          return false;
-        }
-
-        if (view.state.readOnly) {
-          event.preventDefault();
-          config.notifyReadOnly();
-          return true;
-        }
-
-        const selection = view.state.selection.main;
-        if (selection.empty) {
-          event.preventDefault();
-          config.notifyNoSelection();
-          return true;
-        }
-
-        const fromLine = view.state.doc.lineAt(selection.from).number;
-        const toLine = view.state.doc.lineAt(selection.to).number;
-        if (fromLine !== toLine) {
-          event.preventDefault();
-          config.notifyMultiLine();
-          return true;
-        }
-
-        const selectedText = view.state.sliceDoc(selection.from, selection.to);
-        event.preventDefault();
-        config.requestOpenEmphasisMarkDialog({
-          selectedText,
-          selection: { from: selection.from, to: selection.to }
-        });
+      if (view.state.readOnly) {
+        config.notifyReadOnly();
         return true;
       }
-    })
-  );
+
+      const selection = view.state.selection.main;
+      if (selection.empty) {
+        config.notifyNoSelection();
+        return true;
+      }
+
+      const fromLine = view.state.doc.lineAt(selection.from).number;
+      const toLine = view.state.doc.lineAt(selection.to).number;
+      if (fromLine !== toLine) {
+        config.notifyMultiLine();
+        return true;
+      }
+
+      config.requestOpenEmphasisMarkDialog({
+        selectedText: view.state.sliceDoc(selection.from, selection.to),
+        selection: { from: selection.from, to: selection.to }
+      });
+      return true;
+    }
+  };
 }

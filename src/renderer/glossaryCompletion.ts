@@ -15,6 +15,12 @@
 import { representativeGlossaryAtom, type GlossaryEntry } from "../shared/glossary";
 import type { PergamumPlatform } from "../shared/keybindings";
 import { getRuntimePlatform } from "./platformModifier";
+import {
+  eventMatchesCatalogCommand,
+  type CatalogKeyEvent
+} from "./keybindings/catalogKeyMatch";
+
+export const GLOSSARY_COMPLETION_COMMAND_ID = "glossary.completion.open";
 
 /** Upper bound on rendered completion candidates - a large glossary must not
  *  flood the popup. Candidates are truncated from the front of the given
@@ -266,24 +272,15 @@ export function extractGlossaryCompletionPrefix(
 }
 
 /**
- * Glossary completion trigger: Ctrl+Space on win32/linux, Option+` on darwin
- * (Ctrl+Space / Cmd+Space belong to input-source switching / Spotlight
- * there). `code` is used because Option+` composes a dead key (#636).
+ * Whether `event` is the glossary completion shortcut: the catalog key of
+ * `glossary.completion.open` (Ctrl-Space on win32/linux, Alt-` on darwin,
+ * where Ctrl+Space / Cmd+Space belong to input-source switching / Spotlight).
+ * Matched on the physical key, since Option+` composes a dead key (#636,
+ * #641).
  */
 export function isGlossaryCompletionShortcutEvent(
-  event: {
-    readonly code: string;
-    readonly ctrlKey: boolean;
-    readonly altKey: boolean;
-    readonly metaKey: boolean;
-    readonly shiftKey: boolean;
-  },
+  event: CatalogKeyEvent,
   platform: PergamumPlatform = getRuntimePlatform()
 ): boolean {
-  if (event.shiftKey || event.metaKey) {
-    return false;
-  }
-  return platform === "darwin"
-    ? event.code === "Backquote" && event.altKey && !event.ctrlKey
-    : event.code === "Space" && event.ctrlKey && !event.altKey;
+  return eventMatchesCatalogCommand(event, GLOSSARY_COMPLETION_COMMAND_ID, platform);
 }

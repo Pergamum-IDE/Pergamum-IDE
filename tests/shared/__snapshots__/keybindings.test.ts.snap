@@ -45,6 +45,9 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
   "editor.diagnostic.next": [
     "F8",
   ],
+  "editor.document.rename": [
+    "F2",
+  ],
   "editor.document.save": [
     "Mod-s",
   ],
@@ -167,7 +170,7 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
     "Mod-u",
   ],
   "editor.tabCapture.bypassOnce": [
-    null,
+    "Escape",
   ],
   "editor.tabCapture.toggle": [
     "Shift-Alt-m",
@@ -287,6 +290,9 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
   "editor.diagnostic.next": [
     "F8",
   ],
+  "editor.document.rename": [
+    "F2",
+  ],
   "editor.document.save": [
     "Mod-s",
   ],
@@ -409,7 +415,7 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
     "Mod-u",
   ],
   "editor.tabCapture.bypassOnce": [
-    null,
+    "Escape",
   ],
   "editor.tabCapture.toggle": [
     "Ctrl-m",
@@ -529,6 +535,9 @@ exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
   "editor.diagnostic.next": [
     "F8",
   ],
+  "editor.document.rename": [
+    "F2",
+  ],
   "editor.document.save": [
     "Mod-s",
   ],
@@ -651,7 +660,7 @@ exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
     "Mod-u",
   ],
   "editor.tabCapture.bypassOnce": [
-    null,
+    "Escape",
   ],
   "editor.tabCapture.toggle": [
     "Ctrl-m",

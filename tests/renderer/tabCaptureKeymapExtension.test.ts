@@ -3,10 +3,16 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { stubRuntimePlatform } from "./helpers/runtimePlatform";
+import { handlerFires, keymapFor } from "./helpers/editorKeymapHarness";
+
+const isTabCaptureToggleShortcut = (
+  event: KeyboardEvent,
+  platform: "darwin" | "win32" | "linux"
+): boolean => handlerFires("editor.tabCapture.toggle", event, platform);
 import {
   createTabCaptureKeymapExtension,
+  createTabCaptureToggleKeybindingHandlers,
   isTabCaptureBypassActive,
-  isTabCaptureToggleShortcut,
   publishTabCaptureToggle,
   resetTabCaptureBypass,
   triggerTabCaptureBypass,
@@ -34,6 +40,11 @@ function mountEditor(input: {
           fencedCodeIndentUnit: input.fencedCodeIndentUnit ?? "spaces4"
         }),
         createTabCaptureKeymapExtension(captureTabInEditor),
+        // #641: the toggle shortcut lives in the always-on editor keymap.
+        keymapFor({
+          handlers: createTabCaptureToggleKeybindingHandlers(),
+          commandIds: ["editor.tabCapture.toggle"]
+        }),
         ...(input.readOnly ? [EditorState.readOnly.of(true)] : []),
         ...(input.isMarkdownDocument !== undefined
           ? [documentIsMarkdownFacet.of(input.isMarkdownDocument)]
@@ -56,7 +67,8 @@ function keydownEvent(key: string, options: { shiftKey?: boolean; ctrlKey?: bool
 
 describe("tabCaptureKeymapExtension (#467)", () => {
   describe("default OFF (captureTabInEditor = false)", () => {
-    it("installs only the toggle shortcut handler (no Tab capture) when false", () => {
+    it("returns an empty extension and does not capture Tab when false", () => {
+      expect(createTabCaptureKeymapExtension(false)).toEqual([]);
       const view = mountEditor({ doc: "- item", captureTabInEditor: false });
       try {
         const tabEvent = keydownEvent("Tab");
@@ -507,18 +519,19 @@ describe("tabCaptureKeymapExtension (#467)", () => {
     }
 
     it("recognizes Ctrl+M on win32 / linux and Shift+Option+M on darwin only", () => {
-      const ctrlM = keyM({ ctrlKey: true });
-      const shiftAltM = keyM({ shiftKey: true, altKey: true });
-      const cmdM = keyM({ metaKey: true });
+      // A fresh event per call: a dispatched, handled event is not reusable.
+      const ctrlM = () => keyM({ ctrlKey: true });
+      const shiftAltM = () => keyM({ shiftKey: true, altKey: true });
+      const cmdM = () => keyM({ metaKey: true });
       for (const platform of ["win32", "linux"] as const) {
-        expect(isTabCaptureToggleShortcut(ctrlM, platform)).toBe(true);
-        expect(isTabCaptureToggleShortcut(shiftAltM, platform)).toBe(false);
-        expect(isTabCaptureToggleShortcut(cmdM, platform)).toBe(false);
+        expect(isTabCaptureToggleShortcut(ctrlM(), platform)).toBe(true);
+        expect(isTabCaptureToggleShortcut(shiftAltM(), platform)).toBe(false);
+        expect(isTabCaptureToggleShortcut(cmdM(), platform)).toBe(false);
       }
-      expect(isTabCaptureToggleShortcut(shiftAltM, "darwin")).toBe(true);
-      expect(isTabCaptureToggleShortcut(ctrlM, "darwin")).toBe(false);
+      expect(isTabCaptureToggleShortcut(shiftAltM(), "darwin")).toBe(true);
+      expect(isTabCaptureToggleShortcut(ctrlM(), "darwin")).toBe(false);
       // Cmd+M minimizes the window on macOS: never a Pergamum shortcut.
-      expect(isTabCaptureToggleShortcut(cmdM, "darwin")).toBe(false);
+      expect(isTabCaptureToggleShortcut(cmdM(), "darwin")).toBe(false);
     });
 
     it.each([true, false])(

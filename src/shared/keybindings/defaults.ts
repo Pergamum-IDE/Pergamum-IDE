@@ -75,11 +75,14 @@ export const defaultKeybindings: readonly DefaultKeybinding[] = [
   bind("glossary.completion.open", "Ctrl-Space", { mac: "Alt-`" }),
 
   // Editor
+  bind("editor.document.rename", "F2"),
   bind("editor.indent", "Mod-]"),
   bind("editor.outdent", "Mod-["),
   // Tab capture: Mod-m is "Minimize" on darwin, hence Shift-Alt-m there.
   bind("editor.tabCapture.toggle", "Ctrl-m", { mac: "Shift-Alt-m" }),
-  // No default key yet: editor.tabCapture.bypassOnce.
+  // Editor-only one-shot bypass of the next Tab. Not the UI Escape behavior of
+  // dialogs / popovers / listboxes.
+  bind("editor.tabCapture.bypassOnce", "Escape"),
 
   // Workbench / Pane
   bind("workspace.files.toggle", "Mod-Shift-e"),

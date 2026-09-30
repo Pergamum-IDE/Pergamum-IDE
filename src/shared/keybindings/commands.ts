@@ -443,6 +443,16 @@ export const keybindingCommands: readonly KeybindingCommand[] = [
     scope: "editor"
   }),
   pergamum({
+    id: "editor.document.rename",
+    title: "Rename Document",
+    category: "Editor",
+    description:
+      "Renames the active document from the editor body (F2; CodeMirror handler). File Explorer F2 is separate.",
+    handlerStatus: callbackDirect,
+    when: whenEditor,
+    scope: "editor"
+  }),
+  pergamum({
     id: "editor.tabCapture.toggle",
     title: "Toggle Tab Capture",
     category: "Editor",
@@ -457,7 +467,7 @@ export const keybindingCommands: readonly KeybindingCommand[] = [
     title: "Bypass Tab Capture Once",
     category: "Editor",
     description:
-      "Escape arms a one-shot bypass of the next Tab / Shift+Tab (CodeMirror handler).",
+      "Escape arms a one-shot bypass of the next Tab / Shift+Tab while tab capture is on (dedicated CodeMirror handler; not the dialog / popover Escape).",
     handlerStatus: callbackDirect,
     when: "editorFocus && tabCaptureEnabled",
     scope: "editor"

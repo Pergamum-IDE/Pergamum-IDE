@@ -16,6 +16,7 @@ export {
   toElectronAccelerator
 } from "./format";
 export { validateKeybindingCatalog } from "./validate";
+export { listCommonDefaultKeys, resolveEditorKeybindings } from "./editor";
 export {
   listCommandMetadata,
   listResolvedKeyboardShortcutItems,

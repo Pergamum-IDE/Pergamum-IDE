@@ -9,18 +9,55 @@ import {
   type PergamumPlatform
 } from "../../src/shared/keybindings";
 import { shouldHandleTabSwitchShortcut } from "../../src/renderer/editorTabShortcuts";
-import { matchMarkdownToolbarShortcutTrigger } from "../../src/renderer/editorMarkdownToolbarShortcuts";
 import { isGlossaryCompletionShortcutEvent } from "../../src/renderer/glossaryCompletion";
 import { activeFindModeForKeyEvent } from "../../src/renderer/find/activeFindKeymapExtension";
-import { isRubyShortcutTrigger } from "../../src/renderer/editorRubyShortcuts";
-import { isEmphasisMarkShortcutTrigger } from "../../src/renderer/editorEmphasisShortcuts";
-import { isTabCaptureToggleShortcut } from "../../src/renderer/tabCaptureKeymapExtension";
 import {
   appPlatformToPergamumPlatform,
   getRuntimePlatform,
   isModKey
 } from "../../src/renderer/platformModifier";
 import { stubRuntimePlatform } from "./helpers/runtimePlatform";
+import { handlerFires } from "./helpers/editorKeymapHarness";
+
+const isTabCaptureToggleShortcut = (
+  event: KeyboardEvent,
+  platform: PergamumPlatform
+): boolean => handlerFires("editor.tabCapture.toggle", event, platform);
+
+const TOOLBAR_COMMANDS = [
+  "editor.markdown.bold",
+  "editor.markdown.italic",
+  "editor.markdown.strikethrough",
+  "editor.markdown.link",
+  "editor.markdown.heading",
+  "editor.markdown.insertHorizontalRule",
+  "editor.markdown.insertCodeBlock",
+  "editor.markdown.insertBlockquote",
+  "editor.image.insert",
+  "editor.markdown.insertTable",
+  "editor.markdown.toggleSyntaxChecker"
+] as const;
+
+/** The toolbar command the generated keymap would run for `event`, if any. */
+function matchMarkdownToolbarShortcutTrigger(
+  event: KeyboardEvent,
+  platform: PergamumPlatform
+): string | null {
+  for (const command of TOOLBAR_COMMANDS) {
+    if (handlerFires(command, event, platform)) {
+      return command;
+    }
+  }
+  return null;
+}
+const isRubyShortcutTrigger = (
+  event: KeyboardEvent,
+  platform: PergamumPlatform
+): boolean => handlerFires("editor.markdown.insertRuby", event, platform);
+const isEmphasisMarkShortcutTrigger = (
+  event: KeyboardEvent,
+  platform: PergamumPlatform
+): boolean => handlerFires("editor.markdown.insertEmphasisMark", event, platform);
 
 /**
  * #636: platform-aware Mod handling and macOS default overrides. Where a
@@ -75,6 +112,14 @@ function catalogKey(platform: PergamumPlatform, command: string): string {
     throw new Error(`${command} has no key on ${platform}`);
   }
   return key;
+}
+
+function realEvent(synthetic: SyntheticKey): KeyboardEvent {
+  return new KeyboardEvent("keydown", {
+    ...synthetic,
+    bubbles: true,
+    cancelable: true
+  });
 }
 
 function keyEvent(
@@ -164,11 +209,11 @@ describe("macOS Ctrl+letter stays with the OS text-editing keys (#636)", () => {
 
   it("Cmd+B / I / K / L / T and Cmd+R work on darwin", () => {
     const expected: Record<string, string> = {
-      b: "bold",
-      i: "italic",
-      k: "link",
-      l: "heading",
-      t: "insertTable"
+      b: "editor.markdown.bold",
+      i: "editor.markdown.italic",
+      k: "editor.markdown.link",
+      l: "editor.markdown.heading",
+      t: "editor.markdown.insertTable"
     };
     for (const [letter, trigger] of Object.entries(expected)) {
       expect(
@@ -190,13 +235,13 @@ describe("macOS Ctrl+letter stays with the OS text-editing keys (#636)", () => {
           keyEvent({ key: "b", ctrlKey: true }),
           platform
         )
-      ).toBe("bold");
+      ).toBe("editor.markdown.bold");
       expect(
         matchMarkdownToolbarShortcutTrigger(
           keyEvent({ key: "q", ctrlKey: true, shiftKey: true }),
           platform
         )
-      ).toBe("insertBlockquote");
+      ).toBe("editor.markdown.insertBlockquote");
       expect(
         matchMarkdownToolbarShortcutTrigger(
           keyEvent({ key: "b", metaKey: true }),
@@ -213,7 +258,7 @@ describe("macOS default overrides: catalog and runtime agree (#636)", () => {
       const key = catalogKey(platform, "editor.find.replace.open");
       expect(key).toBe(platform === "darwin" ? "Mod-Alt-f" : "Mod-h");
       expect(
-        activeFindModeForKeyEvent(eventFromCatalogKey(key, platform) as KeyboardEvent, platform)
+        activeFindModeForKeyEvent(realEvent(eventFromCatalogKey(key, platform)), platform)
       ).toBe("replace");
     }
     const cmdH = keyEvent({ key: "h", metaKey: true });
@@ -227,7 +272,7 @@ describe("macOS default overrides: catalog and runtime agree (#636)", () => {
     for (const platform of platforms) {
       const key = catalogKey(platform, "editor.tabCapture.toggle");
       expect(key).toBe(platform === "darwin" ? "Shift-Alt-m" : "Ctrl-m");
-      expect(isTabCaptureToggleShortcut(eventFromCatalogKey(key, platform), platform)).toBe(true);
+      expect(isTabCaptureToggleShortcut(realEvent(eventFromCatalogKey(key, platform)), platform)).toBe(true);
     }
   });
 
@@ -289,10 +334,10 @@ describe("macOS default overrides: catalog and runtime agree (#636)", () => {
       expect(key).toBe(platform === "darwin" ? "Mod-Alt-q" : "Mod-Shift-q");
       expect(
         matchMarkdownToolbarShortcutTrigger(
-          eventFromCatalogKey(key, platform) as KeyboardEvent,
+          realEvent(eventFromCatalogKey(key, platform)),
           platform
         )
-      ).toBe("insertBlockquote");
+      ).toBe("editor.markdown.insertBlockquote");
     }
     expect(
       matchMarkdownToolbarShortcutTrigger(
@@ -307,7 +352,7 @@ describe("macOS default overrides: catalog and runtime agree (#636)", () => {
       const key = catalogKey(platform, "editor.markdown.insertRuby");
       expect(key).toBe("Mod-r");
       expect(
-        isRubyShortcutTrigger(eventFromCatalogKey(key, platform) as KeyboardEvent, platform)
+        isRubyShortcutTrigger(realEvent(eventFromCatalogKey(key, platform)), platform)
       ).toBe(true);
     }
   });

@@ -6,7 +6,7 @@ import {
   buildLineChange,
   canIndentEditorState,
   canOutdentEditorState,
-  editorIndentKeymap,
+  editorIndentKeybindingHandlers,
   fencedCodeIndentUnitFacet,
   indentCommand,
   outdentCommand,
@@ -813,11 +813,11 @@ describe("editorIndentKeymap wired into the base CodeMirror setup (#463)", () =>
     });
   }
 
-  it("exposes exactly Mod-] -> indentCommand and Mod-[ -> outdentCommand", () => {
-    expect(editorIndentKeymap).toEqual([
-      { key: "Mod-]", run: indentCommand },
-      { key: "Mod-[", run: outdentCommand }
-    ]);
+  it("maps exactly editor.indent -> indentCommand and editor.outdent -> outdentCommand", () => {
+    expect(editorIndentKeybindingHandlers).toEqual({
+      "editor.indent": indentCommand,
+      "editor.outdent": outdentCommand
+    });
   });
 
   it("Mod+] (Ctrl+]) is consumed by the base setup and leaves a top-level paragraph unchanged", () => {
