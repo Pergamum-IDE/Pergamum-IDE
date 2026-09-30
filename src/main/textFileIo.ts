@@ -259,3 +259,16 @@ export function encodeTextFileContent(
     }
   }
 }
+
+export function decodeAozoraTextBytes(bytes: Uint8Array): string {
+  try {
+    const text = new TextDecoder("utf-8", {
+      fatal: true,
+      ignoreBOM: false
+    }).decode(bytes);
+    return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  } catch {
+    return iconv.decode(Buffer.from(bytes), "cp932");
+  }
+}
+

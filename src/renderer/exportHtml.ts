@@ -133,14 +133,7 @@ pdfMarkdownParser.renderer.rules.image = (tokens, idx, options, env, self) => {
   return defaultPdfImageRender(tokens, idx, options, env, self);
 };
 
-function isKanjiCodePoint(codePoint: number): boolean {
-  return (
-    (codePoint >= 0x4e00 && codePoint <= 0x9fff) ||
-    (codePoint >= 0x3400 && codePoint <= 0x4dbf) ||
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-    (codePoint >= 0x20000 && codePoint <= 0x323af)
-  );
-}
+import { findAozoraRubyBase, isKanjiCodePoint } from "../shared/aozoraRuby";
 
 function isNarouRubyReading(text: string): boolean {
   if (text.length === 0) {
@@ -225,44 +218,10 @@ function parseRubyAndEmphasisToHtml(
 
       const rubyText = text.slice(openIndex + 1, closeIndex);
 
-      let baseStart = -1;
-      let pipeCharLength = 0;
-      for (let index = openIndex - 1; index >= pos; index -= 1) {
-        const char = text[index];
-        if (char === "｜" || char === "|") {
-          baseStart = index;
-          pipeCharLength = 1;
-          break;
-        }
-        if (text[index] === "\n" || text[index] === "\r") {
-          break;
-        }
-      }
-
-      if (baseStart !== -1) {
-        const baseText = text.slice(baseStart + pipeCharLength, openIndex);
-        if (baseText.length > 0) {
-          result += escapeHtmlText(text.slice(pos, baseStart));
-          result += `<ruby>${escapeHtmlText(baseText)}<rt>${escapeHtmlText(rubyText)}</rt></ruby>`;
-          pos = closeIndex + 1;
-          continue;
-        }
-      }
-
-      let kanjiStart = openIndex;
-      while (kanjiStart > pos) {
-        const prevChar = text.slice(kanjiStart - 1, kanjiStart);
-        const codePoint = prevChar.codePointAt(0);
-        if (codePoint !== undefined && isKanjiCodePoint(codePoint)) {
-          kanjiStart -= prevChar.length;
-        } else {
-          break;
-        }
-      }
-
-      if (kanjiStart < openIndex) {
-        const baseText = text.slice(kanjiStart, openIndex);
-        result += escapeHtmlText(text.slice(pos, kanjiStart));
+      const rubyBaseMatch = findAozoraRubyBase(text, openIndex, pos);
+      if (rubyBaseMatch) {
+        const { matchStart, baseText } = rubyBaseMatch;
+        result += escapeHtmlText(text.slice(pos, matchStart));
         result += `<ruby>${escapeHtmlText(baseText)}<rt>${escapeHtmlText(rubyText)}</rt></ruby>`;
         pos = closeIndex + 1;
         continue;

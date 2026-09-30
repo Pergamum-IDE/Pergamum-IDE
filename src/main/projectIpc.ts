@@ -148,7 +148,11 @@ import {
   sanitizedFileIoError,
   type SanitizedFileIoError
 } from "./markdownFileIo";
-import { decodeTextFileBytes, encodeTextFileContent } from "./textFileIo";
+import {
+  decodeAozoraTextBytes,
+  decodeTextFileBytes,
+  encodeTextFileContent
+} from "./textFileIo";
 import type { ApplicationSettings } from "../shared/settings";
 import type { TextFileEncoding } from "../shared/textFileEncoding";
 import {
@@ -5039,8 +5043,7 @@ export function registerProjectIpc(
           : String(rawRequest);
       const documentPath = resolveProjectDocumentPath(relativePath);
       const bytes = await fs.readFile(documentPath);
-      const decoder = new TextDecoder("shift_jis");
-      return decoder.decode(bytes);
+      return decodeAozoraTextBytes(bytes);
     }
   );
 

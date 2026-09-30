@@ -48,14 +48,7 @@ markdown.use(markdownItCallout, {
       ?.previewRenderer === "markdown"
 });
 
-function isKanjiCodePoint(codePoint: number): boolean {
-  return (
-    (codePoint >= 0x4e00 && codePoint <= 0x9fff) ||
-    (codePoint >= 0x3400 && codePoint <= 0x4dbf) ||
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-    (codePoint >= 0x20000 && codePoint <= 0x323af)
-  );
-}
+import { findAozoraRubyBase, isKanjiCodePoint } from "../../shared/aozoraRuby";
 
 function escapeHtml(str: string): string {
   return str
@@ -190,50 +183,8 @@ function parseRubyInText(
         continue;
       }
 
-      let matchStart = -1;
-      let baseText = "";
-
-      // Check 1: Explicit ruby base marker (｜ or |) before openIndex
-      const explicit1 = text.lastIndexOf("｜", openIndex - 1);
-      const explicit2 = text.lastIndexOf("|", openIndex - 1);
-      const explicitMarkerPos = Math.max(explicit1, explicit2);
-
-      if (explicitMarkerPos >= pos) {
-        const candidateBase = text.slice(explicitMarkerPos + 1, openIndex);
-        if (candidateBase.length > 0 && !/[\r\n》｜|]/.test(candidateBase)) {
-          matchStart = explicitMarkerPos;
-          baseText = candidateBase;
-        }
-      }
-
-      // Check 2: Implicit ruby base (contiguous Kanji run immediately preceding openIndex)
-      if (matchStart === -1) {
-        let kanjiStart = openIndex;
-        while (kanjiStart > pos) {
-          let prevPos = kanjiStart - 1;
-          if (
-            prevPos > pos &&
-            text.charCodeAt(prevPos) >= 0xdc00 &&
-            text.charCodeAt(prevPos) <= 0xdfff &&
-            text.charCodeAt(prevPos - 1) >= 0xd800 &&
-            text.charCodeAt(prevPos - 1) <= 0xdbff
-          ) {
-            prevPos -= 1;
-          }
-          const cp = text.codePointAt(prevPos);
-          if (cp === undefined || !isKanjiCodePoint(cp)) {
-            break;
-          }
-          kanjiStart = prevPos;
-        }
-
-        if (kanjiStart < openIndex) {
-          matchStart = kanjiStart;
-          baseText = text.slice(kanjiStart, openIndex);
-        }
-      }
-
-      if (matchStart === -1) {
+      const rubyBaseMatch = findAozoraRubyBase(text, openIndex, pos);
+      if (!rubyBaseMatch) {
         result.push({
           type: "text",
           content: text.slice(pos, openIndex + 1)
@@ -241,6 +192,8 @@ function parseRubyInText(
         pos = openIndex + 1;
         continue;
       }
+
+      const { matchStart, baseText } = rubyBaseMatch;
 
       if (matchStart > pos) {
         result.push({

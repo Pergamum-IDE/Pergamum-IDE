@@ -67,10 +67,9 @@ describe("Markdown Preview Aozora/Narou ruby notation parsing (#507)", () => {
       expect(result).toContain("かな《かな》");
     });
 
-    it("does not match Latin characters before 《 without explicit marker", () => {
+    it("converts non-kana implicit ruby bases before 《 (#628)", () => {
       const result = markdownPreviewRenderer.render("abc《えーびーしー》");
-      expect(result).not.toContain("<ruby>");
-      expect(result).toContain("abc《えーびーしー》");
+      expect(result).toContain("<ruby>abc<rt>えーびーしー</rt></ruby>");
     });
 
     it("does not match when ruby text is empty or missing closing bracket", () => {
