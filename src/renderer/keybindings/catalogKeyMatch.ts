@@ -13,9 +13,10 @@
 
 import {
   parseKeybindingKey,
-  resolveDefaultKeybindings,
-  type PergamumPlatform
+  type PergamumPlatform,
+  type ResolvedKeybinding
 } from "../../shared/keybindings";
+import { getEffectiveKeybindingRows } from "./effectiveKeybindingStore";
 
 export interface CatalogKeyEvent {
   readonly key: string;
@@ -141,17 +142,26 @@ export function eventMatchesCatalogKey(
   return keyMatches(event, parsed.key, basis);
 }
 
-const keysByPlatform = new Map<PergamumPlatform, Map<string, string[]>>();
+/** Per-rows-array cache: a replaced effective set gets a fresh index. */
+const keysByRows = new WeakMap<
+  readonly ResolvedKeybinding[],
+  Map<string, string[]>
+>();
 
-/** The catalog's default keys for `commandId` on `platform` (may be empty). */
+/**
+ * The keys bound to `commandId` on `platform` in the effective keybindings
+ * (defaults plus the user's overrides, #645; just the defaults when there is
+ * no keybindings.json). May be empty.
+ */
 export function catalogKeysForCommand(
   commandId: string,
   platform: PergamumPlatform
 ): readonly string[] {
-  let byCommand = keysByPlatform.get(platform);
+  const rows = getEffectiveKeybindingRows(platform);
+  let byCommand = keysByRows.get(rows);
   if (byCommand === undefined) {
     byCommand = new Map();
-    for (const binding of resolveDefaultKeybindings(platform)) {
+    for (const binding of rows) {
       if (binding.key === null) {
         continue;
       }
@@ -159,7 +169,7 @@ export function catalogKeysForCommand(
       keys.push(binding.key);
       byCommand.set(binding.command, keys);
     }
-    keysByPlatform.set(platform, byCommand);
+    keysByRows.set(rows, byCommand);
   }
   return byCommand.get(commandId) ?? [];
 }

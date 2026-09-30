@@ -22,13 +22,14 @@ import {
   type KeyBinding
 } from "@codemirror/view";
 import {
-  resolveEditorKeybindings,
+  selectEditorKeybindings,
   toCodeMirrorKey,
   type PergamumPlatform,
   type ResolvedKeybinding
 } from "../../shared/keybindings";
 import { getRuntimePlatform } from "../platformModifier";
 import { modifiersMatchCatalogKey } from "./catalogKeyMatch";
+import { getEffectiveKeybindingRows } from "./effectiveKeybindingStore";
 
 /** The CodeMirror keymap scope all generated bindings use. */
 export const PERGAMUM_EDITOR_KEYMAP_SCOPE = "pergamum-editor";
@@ -55,7 +56,8 @@ function selectEditorBindings(
   commandIds?: readonly string[]
 ): ResolvedKeybinding[] {
   const allowed = commandIds === undefined ? null : new Set(commandIds);
-  return resolveEditorKeybindings(platform).filter(
+  // #645: the effective keybindings (defaults + the user's overrides).
+  return selectEditorKeybindings(getEffectiveKeybindingRows(platform)).filter(
     (binding) => allowed === null || allowed.has(binding.command)
   );
 }

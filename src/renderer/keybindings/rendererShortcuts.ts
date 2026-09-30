@@ -13,16 +13,16 @@
  * commands and are not handled here.
  */
 
-import {
-  resolveDefaultKeybindings,
-  type PergamumPlatform,
-  type ResolvedKeybinding
+import type {
+  PergamumPlatform,
+  ResolvedKeybinding
 } from "../../shared/keybindings";
 import { getRuntimePlatform } from "../platformModifier";
 import {
   eventMatchesCatalogKey,
   type CatalogKeyEvent
 } from "./catalogKeyMatch";
+import { getEffectiveKeybindingRows } from "./effectiveKeybindingStore";
 
 /** Command ids of the renderer-side shortcut families. */
 export const rendererShortcutCommandIds = {
@@ -81,7 +81,7 @@ export function resolveRendererShortcutKeybindings(
 ): ResolvedKeybinding[] {
   const listed = new Set(RENDERER_SHORTCUT_COMMAND_IDS);
   const editorExceptions = new Set(RENDERER_WINDOW_LISTENER_EDITOR_COMMAND_IDS);
-  return resolveDefaultKeybindings(platform).filter(
+  return getEffectiveKeybindingRows(platform).filter(
     (binding) =>
       listed.has(binding.command) &&
       binding.source === "pergamum" &&
@@ -118,10 +118,15 @@ export function createRendererShortcutBindings(
   }));
 }
 
-const keysByPlatform = new Map<PergamumPlatform, Map<string, string[]>>();
+/** Per-rows-array cache (the rows array changes when the effective set does). */
+const keysByRows = new WeakMap<
+  readonly ResolvedKeybinding[],
+  Map<string, string[]>
+>();
 
 function keysFor(platform: PergamumPlatform, commandId: string): string[] {
-  let byCommand = keysByPlatform.get(platform);
+  const rows = getEffectiveKeybindingRows(platform);
+  let byCommand = keysByRows.get(rows);
   if (byCommand === undefined) {
     byCommand = new Map();
     for (const binding of resolveRendererShortcutKeybindings(platform)) {
@@ -129,7 +134,7 @@ function keysFor(platform: PergamumPlatform, commandId: string): string[] {
       keys.push(binding.key as string);
       byCommand.set(binding.command, keys);
     }
-    keysByPlatform.set(platform, byCommand);
+    keysByRows.set(rows, byCommand);
   }
   return byCommand.get(commandId) ?? [];
 }

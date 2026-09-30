@@ -13,6 +13,7 @@ import {
   GLOSSARY_CHANNELS,
   IMAGE_ATTACHMENT_CHANNELS,
   IMAGE_INSERTION_CHANNELS,
+  KEYBINDINGS_CHANNELS,
   MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS,
   LIFECYCLE_CHANNELS,
   PROJECT_CHANNELS,
@@ -229,6 +230,14 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(SETTINGS_CHANNELS.saveSettings, settings),
     exportJson: (request) =>
       ipcRenderer.invoke(SETTINGS_CHANNELS.exportJson, request)
+  },
+  keybindings: {
+    getUserKeybindings: () =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.getUserKeybindings),
+    getEffectiveKeybindings: () =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.getEffectiveKeybindings),
+    saveUserKeybindings: (entries) =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.saveUserKeybindings, entries)
   },
   session: {
     persist: (snapshot) =>

@@ -21,6 +21,7 @@ import {
   type ApplicationMenuCommandId
 } from "../shared/commandIds";
 import { t, type Language, type TranslationKey } from "../shared/i18n";
+import type { ResolvedKeybinding } from "../shared/keybindings";
 import type { DebugLogger } from "./debugLogger";
 import {
   createMenuAcceleratorLookup,
@@ -42,6 +43,11 @@ export interface ApplicationMenuTargetWindow {
 
 export interface ApplicationMenuOptions {
   getMainWindow(): ApplicationMenuTargetWindow | null;
+  /**
+   * #645: the effective keybindings (defaults + user keybindings.json) the
+   * menu accelerators come from. Omitted = the shipped defaults.
+   */
+  keybindingRows?: readonly ResolvedKeybinding[];
   requestApplicationQuit?: () => void;
   debugLogger?: Pick<DebugLogger, "log">;
 }
@@ -641,7 +647,10 @@ export function buildApplicationMenu(
   // #642: accelerators of Pergamum custom commands come from the shared
   // keybinding catalog, resolved for the MAIN process' platform.
   const accelerators = createMenuAcceleratorLookup(
-    nodePlatformToPergamumPlatform(platform)
+    nodePlatformToPergamumPlatform(platform),
+    undefined,
+    undefined,
+    options.keybindingRows
   );
   const template: MenuItemConstructorOptions[] = [
     ...(platform === "darwin" ? [macApplicationMenu(language, options)] : []),

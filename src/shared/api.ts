@@ -117,6 +117,12 @@ import type {
 } from "./recoveryCandidate";
 import type { RendererSessionSnapshot, SessionRecord } from "./session";
 import type { ColdStartLaunchTarget } from "./sessionRestore";
+import type {
+  KeybindingDiagnostic,
+  PergamumPlatform,
+  ResolvedKeybinding,
+  UserKeybindingEntry
+} from "./keybindings";
 
 export type { AppPlatform } from "./platform";
 export type {
@@ -379,6 +385,40 @@ export const SETTINGS_CHANNELS = {
   saveSettings: "settings:saveSettings",
   exportJson: "settings:exportJson"
 } as const;
+
+/**
+ * #645: user keybindings (`keybindings.json` next to Application Settings).
+ * The renderer never sees the file path; results are plain serializable data.
+ */
+export const KEYBINDINGS_CHANNELS = {
+  getUserKeybindings: "keybindings:getUserKeybindings",
+  getEffectiveKeybindings: "keybindings:getEffectiveKeybindings",
+  saveUserKeybindings: "keybindings:saveUserKeybindings"
+} as const;
+
+export interface GetUserKeybindingsResult {
+  readonly entries: readonly UserKeybindingEntry[];
+  readonly diagnostics: readonly KeybindingDiagnostic[];
+}
+
+export interface GetEffectiveKeybindingsResult {
+  /** The main process' platform the keybindings were resolved for. */
+  readonly platform: PergamumPlatform;
+  readonly keybindings: readonly ResolvedKeybinding[];
+  /** File parse diagnostics followed by overlay diagnostics. */
+  readonly diagnostics: readonly KeybindingDiagnostic[];
+}
+
+export type SaveUserKeybindingsResult =
+  | {
+      readonly ok: true;
+      readonly diagnostics: readonly KeybindingDiagnostic[];
+    }
+  | {
+      /** Nothing was written; `diagnostics` holds the errors. */
+      readonly ok: false;
+      readonly diagnostics: readonly KeybindingDiagnostic[];
+    };
 
 export const IMAGE_ATTACHMENT_CHANNELS = {
   save: "imageAttachment:save"
@@ -1532,6 +1572,17 @@ export interface PergamumApi {
     exportJson: (
       request: ExportSettingsJsonRequest
     ) => Promise<ExportSettingsJsonResult>;
+  };
+  /**
+   * #645: user keybindings foundation for the future Keyboard Shortcuts UI.
+   * Keybindings are applied at startup only (no live reload of edits).
+   */
+  keybindings: {
+    getUserKeybindings: () => Promise<GetUserKeybindingsResult>;
+    getEffectiveKeybindings: () => Promise<GetEffectiveKeybindingsResult>;
+    saveUserKeybindings: (
+      entries: readonly UserKeybindingEntry[]
+    ) => Promise<SaveUserKeybindingsResult>;
   };
   /**
    * #272: continuous Session persistence (the "write it out" side only —
