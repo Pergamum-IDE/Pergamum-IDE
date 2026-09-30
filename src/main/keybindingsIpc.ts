@@ -72,7 +72,7 @@ export function parseKeybindingEditRequest(
   }
   const record = value as Record<string, unknown>;
   const { kind, target, newKey } = record;
-  if (kind !== "change" && kind !== "unbind" && kind !== "reset") {
+  if (kind !== "change" && kind !== "unbind" && kind !== "reset" && kind !== "add") {
     return null;
   }
   if (typeof target !== "object" || target === null || Array.isArray(target)) {
@@ -81,6 +81,16 @@ export function parseKeybindingEditRequest(
   const t = target as Record<string, unknown>;
   if (typeof t.commandId !== "string" || t.commandId === "") {
     return null;
+  }
+  if (kind === "add") {
+    // #648: an add names only the command; any row fields are refused.
+    if (Object.keys(t).some((field) => field !== "commandId")) {
+      return null;
+    }
+    if (typeof newKey !== "string" || newKey === "") {
+      return null;
+    }
+    return { kind, target: { commandId: t.commandId }, newKey };
   }
   if (t.key !== null && typeof t.key !== "string") {
     return null;

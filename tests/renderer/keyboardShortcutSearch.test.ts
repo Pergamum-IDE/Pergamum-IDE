@@ -23,6 +23,7 @@ function row(overrides: Partial<KeyboardShortcutRow>): KeyboardShortcutRow {
     canReset: false,
     defaultKey: null,
     defaultKeyLabel: null,
+    originKind: "default",
     ...overrides
   };
 }

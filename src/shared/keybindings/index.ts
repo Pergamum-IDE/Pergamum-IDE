@@ -30,8 +30,11 @@ export {
 export {
   listCommandMetadata,
   listKeyboardShortcutRows,
+  groupKeyboardShortcutRows,
   listResolvedKeyboardShortcutItems,
+  type KeyboardShortcutCommandGroup,
   type KeyboardShortcutListItem,
+  type KeyboardShortcutOriginKind,
   type KeyboardShortcutRow
 } from "./listing";
 export {
@@ -42,6 +45,7 @@ export {
 } from "./capture";
 export {
   applyKeybindingEdit,
+  type KeybindingAddRequest,
   type KeybindingEditConflict,
   type KeybindingEditFailureReason,
   type KeybindingEditKind,

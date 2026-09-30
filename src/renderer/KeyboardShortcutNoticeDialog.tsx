@@ -47,6 +47,9 @@ export function KeyboardShortcutNoticeDialog({
     case "unsupported":
       message = translate("keyboardShortcuts.unsupportedKey");
       break;
+    case "duplicate":
+      message = translate("keyboardShortcuts.notice.duplicate");
+      break;
     case "stale":
       message = translate("keyboardShortcuts.notice.stale");
       break;

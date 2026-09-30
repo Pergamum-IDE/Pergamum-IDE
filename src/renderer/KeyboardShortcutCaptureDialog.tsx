@@ -25,7 +25,10 @@ import { InfoDialog } from "./dialog/InfoDialog";
 export interface KeyboardShortcutCaptureDialogProps {
   readonly translate: Translate;
   readonly platform: PergamumPlatform;
-  readonly row: KeyboardShortcutRow;
+  /** The row being edited, or (for an add) any row of the command. */
+  readonly row: Pick<KeyboardShortcutRow, "title" | "commandId" | "keyLabel">;
+  /** #648: `add` appends a new key to the command instead of replacing one. */
+  readonly mode?: "edit" | "add";
   readonly opener: Element | null;
   /** The captured key, in catalog notation. */
   readonly onCapture: (notation: string) => void;
@@ -36,6 +39,7 @@ export function KeyboardShortcutCaptureDialog({
   translate,
   platform,
   row,
+  mode = "edit",
   opener,
   onCapture,
   onCancel
@@ -112,7 +116,9 @@ export function KeyboardShortcutCaptureDialog({
 
   return (
     <InfoDialog
-      title={translate("keyboardShortcuts.capture.title")}
+      title={translate(
+        mode === "add" ? "keyboardShortcuts.capture.title.add" : "keyboardShortcuts.capture.title"
+      )}
       opener={opener}
       onClose={onCancel}
       footer={
@@ -127,7 +133,9 @@ export function KeyboardShortcutCaptureDialog({
     >
       <div className="keyboardShortcutCaptureBody">
         <p className="keyboardShortcutCapturePrompt" role="status">
-          {translate("keyboardShortcuts.capture.prompt")}
+          {translate(
+            mode === "add" ? "keyboardShortcuts.capture.prompt.add" : "keyboardShortcuts.capture.prompt"
+          )}
         </p>
         <p className="keyboardShortcutCaptureMeta">
           {translate("keyboardShortcuts.capture.command", {
@@ -135,11 +143,13 @@ export function KeyboardShortcutCaptureDialog({
             commandId: row.commandId
           })}
         </p>
-        <p className="keyboardShortcutCaptureMeta">
-          {translate("keyboardShortcuts.capture.current", {
-            key: row.keyLabel ?? translate("keyboardShortcuts.unassigned")
-          })}
-        </p>
+        {mode === "edit" ? (
+          <p className="keyboardShortcutCaptureMeta">
+            {translate("keyboardShortcuts.capture.current", {
+              key: row.keyLabel ?? translate("keyboardShortcuts.unassigned")
+            })}
+          </p>
+        ) : null}
         <p className="keyboardShortcutCaptureHint">
           {translate("keyboardShortcuts.capture.hint")}
         </p>
