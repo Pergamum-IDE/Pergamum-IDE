@@ -58,8 +58,13 @@ describe("isRubyShortcutTrigger", () => {
     expect(isRubyShortcutTrigger(rKeydown({ ctrlKey: true }))).toBe(true);
   });
 
-  it("returns true for Cmd+R", () => {
-    expect(isRubyShortcutTrigger(rKeydown({ ctrlKey: false, metaKey: true }))).toBe(true);
+  it("returns true on darwin for Cmd+R", () => {
+    expect(isRubyShortcutTrigger(rKeydown({ ctrlKey: false, metaKey: true }), "darwin")).toBe(true);
+    // Ctrl alone is an OS text-editing key on darwin and is not consumed.
+    expect(isRubyShortcutTrigger(rKeydown({ ctrlKey: true }), "darwin")).toBe(false);
+    // Cmd alone is not Mod on win32 / linux.
+    expect(isRubyShortcutTrigger(rKeydown({ ctrlKey: false, metaKey: true }), "win32")).toBe(false);
+    expect(isRubyShortcutTrigger(rKeydown({ ctrlKey: false, metaKey: true }), "linux")).toBe(false);
   });
 
   it("returns true for uppercase R", () => {

@@ -213,6 +213,10 @@ import { DEFAULT_ZOOM_FACTOR } from "../shared/zoom";
 import { StatusBarZoomControls } from "./components/StatusBarZoomControls";
 import { useTabSwitchShortcuts } from "./editorTabShortcuts";
 import { useGlobalKeyboardShortcuts } from "./globalKeyboardShortcuts";
+import {
+  publishTabCaptureToggle,
+  unpublishTabCaptureToggle
+} from "./tabCaptureKeymapExtension";
 import { type WorkspaceTab } from "./workspaceTabs";
 import { ChoiceDialog } from "./dialog/ChoiceDialog";
 import { ConfirmDialog } from "./dialog/ConfirmDialog";
@@ -2185,6 +2189,26 @@ export function App(): JSX.Element {
   } = useApplicationSettings();
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  // #636: `editor.tabCapture.toggle` (Ctrl+M / macOS Shift+Option+M) flips the
+  // existing `editor.captureTabInEditor` setting through the normal
+  // settings-save path (`changeSettings`), never by writing JSON directly.
+  const changeSettingsRef = useRef<
+    (next: SaveApplicationSettingsRequest) => Promise<boolean>
+  >(async () => false);
+  useEffect(() => {
+    const toggle = (): void => {
+      const current = settingsRef.current;
+      void changeSettingsRef.current({
+        ...current,
+        editor: {
+          ...current.editor,
+          captureTabInEditor: !current.editor.captureTabInEditor
+        }
+      });
+    };
+    publishTabCaptureToggle(toggle);
+    return () => unpublishTabCaptureToggle(toggle);
+  }, []);
   // #625: a stable fingerprint of the Japanese lint rule settings. When the
   // user changes a rule or threshold it changes, which makes the open
   // editor re-run the instant check with the new rules right away.
@@ -5354,7 +5378,12 @@ export function App(): JSX.Element {
     },
     {
       id: "openCommandPaletteHeadingJump",
-      match: { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      match: {
+        key: "#",
+        ctrlOrCmd: true,
+        ignoreShiftAndAltState: true,
+        excludePlatforms: ["darwin"]
+      },
       handler: () => openCommandPaletteWithPrefix("#")
     },
     {
@@ -5369,7 +5398,12 @@ export function App(): JSX.Element {
     },
     {
       id: "openCommandPaletteProjectSearch",
-      match: { key: "%", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      match: {
+        key: "%",
+        ctrlOrCmd: true,
+        ignoreShiftAndAltState: true,
+        excludePlatforms: ["darwin"]
+      },
       handler: () => openCommandPaletteWithPrefix("%")
     },
     // #558: pane toggle shortcuts. Each calls `handleActivityBarModeClick`
@@ -12314,6 +12348,7 @@ export function App(): JSX.Element {
   // below. `changeSettings` itself keeps its original, simpler job: save,
   // and report success/failure — it returns whether the save succeeded so
   // the blur handler can skip the restart check after a failed save.
+  changeSettingsRef.current = changeSettings;
   async function changeSettings(
     nextSettings: SaveApplicationSettingsRequest
   ): Promise<boolean> {

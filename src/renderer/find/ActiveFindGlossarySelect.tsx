@@ -8,7 +8,11 @@ import {
   type MouseEvent as ReactMouseEvent
 } from "react";
 import type { Translate } from "../../shared/i18n";
-import { glossaryCompletionCandidateDetail } from "../glossaryCompletion";
+import {
+  glossaryCompletionCandidateDetail,
+  isGlossaryCompletionShortcutEvent
+} from "../glossaryCompletion";
+import { getRuntimePlatform } from "../platformModifier";
 import {
   filterFindGlossaryCandidates,
   type FindGlossaryCandidate
@@ -131,13 +135,7 @@ export function ActiveFindGlossarySelect({
       return;
     }
 
-    const ctrlSpace =
-      event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey &&
-      !event.shiftKey &&
-      event.code === "Space";
-    if (ctrlSpace) {
+    if (isGlossaryCompletionShortcutEvent(event, getRuntimePlatform())) {
       event.preventDefault();
       event.stopPropagation();
       setOpen(true);

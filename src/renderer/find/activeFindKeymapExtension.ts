@@ -34,6 +34,8 @@
 
 import { Prec, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import type { PergamumPlatform } from "../../shared/keybindings";
+import { getRuntimePlatform, isModKey } from "../platformModifier";
 import { logRendererDebugEvent } from "../debugLog";
 
 export type ActiveFindPanelMode = "search" | "replace";
@@ -113,15 +115,25 @@ export function nextActiveFindEditorInstanceId(): string {
 }
 
 /**
- * `"search"` for Ctrl+F / Cmd+F, `"replace"` for Ctrl+H / Cmd+H, else `null`.
- * No Shift / Alt, and exactly one of Ctrl / Meta so Ctrl+Cmd+F never counts.
+ * `"search"` for Mod+F; `"replace"` for Ctrl+H on win32/linux and for
+ * Cmd+Option+F on darwin (Cmd+H hides the app there, so it is not used).
+ * Mod is Ctrl on win32/linux and Cmd on darwin; bare Ctrl+F / Ctrl+H on
+ * darwin are OS text-editing keys and are not consumed (#636).
  */
-function findTriggerMode(event: KeyboardEvent): ActiveFindPanelMode | null {
-  if (
-    event.altKey ||
-    event.shiftKey ||
-    event.ctrlKey === event.metaKey
-  ) {
+export function activeFindModeForKeyEvent(
+  event: KeyboardEvent | ReactLikeKeyEvent,
+  platform: PergamumPlatform = getRuntimePlatform()
+): ActiveFindPanelMode | null {
+  if (!isModKey(event, platform) || event.shiftKey) {
+    return null;
+  }
+  if (platform === "darwin") {
+    if (event.code !== "KeyF") {
+      return null;
+    }
+    return event.altKey ? "replace" : "search";
+  }
+  if (event.altKey) {
     return null;
   }
   if (event.code === "KeyF") {
@@ -131,6 +143,18 @@ function findTriggerMode(event: KeyboardEvent): ActiveFindPanelMode | null {
     return "replace";
   }
   return null;
+}
+
+interface ReactLikeKeyEvent {
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly shiftKey: boolean;
+  readonly altKey: boolean;
+  readonly code: string;
+}
+
+function findTriggerMode(event: KeyboardEvent): ActiveFindPanelMode | null {
+  return activeFindModeForKeyEvent(event, getRuntimePlatform());
 }
 
 export function createActiveFindKeymapExtension(input?: {

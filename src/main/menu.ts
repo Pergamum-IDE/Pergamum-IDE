@@ -263,7 +263,16 @@ function fileMenu(
         ? [
             ...commandItems,
             { type: "separator" },
-            roleItem("close", language, "menu.close")
+            // #636: Cmd+W belongs to `editor.close` (active document tab).
+            // The native Close Window role gets Cmd+Shift+W so the two
+            // never claim the same accelerator on macOS.
+            roleItem(
+              "close",
+              language,
+              "menu.close",
+              undefined,
+              "CommandOrControl+Shift+W"
+            )
           ]
         : [
             ...commandItems,

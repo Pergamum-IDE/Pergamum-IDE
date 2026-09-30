@@ -138,6 +138,7 @@ import {
 } from "./fileExplorerSelectionState";
 import type { ExportOrigin } from "./exportCandidates";
 import { clampContextMenuPosition } from "./contextMenuPosition";
+import { getRuntimePlatform, isModKey } from "./platformModifier";
 
 /**
  * #311: an external request (from the Command Palette) to open the same
@@ -3350,7 +3351,9 @@ export function FileExplorer({
       }
 
       const usesPrimaryModifier =
-        (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
+        isModKey(event, getRuntimePlatform()) &&
+        !event.altKey &&
+        !event.shiftKey;
       if (!usesPrimaryModifier) {
         return;
       }

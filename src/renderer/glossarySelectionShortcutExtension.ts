@@ -36,6 +36,8 @@
 
 import { Prec, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform, isModKey } from "./platformModifier";
 
 export interface MarkdownEditorGlossarySelectionShortcutConfig {
   /** The active Markdown editor's current PRIMARY selection, verbatim
@@ -69,14 +71,17 @@ export function getCurrentGlossarySelectionShortcutConfig(): MarkdownEditorGloss
 }
 
 /**
- * Ctrl+G / Cmd+G, no Shift/Alt, exactly one of Ctrl/Meta (so Ctrl+Cmd+G
- * never counts — same guard shape as Active Find's trigger check).
+ * Mod+G (Ctrl+G on win32/linux, Cmd+G on darwin), no Shift/Alt. Ctrl+Cmd+G
+ * never counts, and on darwin a bare Ctrl+G is left to the OS (#636).
  */
-function isGlossarySelectionShortcutTrigger(event: KeyboardEvent): boolean {
+export function isGlossarySelectionShortcutTrigger(
+  event: KeyboardEvent,
+  platform: PergamumPlatform = getRuntimePlatform()
+): boolean {
   return (
     !event.altKey &&
     !event.shiftKey &&
-    event.ctrlKey !== event.metaKey &&
+    isModKey(event, platform) &&
     event.code === "KeyG"
   );
 }

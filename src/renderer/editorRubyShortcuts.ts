@@ -1,5 +1,7 @@
 import { Prec, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform, isModKey } from "./platformModifier";
 
 export interface MarkdownEditorRubyShortcutConfig {
   readonly requestOpenRubyDialog: (input: {
@@ -32,13 +34,16 @@ export function getCurrentRubyShortcutConfig(): MarkdownEditorRubyShortcutConfig
 }
 
 /**
- * Trigger check for Ctrl+R / Cmd+R.
+ * Trigger check for Mod+R (Ctrl+R on win32/linux, Cmd+R on darwin).
  */
-export function isRubyShortcutTrigger(event: KeyboardEvent): boolean {
+export function isRubyShortcutTrigger(
+  event: KeyboardEvent,
+  platform: PergamumPlatform = getRuntimePlatform()
+): boolean {
   return (
     !event.altKey &&
     !event.shiftKey &&
-    (event.ctrlKey || event.metaKey) &&
+    isModKey(event, platform) &&
     (event.key === "r" || event.key === "R" || event.code === "KeyR")
   );
 }

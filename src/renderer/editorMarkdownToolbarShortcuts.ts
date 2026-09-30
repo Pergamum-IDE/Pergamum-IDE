@@ -19,6 +19,8 @@
 
 import { Prec, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform, isModKey } from "./platformModifier";
 
 export interface MarkdownEditorToolbarShortcutConfig {
   readonly isEnabled: boolean;
@@ -78,11 +80,22 @@ type MarkdownToolbarShortcutTrigger =
   | "insertTable"
   | "toggleSyntaxChecker";
 
-function matchMarkdownToolbarShortcutTrigger(
-  event: KeyboardEvent
+export function matchMarkdownToolbarShortcutTrigger(
+  event: KeyboardEvent,
+  platform: PergamumPlatform = getRuntimePlatform()
 ): MarkdownToolbarShortcutTrigger | null {
-  if (event.altKey || !(event.ctrlKey || event.metaKey)) {
+  // Mod = Ctrl (win32/linux) or Cmd (darwin). On darwin a bare Ctrl+letter
+  // is left to the OS text-editing keys (#636).
+  if (!isModKey(event, platform)) {
     return null;
+  }
+
+  if (event.altKey) {
+    // darwin: Cmd+Option+Q inserts a blockquote (Cmd+Shift+Q is log out).
+    // `event.key` is a composed character under Option, so use `code`.
+    return platform === "darwin" && !event.shiftKey && event.code === "KeyQ"
+      ? "insertBlockquote"
+      : null;
   }
 
   const key = event.key.toLowerCase();
@@ -96,7 +109,8 @@ function matchMarkdownToolbarShortcutTrigger(
       case "b":
         return "codeBlock";
       case "q":
-        return "insertBlockquote";
+        // darwin uses Cmd+Option+Q instead (see above).
+        return platform === "darwin" ? null : "insertBlockquote";
       case "i":
         return "insertImage";
       case "c":
@@ -141,7 +155,10 @@ export function createMarkdownToolbarShortcutKeymapExtension(input?: {
         return false;
       },
       keydown(event, view): boolean {
-        const trigger = matchMarkdownToolbarShortcutTrigger(event);
+        const trigger = matchMarkdownToolbarShortcutTrigger(
+          event,
+          getRuntimePlatform()
+        );
         if (!trigger) {
           return false;
         }

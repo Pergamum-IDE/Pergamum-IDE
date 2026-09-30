@@ -38,7 +38,12 @@ import {
   type ActiveFindGlossaryCompletionTarget,
   type GlossaryCompletionDisplayItem
 } from "./activeFindGlossaryCompletion";
-import type { ActiveFindPanelMode } from "./activeFindKeymapExtension";
+import {
+  activeFindModeForKeyEvent,
+  type ActiveFindPanelMode
+} from "./activeFindKeymapExtension";
+import { isGlossaryCompletionShortcutEvent } from "../glossaryCompletion";
+import { getRuntimePlatform } from "../platformModifier";
 
 const REPLACE_CURRENT_ICON = inlineSearchIcon(replaceCurrentIconRaw);
 const REPLACE_ALL_ICON = inlineSearchIcon(replaceAllIconRaw);
@@ -343,17 +348,9 @@ export function ActiveFindPanel({
     // own <input> - only generic KeyboardEvent fields are read below.
     event: ReactKeyboardEvent<HTMLElement>
   ): boolean => {
-    const plainCtrlOrCmd =
-      (event.ctrlKey || event.metaKey) &&
-      !event.altKey &&
-      !event.shiftKey &&
-      event.ctrlKey !== event.metaKey;
-    if (!plainCtrlOrCmd) {
-      return false;
-    }
-    if (event.code === "KeyF" || event.code === "KeyH") {
-      const nextMode: ActiveFindPanelMode =
-        event.code === "KeyF" ? "search" : "replace";
+    const modeForShortcut = activeFindModeForKeyEvent(event.nativeEvent);
+    if (modeForShortcut !== null) {
+      const nextMode: ActiveFindPanelMode = modeForShortcut;
       event.preventDefault();
       event.stopPropagation();
       // The owner re-focuses + selects the query input via `focusToken`.
@@ -441,13 +438,7 @@ export function ActiveFindPanel({
     event: ReactKeyboardEvent<HTMLTextAreaElement>,
     target: ActiveFindGlossaryCompletionTarget
   ): boolean => {
-    const ctrlSpaceTrigger =
-      event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey &&
-      !event.shiftKey &&
-      event.code === "Space";
-    if (ctrlSpaceTrigger) {
+    if (isGlossaryCompletionShortcutEvent(event, getRuntimePlatform())) {
       event.preventDefault();
       event.stopPropagation();
       openCompletion(target);

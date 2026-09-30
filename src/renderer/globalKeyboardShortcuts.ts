@@ -18,6 +18,8 @@
  */
 
 import { useEffect, useRef } from "react";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform, isModKey } from "./platformModifier";
 import {
   isEditableTextInputTarget,
   isModalOrDialogActive
@@ -26,8 +28,19 @@ import {
 export interface GlobalKeyboardShortcutMatch {
   /** Compared against `KeyboardEvent.key`, case-insensitively. */
   readonly key: string;
-  /** Matches either Ctrl (Windows/Linux) or Cmd (macOS). */
+  /**
+   * Matches Mod: Ctrl on Windows/Linux, Cmd on macOS (#636: exactly one of
+   * Ctrl / Meta, so macOS Ctrl+letter is never consumed). When omitted, the
+   * event must carry neither Ctrl nor Meta.
+   */
   readonly ctrlOrCmd?: boolean;
+  /**
+   * #636: platforms on which this shortcut never fires. Used for the
+   * Command Palette `#` / `%` direct shortcuts, which are not offered on
+   * macOS (Cmd+Shift+3 / Cmd+Shift+5 are system screenshot keys); the
+   * palette prefix can still be typed manually.
+   */
+  readonly excludePlatforms?: readonly PergamumPlatform[];
   readonly shift?: boolean;
   readonly alt?: boolean;
   /**
@@ -80,10 +93,16 @@ export function matchesGlobalKeyboardShortcut(
     readonly altKey: boolean;
     readonly getModifierState?: (key: string) => boolean;
   },
-  match: GlobalKeyboardShortcutMatch
+  match: GlobalKeyboardShortcutMatch,
+  platform: PergamumPlatform = getRuntimePlatform()
 ): boolean {
-  const ctrlOrCmd = event.ctrlKey || event.metaKey;
-  if (Boolean(match.ctrlOrCmd) !== ctrlOrCmd) {
+  if (match.excludePlatforms?.includes(platform)) {
+    return false;
+  }
+  const modifierMatches = match.ctrlOrCmd
+    ? isModKey(event, platform)
+    : !event.ctrlKey && !event.metaKey;
+  if (!modifierMatches) {
     return false;
   }
   if (match.ctrlOrCmd && isAltGraphEvent(event)) {

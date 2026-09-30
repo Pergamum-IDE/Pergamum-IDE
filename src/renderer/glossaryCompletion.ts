@@ -13,6 +13,8 @@
  */
 
 import { representativeGlossaryAtom, type GlossaryEntry } from "../shared/glossary";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform } from "./platformModifier";
 
 /** Upper bound on rendered completion candidates - a large glossary must not
  *  flood the popup. Candidates are truncated from the front of the given
@@ -261,4 +263,27 @@ export function extractGlossaryCompletionPrefix(
   }
 
   return extractDelimitedGlossaryCompletionPrefix(textBeforeCaret);
+}
+
+/**
+ * Glossary completion trigger: Ctrl+Space on win32/linux, Option+` on darwin
+ * (Ctrl+Space / Cmd+Space belong to input-source switching / Spotlight
+ * there). `code` is used because Option+` composes a dead key (#636).
+ */
+export function isGlossaryCompletionShortcutEvent(
+  event: {
+    readonly code: string;
+    readonly ctrlKey: boolean;
+    readonly altKey: boolean;
+    readonly metaKey: boolean;
+    readonly shiftKey: boolean;
+  },
+  platform: PergamumPlatform = getRuntimePlatform()
+): boolean {
+  if (event.shiftKey || event.metaKey) {
+    return false;
+  }
+  return platform === "darwin"
+    ? event.code === "Backquote" && event.altKey && !event.ctrlKey
+    : event.code === "Space" && event.ctrlKey && !event.altKey;
 }

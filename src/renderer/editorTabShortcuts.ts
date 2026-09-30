@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { DocumentTab } from "./openDocuments";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform } from "./platformModifier";
 import {
   orderedWorkspaceTabs,
   workspaceTabIdEquals,
@@ -102,13 +104,20 @@ export function shouldHandleTabSwitchShortcut(
     isComposing?: boolean;
     defaultPrevented?: boolean;
   },
-  isModalActive: boolean = isModalOrDialogActive(event.target)
+  isModalActive: boolean = isModalOrDialogActive(event.target),
+  platform: PergamumPlatform = getRuntimePlatform()
 ): TabSwitchDirection | null {
   if (event.defaultPrevented || event.isComposing) {
     return null;
   }
 
-  if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+  // win32/linux: Alt+Arrow. darwin: Cmd+Option+Arrow (#636) - a bare
+  // Option+Arrow stays word movement on macOS.
+  const modifiersMatch =
+    platform === "darwin"
+      ? event.altKey && event.metaKey && !event.ctrlKey && !event.shiftKey
+      : event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+  if (!modifiersMatch) {
     return null;
   }
 
