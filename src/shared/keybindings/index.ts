@@ -16,3 +16,8 @@ export {
   toElectronAccelerator
 } from "./format";
 export { validateKeybindingCatalog } from "./validate";
+export {
+  listCommandMetadata,
+  listResolvedKeyboardShortcutItems,
+  type KeyboardShortcutListItem
+} from "./listing";

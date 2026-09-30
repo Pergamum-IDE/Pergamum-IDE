@@ -21,6 +21,7 @@ import {
 import {
   pergamumPlatforms,
   type KeybindingCatalog,
+  type KeybindingCommand,
   type KeybindingDiagnostic,
   type PergamumPlatform,
   type ResolvedKeybinding
@@ -75,6 +76,7 @@ function validateCommands(
         command: command.id
       });
     }
+    validateHostAndHandler(command, diagnostics);
     if (command.source === "nativeRole" && !command.readonly) {
       diagnostics.push({
         code: "nativeRoleNotReadonly",
@@ -91,6 +93,64 @@ function validateCommands(
         command: command.id
       });
     }
+  }
+}
+
+/**
+ * #640 invariants between source / executionHost / handlerStatus.
+ * - nativeRole: host nativeRole <=> source nativeRole, status nativeRole.
+ * - standard: host standard <=> source standard, status standard.
+ * - pergamum: host renderer | main, status registered | callbackDirect |
+ *   notYetRegistered.
+ */
+function validateHostAndHandler(
+  command: KeybindingCommand,
+  diagnostics: KeybindingDiagnostic[]
+): void {
+  const base = { command: command.id };
+  if ((command.executionHost === "nativeRole") !== (command.source === "nativeRole")) {
+    diagnostics.push({
+      ...base,
+      code: "nativeRoleHostMismatch",
+      severity: "error",
+      message: `nativeRole executionHost and source must go together: ${command.id}`
+    });
+  }
+  if ((command.executionHost === "standard") !== (command.source === "standard")) {
+    diagnostics.push({
+      ...base,
+      code: "standardHostMismatch",
+      severity: "error",
+      message: `standard executionHost and source must go together: ${command.id}`
+    });
+  }
+  if (
+    command.source === "pergamum" &&
+    command.executionHost !== "renderer" &&
+    command.executionHost !== "main"
+  ) {
+    diagnostics.push({
+      ...base,
+      code: "pergamumHostInvalid",
+      severity: "error",
+      message: `pergamum command must run in renderer or main: ${command.id}`
+    });
+  }
+  const statusOk =
+    command.source === "nativeRole"
+      ? command.handlerStatus === "nativeRole"
+      : command.source === "standard"
+        ? command.handlerStatus === "standard"
+        : command.handlerStatus === "registered" ||
+          command.handlerStatus === "callbackDirect" ||
+          command.handlerStatus === "notYetRegistered";
+  if (!statusOk) {
+    diagnostics.push({
+      ...base,
+      code: "handlerStatusMismatch",
+      severity: "error",
+      message: `handlerStatus ${command.handlerStatus} does not fit source ${command.source}: ${command.id}`
+    });
   }
 }
 

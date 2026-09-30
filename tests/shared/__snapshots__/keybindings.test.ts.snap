@@ -2,6 +2,12 @@
 
 exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
 {
+  "app.hide": [
+    "Mod-h",
+  ],
+  "app.hideOthers": [
+    "Mod-Alt-h",
+  ],
   "app.quit": [
     "Mod-q",
   ],
@@ -63,11 +69,23 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
   "editor.indent": [
     "Mod-]",
   ],
+  "editor.line.copyDown": [
+    "Shift-Alt-ArrowDown",
+  ],
+  "editor.line.copyUp": [
+    "Shift-Alt-ArrowUp",
+  ],
   "editor.line.delete": [
     "Mod-Shift-k",
   ],
   "editor.line.insertBlankLine": [
     "Mod-Enter",
+  ],
+  "editor.line.moveDown": [
+    "Alt-ArrowDown",
+  ],
+  "editor.line.moveUp": [
+    "Alt-ArrowUp",
   ],
   "editor.markdown.bold": [
     "Mod-b",
@@ -226,6 +244,12 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
 
 exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
 {
+  "app.hide": [
+    null,
+  ],
+  "app.hideOthers": [
+    null,
+  ],
   "app.quit": [
     "Mod-q",
   ],
@@ -287,11 +311,23 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
   "editor.indent": [
     "Mod-]",
   ],
+  "editor.line.copyDown": [
+    "Shift-Alt-ArrowDown",
+  ],
+  "editor.line.copyUp": [
+    "Shift-Alt-ArrowUp",
+  ],
   "editor.line.delete": [
     "Mod-Shift-k",
   ],
   "editor.line.insertBlankLine": [
     "Mod-Enter",
+  ],
+  "editor.line.moveDown": [
+    "Alt-ArrowDown",
+  ],
+  "editor.line.moveUp": [
+    "Alt-ArrowUp",
   ],
   "editor.markdown.bold": [
     "Mod-b",
@@ -450,6 +486,12 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
 
 exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
 {
+  "app.hide": [
+    null,
+  ],
+  "app.hideOthers": [
+    null,
+  ],
   "app.quit": [
     "Mod-q",
   ],
@@ -511,11 +553,23 @@ exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
   "editor.indent": [
     "Mod-]",
   ],
+  "editor.line.copyDown": [
+    "Shift-Alt-ArrowDown",
+  ],
+  "editor.line.copyUp": [
+    "Shift-Alt-ArrowUp",
+  ],
   "editor.line.delete": [
     "Mod-Shift-k",
   ],
   "editor.line.insertBlankLine": [
     "Mod-Enter",
+  ],
+  "editor.line.moveDown": [
+    "Alt-ArrowDown",
+  ],
+  "editor.line.moveUp": [
+    "Alt-ArrowUp",
   ],
   "editor.markdown.bold": [
     "Mod-b",
