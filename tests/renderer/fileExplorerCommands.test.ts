@@ -400,6 +400,7 @@ describe("Toggle File Explorer command wording (#311)", () => {
       {
         focusSidebarMode: () => undefined,
         openApplicationSettings: () => undefined,
+        openKeyboardShortcuts: () => undefined,
         showResumeHub: () => undefined,
         canShowResumeHub: () => true
       },

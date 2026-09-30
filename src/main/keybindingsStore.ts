@@ -96,6 +96,29 @@ export async function loadKeybindings(
   };
 }
 
+let startupKeybindings: LoadedKeybindings | null = null;
+
+/**
+ * The keybindings applied at startup (#646): the Keyboard Shortcuts screen
+ * shows THESE, not a fresh read of the file, so it reflects what is really in
+ * effect. Edits to keybindings.json apply after a restart.
+ */
+export function setStartupKeybindings(loaded: LoadedKeybindings | null): void {
+  startupKeybindings = loaded;
+}
+
+export function getStartupKeybindings(): LoadedKeybindings | null {
+  return startupKeybindings;
+}
+
+/** Creates the keybindings.json directory if needed; returns it. */
+export async function ensureKeybindingsDirectory(
+  directory: string = app.getPath("userData")
+): Promise<string> {
+  await fs.mkdir(directory, { recursive: true });
+  return directory;
+}
+
 export type SaveUserKeybindingsOutcome =
   | { readonly ok: true; readonly diagnostics: KeybindingDiagnostic[] }
   | { readonly ok: false; readonly diagnostics: KeybindingDiagnostic[] };

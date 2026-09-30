@@ -259,6 +259,14 @@ function fileMenu(
       "menu.projectSettings",
       options
     ),
+    // #646: the read-only Keyboard Shortcuts screen, right before Application
+    // Settings. A menu entry only: it carries no accelerator.
+    commandMenuItem(
+      workspaceCommandIds.openKeyboardShortcuts,
+      language,
+      "menu.keyboardShortcuts",
+      options
+    ),
     commandMenuItem(
       workspaceCommandIds.openApplicationSettings,
       language,

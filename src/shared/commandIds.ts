@@ -22,6 +22,7 @@ export const workspaceCommandIds = {
   focusDocumentMap: defineCommandId("workspace.documentMap.focus"),
   focusDocumentMetrics: defineCommandId("workspace.documentMetrics.focus"),
   openApplicationSettings: defineCommandId("workspace.applicationSettings.open"),
+  openKeyboardShortcuts: defineCommandId("workspace.keyboardShortcuts.open"),
   showResumeHub: defineCommandId("workbench.showResumeHub")
 } as const;
 
@@ -148,6 +149,7 @@ export const applicationMenuCommandIds = [
   applicationCommandIds.zoomOut,
   applicationCommandIds.resetZoom,
   projectSettingsCommandIds.open,
+  workspaceCommandIds.openKeyboardShortcuts,
   workspaceCommandIds.openApplicationSettings,
   workspaceCommandIds.showResumeHub,
   editorCommandIds.undo,

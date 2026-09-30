@@ -237,7 +237,11 @@ const pergamumApi: PergamumApi = {
     getEffectiveKeybindings: () =>
       ipcRenderer.invoke(KEYBINDINGS_CHANNELS.getEffectiveKeybindings),
     saveUserKeybindings: (entries) =>
-      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.saveUserKeybindings, entries)
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.saveUserKeybindings, entries),
+    getKeyboardShortcutItems: () =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.getKeyboardShortcutItems),
+    openKeybindingsJsonLocation: () =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.openKeybindingsJsonLocation)
   },
   session: {
     persist: (snapshot) =>

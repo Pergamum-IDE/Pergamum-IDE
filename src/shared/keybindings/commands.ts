@@ -580,6 +580,15 @@ export const keybindingCommands: readonly KeybindingCommand[] = [
     scope: "editor"
   }),
   pergamum({
+    id: "workspace.keyboardShortcuts.open",
+    title: "Open Keyboard Shortcuts",
+    category: "View",
+    description:
+      "Opens the Keyboard Shortcuts tab (view only). Menu item and Command Palette; no default key.",
+    handlerStatus: registered,
+    when: whenWorkbench
+  }),
+  pergamum({
     id: "workspace.applicationSettings.open",
     title: "Open Application Settings",
     category: "View",

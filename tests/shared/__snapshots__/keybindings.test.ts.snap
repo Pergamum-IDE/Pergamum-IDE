@@ -248,6 +248,9 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
   "workspace.glossary.toggle": [
     "Mod-Shift-g",
   ],
+  "workspace.keyboardShortcuts.open": [
+    null,
+  ],
   "workspace.project.open": [
     "Mod-Shift-o",
   ],
@@ -508,6 +511,9 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
   "workspace.glossary.toggle": [
     "Mod-Shift-g",
   ],
+  "workspace.keyboardShortcuts.open": [
+    null,
+  ],
   "workspace.project.open": [
     "Mod-Shift-o",
   ],
@@ -767,6 +773,9 @@ exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
   ],
   "workspace.glossary.toggle": [
     "Mod-Shift-g",
+  ],
+  "workspace.keyboardShortcuts.open": [
+    null,
   ],
   "workspace.project.open": [
     "Mod-Shift-o",

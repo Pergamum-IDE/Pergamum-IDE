@@ -119,6 +119,7 @@ import type { RendererSessionSnapshot, SessionRecord } from "./session";
 import type { ColdStartLaunchTarget } from "./sessionRestore";
 import type {
   KeybindingDiagnostic,
+  KeyboardShortcutRow,
   PergamumPlatform,
   ResolvedKeybinding,
   UserKeybindingEntry
@@ -393,8 +394,24 @@ export const SETTINGS_CHANNELS = {
 export const KEYBINDINGS_CHANNELS = {
   getUserKeybindings: "keybindings:getUserKeybindings",
   getEffectiveKeybindings: "keybindings:getEffectiveKeybindings",
-  saveUserKeybindings: "keybindings:saveUserKeybindings"
+  saveUserKeybindings: "keybindings:saveUserKeybindings",
+  getKeyboardShortcutItems: "keybindings:getKeyboardShortcutItems",
+  openKeybindingsJsonLocation: "keybindings:openKeybindingsJsonLocation"
 } as const;
+
+/**
+ * #646: what the Keyboard Shortcuts screen shows - the keybindings IN EFFECT
+ * (applied at startup) and the diagnostics from that same load. No path.
+ */
+export interface GetKeyboardShortcutItemsResult {
+  readonly platform: PergamumPlatform;
+  readonly items: readonly KeyboardShortcutRow[];
+  readonly diagnostics: readonly KeybindingDiagnostic[];
+}
+
+export interface OpenKeybindingsJsonLocationResult {
+  readonly ok: boolean;
+}
 
 export interface GetUserKeybindingsResult {
   readonly entries: readonly UserKeybindingEntry[];
@@ -1583,6 +1600,10 @@ export interface PergamumApi {
     saveUserKeybindings: (
       entries: readonly UserKeybindingEntry[]
     ) => Promise<SaveUserKeybindingsResult>;
+    /** #646: the read-only Keyboard Shortcuts screen's data. */
+    getKeyboardShortcutItems: () => Promise<GetKeyboardShortcutItemsResult>;
+    /** #646: opens the folder holding keybindings.json in the OS file manager. */
+    openKeybindingsJsonLocation: () => Promise<OpenKeybindingsJsonLocationResult>;
   };
   /**
    * #272: continuous Session persistence (the "write it out" side only —

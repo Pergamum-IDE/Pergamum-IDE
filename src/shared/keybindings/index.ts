@@ -29,8 +29,10 @@ export {
 } from "./editor";
 export {
   listCommandMetadata,
+  listKeyboardShortcutRows,
   listResolvedKeyboardShortcutItems,
-  type KeyboardShortcutListItem
+  type KeyboardShortcutListItem,
+  type KeyboardShortcutRow
 } from "./listing";
 export {
   normalizeUserKeyNotation,

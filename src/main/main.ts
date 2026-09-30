@@ -29,7 +29,7 @@ import { PERGAMUM_ASSET_SCHEME } from "../shared/pergamumAssetUrl";
 import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
 import { installReloadShortcutGuard } from "./reloadGuard";
 import { registerKeybindingsIpc } from "./keybindingsIpc";
-import { loadKeybindings } from "./keybindingsStore";
+import { loadKeybindings, setStartupKeybindings } from "./keybindingsStore";
 import { nodePlatformToPergamumPlatform } from "./menuAccelerators";
 import {
   currentActiveProjectFilePath,
@@ -380,6 +380,7 @@ app.whenReady().then(async () => {
   const loadedKeybindings = await loadKeybindings(
     nodePlatformToPergamumPlatform(process.platform)
   );
+  setStartupKeybindings(loadedKeybindings);
   await installApplicationMenu({
     getMainWindow: () => mainWindow,
     requestApplicationQuit: () => {

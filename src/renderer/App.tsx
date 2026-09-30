@@ -598,6 +598,7 @@ import {
 } from "./projectSettingsCommands";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { ResumeHub } from "./ResumeHub";
+import { KeyboardShortcutsScreen } from "./KeyboardShortcutsScreen";
 import {
   shouldShowFullScreenWelcomeSurface,
   shouldShowWelcomeSurface
@@ -1445,6 +1446,10 @@ export function App(): JSX.Element {
   }
 
   const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
+  // #646: the read-only Keyboard Shortcuts special tab. App-level (not
+  // project-scoped) like Application Settings; explicitly selected only.
+  const [isKeyboardShortcutsTabOpen, setIsKeyboardShortcutsTabOpen] =
+    useState(false);
   // #375: the Glossary Tag Manager special tab. Project-scoped (tags are
   // project-owned) — closed on project close. Opening / activating it NEVER
   // opens the "new tag" dialog — that is only the "Add tag" button.
@@ -2342,6 +2347,9 @@ export function App(): JSX.Element {
   // #538: the Resume Hub special tab — active when opened as a special tab
   const isResumeHubTabActive =
     isResumeHubTabOpen && activeSpecialTabId === "resumeHub";
+  // #646: the Keyboard Shortcuts special tab - same "explicitly selected" rule.
+  const isKeyboardShortcutsTabActive =
+    isKeyboardShortcutsTabOpen && activeSpecialTabId === "keyboardShortcuts";
   // When the Settings tab is the only open tab (zero document tabs), it is the
   // active surface even though `activeSpecialTabId` may not have been set —
   // but never while a Glossary management tab, the Project Settings tab, the
@@ -2353,6 +2361,7 @@ export function App(): JSX.Element {
     !isDebugLogTabActive &&
     !isProjectSettingsTabActive &&
     !isResumeHubTabActive &&
+    !isKeyboardShortcutsTabActive &&
     (activeSpecialTabId === "settings" || !hasOpenDocumentTab);
   // A full-editor-area special tab (Settings, Project Settings, a Glossary
   // management tab, the Debug Log tab, or the Resume Hub tab) is showing instead of an editor.
@@ -2364,7 +2373,8 @@ export function App(): JSX.Element {
     isGlossaryTagManagerTabActive ||
     isGlossaryEntryManagerTabActive ||
     isDebugLogTabActive ||
-    isResumeHubTabActive;
+    isResumeHubTabActive ||
+    isKeyboardShortcutsTabActive;
 
   const activeEditableSurfaceContent = useMemo(() => {
     if (isEditorAreaSpecialTabActive || !currentEditor) {
@@ -4108,6 +4118,9 @@ export function App(): JSX.Element {
         openApplicationSettings: () => {
           openSettingsTab();
         },
+        openKeyboardShortcuts: () => {
+          openKeyboardShortcutsTab();
+        },
         showResumeHub: () => {
           showResumeHubCommandRef.current();
         },
@@ -4342,12 +4355,14 @@ export function App(): JSX.Element {
     openDocumentsState,
     isSettingsTabOpen,
     isDebugLogTabOpen,
+    isKeyboardShortcutsTabOpen,
     projectIsOpen: project !== null
   });
   const shouldShowWelcome = shouldShowWelcomeSurface({
     openDocumentsState,
     isSettingsTabOpen,
-    isDebugLogTabOpen
+    isDebugLogTabOpen,
+    isKeyboardShortcutsTabOpen
   });
   const activeActivityMode = resolveActiveActivityMode(
     sidebarMode,
@@ -4366,6 +4381,14 @@ export function App(): JSX.Element {
         kind: "special",
         id: "settings",
         title: translate("settings.application.title")
+      });
+    }
+
+    if (isKeyboardShortcutsTabOpen) {
+      list.push({
+        kind: "special",
+        id: "keyboardShortcuts",
+        title: translate("keyboardShortcuts.title")
       });
     }
 
@@ -4412,6 +4435,7 @@ export function App(): JSX.Element {
     return list;
   }, [
     isSettingsTabOpen,
+    isKeyboardShortcutsTabOpen,
     isProjectSettingsTabOpen,
     isGlossaryTagManagerTabOpen,
     isGlossaryEntryManagerTabOpen,
@@ -4439,11 +4463,13 @@ export function App(): JSX.Element {
           ? specialWorkspaceTabId("projectSettings")
           : isDebugLogTabActive
             ? specialWorkspaceTabId("debugLog")
-            : isSettingsTabActive
-              ? specialWorkspaceTabId("settings")
-              : openDocumentsState.activeDocumentId
-                ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
-                : undefined;
+            : isKeyboardShortcutsTabActive
+              ? specialWorkspaceTabId("keyboardShortcuts")
+              : isSettingsTabActive
+                ? specialWorkspaceTabId("settings")
+                : openDocumentsState.activeDocumentId
+                  ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
+                  : undefined;
 
   // #355 → #354: "Select in File Explorer" (and every other tab context-menu
   // command) now dispatches through `handleTabAction` below, defined after
@@ -5230,6 +5256,12 @@ export function App(): JSX.Element {
     setActiveSpecialTabId("settings");
   }
 
+  // #646: open (or re-activate) the read-only Keyboard Shortcuts tab.
+  function openKeyboardShortcutsTab(): void {
+    setIsKeyboardShortcutsTabOpen(true);
+    setActiveSpecialTabId("keyboardShortcuts");
+  }
+
   // #396: open (or re-activate) the Project Settings special tab. Opening it
   // again just activates the existing one — never a duplicate tab. Project-scoped,
   // so no-op if no project is open.
@@ -5282,6 +5314,10 @@ export function App(): JSX.Element {
 
   function activateSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings" && isSettingsTabOpen) {
+      setActiveSpecialTabId(tabId);
+    }
+
+    if (tabId === "keyboardShortcuts" && isKeyboardShortcutsTabOpen) {
       setActiveSpecialTabId(tabId);
     }
 
@@ -5431,6 +5467,14 @@ export function App(): JSX.Element {
   function closeSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings") {
       setIsSettingsTabOpen(false);
+      setActiveSpecialTabId((current) =>
+        current === tabId ? null : current
+      );
+      return;
+    }
+
+    if (tabId === "keyboardShortcuts") {
+      setIsKeyboardShortcutsTabOpen(false);
       setActiveSpecialTabId((current) =>
         current === tabId ? null : current
       );
@@ -13193,6 +13237,8 @@ export function App(): JSX.Element {
                     <section className="debugLogTab">
                       <DebugLogPanel translate={translate} />
                     </section>
+                  ) : isKeyboardShortcutsTabActive ? (
+                    <KeyboardShortcutsScreen translate={translate} />
                   ) : isResumeHubTabActive ? (
                     <ResumeHub
                       recentDocuments={recentProjectDocuments}
