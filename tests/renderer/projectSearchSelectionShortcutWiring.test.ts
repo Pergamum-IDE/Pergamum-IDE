@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { createMenuAcceleratorLookup } from "../../src/main/menuAccelerators";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -108,8 +109,18 @@ describe("Ctrl+Shift+F/H wired via the Electron application-menu accelerator, no
     expect(menuSource).toContain(
       "searchSelectionShortcutCommandIds.openProjectReplaceFromSelection"
     );
-    expect(menuSource).toContain('"CommandOrControl+Shift+F"');
-    expect(menuSource).toContain('"CommandOrControl+Shift+H"');
+    // #642: the accelerators are catalog-derived (src/main/menuAccelerators.ts),
+    // no longer literals in menu.ts.
+    expect(menuSource).toContain("accelerators.get(");
+    expect(menuSource).not.toContain('"CommandOrControl+Shift+F"');
+    expect(menuSource).not.toContain('"CommandOrControl+Shift+H"');
+    const lookup = createMenuAcceleratorLookup("win32");
+    expect(
+      lookup.get("search.project.openFromSelection")
+    ).toBe("CommandOrControl+Shift+F");
+    expect(
+      lookup.get("search.project.replace.openFromSelection")
+    ).toBe("CommandOrControl+Shift+H");
   });
 
   it("the commands are palette-hidden (keybinding-only, matching the #436 Ctrl+G precedent)", () => {

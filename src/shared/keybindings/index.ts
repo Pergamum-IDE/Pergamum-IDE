@@ -13,7 +13,8 @@ export {
   normalizeKeybindingKey,
   parseKeybindingKey,
   toCodeMirrorKey,
-  toElectronAccelerator
+  toElectronAccelerator,
+  type ElectronAcceleratorOptions
 } from "./format";
 export { validateKeybindingCatalog } from "./validate";
 export { listCommonDefaultKeys, resolveEditorKeybindings } from "./editor";

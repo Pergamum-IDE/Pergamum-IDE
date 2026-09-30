@@ -22,6 +22,11 @@ import {
 } from "../shared/commandIds";
 import { t, type Language, type TranslationKey } from "../shared/i18n";
 import type { DebugLogger } from "./debugLogger";
+import {
+  createMenuAcceleratorLookup,
+  nodePlatformToPergamumPlatform,
+  type MenuAcceleratorLookup
+} from "./menuAccelerators";
 import { loadSettings } from "./settingsStore";
 
 type MenuRole = NonNullable<MenuItemConstructorOptions["role"]>;
@@ -167,7 +172,8 @@ function importMenu(
 function fileMenu(
   language: Language,
   platform: NodeJS.Platform,
-  options: ApplicationMenuOptions
+  options: ApplicationMenuOptions,
+  accelerators: MenuAcceleratorLookup
 ): MenuItemConstructorOptions {
   const commandItems: MenuItemConstructorOptions[] = [
     commandMenuItem(
@@ -181,7 +187,7 @@ function fileMenu(
       language,
       "menu.openProject",
       options,
-      "CommandOrControl+Shift+O"
+      accelerators.get(applicationCommandIds.openProject)
     ),
     commandMenuItem(
       applicationCommandIds.closeProject,
@@ -197,7 +203,7 @@ function fileMenu(
       language,
       "menu.newFile",
       options,
-      "CommandOrControl+N"
+      accelerators.get(editorCommandIds.newFile)
     ),
     // #556: CommandOrControl+O was freed up for the Command Palette's
     // project-file-open mode (a renderer-level global shortcut — see
@@ -216,30 +222,30 @@ function fileMenu(
       language,
       "menu.closeCurrentTab",
       options,
-      "CommandOrControl+W"
+      accelerators.get(editorCommandIds.close)
     ),
     commandMenuItem(
       editorCommandIds.saveDocument,
       language,
       "menu.save",
       options,
-      "CommandOrControl+S"
+      accelerators.get(editorCommandIds.saveDocument)
     ),
     commandMenuItem(
       editorCommandIds.saveAll,
       language,
       "menu.saveAll",
       options,
-      "CommandOrControl+Alt+S"
+      accelerators.get(editorCommandIds.saveAll)
     ),
     commandMenuItem(
       editorCommandIds.saveAs,
       language,
       "menu.saveAs",
       options,
-      "CommandOrControl+Shift+S"
+      accelerators.get(editorCommandIds.saveAs)
     ),
-    saveAsF12MenuItem(options),
+    ...saveAsF12MenuItem(options, accelerators.getAll(editorCommandIds.saveAs)[1]),
     { type: "separator" },
     commandMenuItem(
       projectSettingsCommandIds.open,
@@ -253,7 +259,10 @@ function fileMenu(
       "menu.applicationSettings",
       options
     ),
-    applicationSettingsHiddenAcceleratorMenuItem(options)
+    ...applicationSettingsHiddenAcceleratorMenuItem(
+      options,
+      accelerators.get(workspaceCommandIds.openApplicationSettings)
+    )
   ];
 
   return {
@@ -284,7 +293,8 @@ function fileMenu(
 
 function editMenu(
   language: Language,
-  options: ApplicationMenuOptions
+  options: ApplicationMenuOptions,
+  accelerators: MenuAcceleratorLookup
 ): MenuItemConstructorOptions {
   return {
     label: label(language, "menu.edit"),
@@ -307,14 +317,18 @@ function editMenu(
         language,
         "menu.edit.findInProject",
         options,
-        "CommandOrControl+Shift+F"
+        accelerators.get(
+          searchSelectionShortcutCommandIds.openProjectSearchFromSelection
+        )
       ),
       commandMenuItem(
         searchSelectionShortcutCommandIds.openProjectReplaceFromSelection,
         language,
         "menu.edit.replaceInProject",
         options,
-        "CommandOrControl+Shift+H"
+        accelerators.get(
+          searchSelectionShortcutCommandIds.openProjectReplaceFromSelection
+        )
       )
     ]
   };
@@ -322,7 +336,8 @@ function editMenu(
 
 function viewMenu(
   language: Language,
-  options: ApplicationMenuOptions
+  options: ApplicationMenuOptions,
+  accelerators: MenuAcceleratorLookup
 ): MenuItemConstructorOptions {
   return {
     label: label(language, "menu.view"),
@@ -336,9 +351,12 @@ function viewMenu(
         // shortcut (moved off Mod+Shift+P, which VSCode uses — Pergamum is
         // not a VSCode clone). Preview toggle now owns Mod+Shift+P instead
         // (see the `togglePreview` global shortcut in App.tsx).
-        "CommandOrControl+P"
+        accelerators.get(commandPaletteCommandIds.open)
       ),
-      commandPaletteF1MenuItem(options),
+      ...commandPaletteF1MenuItem(
+        options,
+        accelerators.getAll(commandPaletteCommandIds.open)[1]
+      ),
       { type: "separator" },
       roleItem(
         "toggleDevTools",
@@ -353,22 +371,25 @@ function viewMenu(
         language,
         "menu.zoomIn",
         options,
-        "CommandOrControl+="
+        accelerators.get(applicationCommandIds.zoomIn)
       ),
-      zoomInPlusAliasMenuItem(options),
+      ...zoomInPlusAliasMenuItem(
+        options,
+        accelerators.getAll(applicationCommandIds.zoomIn)[1]
+      ),
       commandMenuItem(
         applicationCommandIds.zoomOut,
         language,
         "menu.zoomOut",
         options,
-        "CommandOrControl+-"
+        accelerators.get(applicationCommandIds.zoomOut)
       ),
       commandMenuItem(
         applicationCommandIds.resetZoom,
         language,
         "menu.actualSize",
         options,
-        "CommandOrControl+0"
+        accelerators.get(applicationCommandIds.resetZoom)
       ),
       { type: "separator" },
       roleItem("togglefullscreen", language, "menu.toggleFullScreen")
@@ -377,49 +398,68 @@ function viewMenu(
 }
 
 /**
- * Hidden accelerator alias for Zoom In with CommandOrControl+Plus.
+ * A hidden menu item that only carries an extra accelerator for a command.
+ * Electron menu items hold a single accelerator string, so each alias key of
+ * a catalog command (#642: the 2nd and later default keys) is bound through
+ * its own hidden item rather than a second visible entry. Hidden items still
+ * fire their accelerator (acceleratorWorksWhenHidden defaults to true; it is
+ * set explicitly to document the intent). With no accelerator (the catalog
+ * has no such key on this platform) there is nothing to bind, so no item is
+ * created.
  */
-function zoomInPlusAliasMenuItem(
-  options: ApplicationMenuOptions
-): MenuItemConstructorOptions {
-  return {
-    label: "Zoom In (+)",
-    accelerator: "CommandOrControl+Plus",
-    visible: false,
-    acceleratorWorksWhenHidden: true,
-    click: () => {
-      sendApplicationMenuCommand(
-        options.getMainWindow,
-        applicationCommandIds.zoomIn,
-        options.debugLogger
-      );
+function hiddenAcceleratorAliasItems(
+  options: ApplicationMenuOptions,
+  commandId: ApplicationMenuCommandId,
+  aliasLabel: string,
+  accelerator: string | undefined
+): MenuItemConstructorOptions[] {
+  if (accelerator === undefined) {
+    return [];
+  }
+  return [
+    {
+      label: aliasLabel,
+      accelerator,
+      visible: false,
+      acceleratorWorksWhenHidden: true,
+      click: () => {
+        sendApplicationMenuCommand(
+          options.getMainWindow,
+          commandId,
+          options.debugLogger
+        );
+      }
     }
-  };
+  ];
+}
+
+/** Hidden accelerator alias for Zoom In (`Mod-+`, i.e. `CommandOrControl+Plus`). */
+function zoomInPlusAliasMenuItem(
+  options: ApplicationMenuOptions,
+  accelerator: string | undefined
+): MenuItemConstructorOptions[] {
+  return hiddenAcceleratorAliasItems(
+    options,
+    applicationCommandIds.zoomIn,
+    "Zoom In (+)",
+    accelerator
+  );
 }
 
 /**
- * Electron menu items only carry a single accelerator string, so F1 is bound
- * via a second, hidden menu item rather than a second visible "Command
- * Palette..." entry. Hidden items still fire their accelerator by default
- * (acceleratorWorksWhenHidden defaults to true); it is set explicitly here
- * to document the intent.
+ * F1 for the Command Palette, bound via a hidden item rather than a second
+ * visible "Command Palette..." entry.
  */
 function commandPaletteF1MenuItem(
-  options: ApplicationMenuOptions
-): MenuItemConstructorOptions {
-  return {
-    label: "Command Palette (F1)",
-    accelerator: "F1",
-    visible: false,
-    acceleratorWorksWhenHidden: true,
-    click: () => {
-      sendApplicationMenuCommand(
-        options.getMainWindow,
-        commandPaletteCommandIds.open,
-        options.debugLogger
-      );
-    }
-  };
+  options: ApplicationMenuOptions,
+  accelerator: string | undefined
+): MenuItemConstructorOptions[] {
+  return hiddenAcceleratorAliasItems(
+    options,
+    commandPaletteCommandIds.open,
+    "Command Palette (F1)",
+    accelerator
+  );
 }
 
 /**
@@ -428,50 +468,34 @@ function commandPaletteF1MenuItem(
  * hidden item matching `commandPaletteF1MenuItem`'s design above.
  */
 function saveAsF12MenuItem(
-  options: ApplicationMenuOptions
-): MenuItemConstructorOptions {
-  return {
-    label: "Save As (F12)",
-    accelerator: "F12",
-    visible: false,
-    acceleratorWorksWhenHidden: true,
-    click: () => {
-      sendApplicationMenuCommand(
-        options.getMainWindow,
-        editorCommandIds.saveAs,
-        options.debugLogger
-      );
-    }
-  };
+  options: ApplicationMenuOptions,
+  accelerator: string | undefined
+): MenuItemConstructorOptions[] {
+  return hiddenAcceleratorAliasItems(
+    options,
+    editorCommandIds.saveAs,
+    "Save As (F12)",
+    accelerator
+  );
 }
 
 /**
  * #591 follow-up: Electron localizes the comma accelerator label on Japanese
  * Windows as "Ctrl+カンマ". Keep the visible item without an accelerator label
- * and register CommandOrControl+, on a hidden item.
+ * and register the catalog's `Mod-,` on a hidden item.
  */
 function applicationSettingsHiddenAcceleratorMenuItem(
-  options: ApplicationMenuOptions
-): MenuItemConstructorOptions {
-  return {
-    label: "Application Settings (Ctrl+,)",
-    accelerator: "CommandOrControl+,",
-    visible: false,
-    acceleratorWorksWhenHidden: true,
-    click: () => {
-      sendApplicationMenuCommand(
-        options.getMainWindow,
-        workspaceCommandIds.openApplicationSettings,
-        options.debugLogger
-      );
-    }
-  };
+  options: ApplicationMenuOptions,
+  accelerator: string | undefined
+): MenuItemConstructorOptions[] {
+  return hiddenAcceleratorAliasItems(
+    options,
+    workspaceCommandIds.openApplicationSettings,
+    "Application Settings (Ctrl+,)",
+    accelerator
+  );
 }
 
-/**
- * Assist menu for document-level support commands. It currently hosts
- * line-ending diagnostics and paragraph indentation bulk operations.
- */
 function assistMenu(
   language: Language,
   options: ApplicationMenuOptions
@@ -614,11 +638,16 @@ export function buildApplicationMenu(
   options: ApplicationMenuOptions,
   platform: NodeJS.Platform = process.platform
 ): MenuItemConstructorOptions[] {
+  // #642: accelerators of Pergamum custom commands come from the shared
+  // keybinding catalog, resolved for the MAIN process' platform.
+  const accelerators = createMenuAcceleratorLookup(
+    nodePlatformToPergamumPlatform(platform)
+  );
   const template: MenuItemConstructorOptions[] = [
     ...(platform === "darwin" ? [macApplicationMenu(language, options)] : []),
-    fileMenu(language, platform, options),
-    editMenu(language, options),
-    viewMenu(language, options),
+    fileMenu(language, platform, options, accelerators),
+    editMenu(language, options, accelerators),
+    viewMenu(language, options, accelerators),
     assistMenu(language, options),
     ...(platform === "darwin" ? [macWindowMenu(language)] : []),
     helpMenu(language, options)

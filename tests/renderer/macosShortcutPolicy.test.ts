@@ -394,10 +394,13 @@ describe("darwin catalog safety (#636)", () => {
 describe("Cmd+W / Cmd+Shift+W (#636)", () => {
   const menu = readFileSync("src/main/menu.ts", "utf8");
 
-  it("keeps editor.close on CommandOrControl+W", () => {
+  it("keeps editor.close on CommandOrControl+W (catalog-derived, #642)", () => {
     expect(menu).toMatch(
-      /editorCommandIds\.close,\s*language,\s*"menu\.closeCurrentTab",\s*options,\s*"CommandOrControl\+W"/
+      /editorCommandIds\.close,\s*language,\s*"menu\.closeCurrentTab",\s*options,\s*accelerators\.get\(editorCommandIds\.close\)/
     );
+    for (const platform of platforms) {
+      expect(catalogKey(platform, "editor.close")).toBe("Mod-w");
+    }
   });
 
   it("gives the darwin native close role Cmd+Shift+W so it cannot claim Cmd+W", () => {

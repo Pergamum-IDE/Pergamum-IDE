@@ -1,0 +1,804 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`application menu accelerators come from the catalog (#642) > darwin: menu structure snapshot 1`] = `
+[
+  {
+    "label": "Pergamum",
+    "submenu": [
+      {
+        "id": "app.about.open",
+        "label": "About Pergamum",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Services",
+        "role": "services",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Hide Pergamum",
+        "role": "hide",
+      },
+      {
+        "label": "Hide Others",
+        "role": "hideOthers",
+      },
+      {
+        "label": "Show All",
+        "role": "unhide",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "Command+Q",
+        "id": "app.quit",
+        "label": "Quit Pergamum",
+      },
+    ],
+  },
+  {
+    "label": "File",
+    "submenu": [
+      {
+        "id": "workspace.project.create",
+        "label": "Create Project...",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+O",
+        "id": "workspace.project.open",
+        "label": "Open Project",
+      },
+      {
+        "id": "workspace.project.close",
+        "label": "Close Project",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Import",
+        "submenu": [
+          {
+            "id": "import.text.bulk.openDialog",
+            "label": "Bulk Import Text Files...",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+N",
+        "id": "editor.file.new",
+        "label": "New File",
+      },
+      {
+        "id": "editor.document.markdown.open",
+        "label": "Open Markdown File",
+      },
+      {
+        "accelerator": "CommandOrControl+W",
+        "id": "editor.close",
+        "label": "Close Current Tab",
+      },
+      {
+        "accelerator": "CommandOrControl+S",
+        "id": "editor.document.save",
+        "label": "Save",
+      },
+      {
+        "accelerator": "CommandOrControl+Alt+S",
+        "id": "editor.saveAll",
+        "label": "Save All",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+S",
+        "id": "editor.saveAs",
+        "label": "Save As...",
+      },
+      {
+        "accelerator": "F12",
+        "label": "Save As (F12)",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "project.settings.open",
+        "label": "Project Settings...",
+      },
+      {
+        "id": "workspace.applicationSettings.open",
+        "label": "Application Settings...",
+      },
+      {
+        "accelerator": "CommandOrControl+,",
+        "label": "Application Settings (Ctrl+,)",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+W",
+        "label": "Close",
+        "role": "close",
+      },
+    ],
+  },
+  {
+    "label": "Edit",
+    "submenu": [
+      {
+        "id": "editor.undo",
+        "label": "Undo",
+        "role": "undo",
+      },
+      {
+        "id": "editor.redo",
+        "label": "Redo",
+        "role": "redo",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "editor.selection.cut",
+        "label": "Cut",
+        "role": "cut",
+      },
+      {
+        "id": "editor.selection.copy",
+        "label": "Copy",
+        "role": "copy",
+      },
+      {
+        "id": "editor.selection.paste",
+        "label": "Paste",
+        "role": "paste",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "editor.selection.selectAll",
+        "label": "Select All",
+        "role": "selectAll",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+F",
+        "id": "search.project.openFromSelection",
+        "label": "Find in Project...",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+H",
+        "id": "search.project.replace.openFromSelection",
+        "label": "Replace in Project...",
+      },
+    ],
+  },
+  {
+    "label": "View",
+    "submenu": [
+      {
+        "accelerator": "CommandOrControl+P",
+        "id": "workbench.commandPalette.open",
+        "label": "Command Palette...",
+      },
+      {
+        "accelerator": "F1",
+        "label": "Command Palette (F1)",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+D",
+        "label": "Toggle Developer Tools",
+        "role": "toggleDevTools",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+=",
+        "id": "app.zoom.in",
+        "label": "Zoom In",
+      },
+      {
+        "accelerator": "CommandOrControl+Plus",
+        "label": "Zoom In (+)",
+        "visible": false,
+      },
+      {
+        "accelerator": "CommandOrControl+-",
+        "id": "app.zoom.out",
+        "label": "Zoom Out",
+      },
+      {
+        "accelerator": "CommandOrControl+0",
+        "id": "app.zoom.reset",
+        "label": "Actual Size",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Toggle Full Screen",
+        "role": "togglefullscreen",
+      },
+    ],
+  },
+  {
+    "label": "Assist",
+    "submenu": [
+      {
+        "id": "assist.lineEndingDistribution.show",
+        "label": "Line Ending Distribution...",
+      },
+      {
+        "id": "assist.paragraphIndent.insert",
+        "label": "Insert Paragraph Indents",
+      },
+      {
+        "id": "assist.paragraphIndent.remove",
+        "label": "Remove Paragraph Indents",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "glossary.entry.manage",
+        "label": "Manage Glossary Entries...",
+      },
+      {
+        "id": "glossary.tag.manage",
+        "label": "Manage Glossary Tags...",
+      },
+    ],
+  },
+  {
+    "label": "Window",
+    "submenu": [
+      {
+        "label": "Minimize",
+        "role": "minimize",
+      },
+      {
+        "label": "Zoom",
+        "role": "zoom",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Bring All to Front",
+        "role": "front",
+      },
+    ],
+  },
+  {
+    "label": "Help",
+    "role": "help",
+    "submenu": [
+      {
+        "id": "workbench.showResumeHub",
+        "label": "Show Resume Hub",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "app.about.open",
+        "label": "About Pergamum",
+      },
+    ],
+  },
+]
+`;
+
+exports[`application menu accelerators come from the catalog (#642) > linux: menu structure snapshot 1`] = `
+[
+  {
+    "label": "File",
+    "submenu": [
+      {
+        "id": "workspace.project.create",
+        "label": "Create Project...",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+O",
+        "id": "workspace.project.open",
+        "label": "Open Project",
+      },
+      {
+        "id": "workspace.project.close",
+        "label": "Close Project",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Import",
+        "submenu": [
+          {
+            "id": "import.text.bulk.openDialog",
+            "label": "Bulk Import Text Files...",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+N",
+        "id": "editor.file.new",
+        "label": "New File",
+      },
+      {
+        "id": "editor.document.markdown.open",
+        "label": "Open Markdown File",
+      },
+      {
+        "accelerator": "CommandOrControl+W",
+        "id": "editor.close",
+        "label": "Close Current Tab",
+      },
+      {
+        "accelerator": "CommandOrControl+S",
+        "id": "editor.document.save",
+        "label": "Save",
+      },
+      {
+        "accelerator": "CommandOrControl+Alt+S",
+        "id": "editor.saveAll",
+        "label": "Save All",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+S",
+        "id": "editor.saveAs",
+        "label": "Save As...",
+      },
+      {
+        "accelerator": "F12",
+        "label": "Save As (F12)",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "project.settings.open",
+        "label": "Project Settings...",
+      },
+      {
+        "id": "workspace.applicationSettings.open",
+        "label": "Application Settings...",
+      },
+      {
+        "accelerator": "CommandOrControl+,",
+        "label": "Application Settings (Ctrl+,)",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+Q",
+        "id": "app.quit",
+        "label": "Quit Pergamum",
+      },
+    ],
+  },
+  {
+    "label": "Edit",
+    "submenu": [
+      {
+        "id": "editor.undo",
+        "label": "Undo",
+        "role": "undo",
+      },
+      {
+        "id": "editor.redo",
+        "label": "Redo",
+        "role": "redo",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "editor.selection.cut",
+        "label": "Cut",
+        "role": "cut",
+      },
+      {
+        "id": "editor.selection.copy",
+        "label": "Copy",
+        "role": "copy",
+      },
+      {
+        "id": "editor.selection.paste",
+        "label": "Paste",
+        "role": "paste",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "editor.selection.selectAll",
+        "label": "Select All",
+        "role": "selectAll",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+F",
+        "id": "search.project.openFromSelection",
+        "label": "Find in Project...",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+H",
+        "id": "search.project.replace.openFromSelection",
+        "label": "Replace in Project...",
+      },
+    ],
+  },
+  {
+    "label": "View",
+    "submenu": [
+      {
+        "accelerator": "CommandOrControl+P",
+        "id": "workbench.commandPalette.open",
+        "label": "Command Palette...",
+      },
+      {
+        "accelerator": "F1",
+        "label": "Command Palette (F1)",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+D",
+        "label": "Toggle Developer Tools",
+        "role": "toggleDevTools",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+=",
+        "id": "app.zoom.in",
+        "label": "Zoom In",
+      },
+      {
+        "accelerator": "CommandOrControl+Plus",
+        "label": "Zoom In (+)",
+        "visible": false,
+      },
+      {
+        "accelerator": "CommandOrControl+-",
+        "id": "app.zoom.out",
+        "label": "Zoom Out",
+      },
+      {
+        "accelerator": "CommandOrControl+0",
+        "id": "app.zoom.reset",
+        "label": "Actual Size",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Toggle Full Screen",
+        "role": "togglefullscreen",
+      },
+    ],
+  },
+  {
+    "label": "Assist",
+    "submenu": [
+      {
+        "id": "assist.lineEndingDistribution.show",
+        "label": "Line Ending Distribution...",
+      },
+      {
+        "id": "assist.paragraphIndent.insert",
+        "label": "Insert Paragraph Indents",
+      },
+      {
+        "id": "assist.paragraphIndent.remove",
+        "label": "Remove Paragraph Indents",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "glossary.entry.manage",
+        "label": "Manage Glossary Entries...",
+      },
+      {
+        "id": "glossary.tag.manage",
+        "label": "Manage Glossary Tags...",
+      },
+    ],
+  },
+  {
+    "label": "Help",
+    "role": "help",
+    "submenu": [
+      {
+        "id": "workbench.showResumeHub",
+        "label": "Show Resume Hub",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "app.about.open",
+        "label": "About Pergamum",
+      },
+    ],
+  },
+]
+`;
+
+exports[`application menu accelerators come from the catalog (#642) > win32: menu structure snapshot 1`] = `
+[
+  {
+    "label": "File",
+    "submenu": [
+      {
+        "id": "workspace.project.create",
+        "label": "Create Project...",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+O",
+        "id": "workspace.project.open",
+        "label": "Open Project",
+      },
+      {
+        "id": "workspace.project.close",
+        "label": "Close Project",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Import",
+        "submenu": [
+          {
+            "id": "import.text.bulk.openDialog",
+            "label": "Bulk Import Text Files...",
+          },
+        ],
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+N",
+        "id": "editor.file.new",
+        "label": "New File",
+      },
+      {
+        "id": "editor.document.markdown.open",
+        "label": "Open Markdown File",
+      },
+      {
+        "accelerator": "CommandOrControl+W",
+        "id": "editor.close",
+        "label": "Close Current Tab",
+      },
+      {
+        "accelerator": "CommandOrControl+S",
+        "id": "editor.document.save",
+        "label": "Save",
+      },
+      {
+        "accelerator": "CommandOrControl+Alt+S",
+        "id": "editor.saveAll",
+        "label": "Save All",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+S",
+        "id": "editor.saveAs",
+        "label": "Save As...",
+      },
+      {
+        "accelerator": "F12",
+        "label": "Save As (F12)",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "project.settings.open",
+        "label": "Project Settings...",
+      },
+      {
+        "id": "workspace.applicationSettings.open",
+        "label": "Application Settings...",
+      },
+      {
+        "accelerator": "CommandOrControl+,",
+        "label": "Application Settings (Ctrl+,)",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+Q",
+        "id": "app.quit",
+        "label": "Quit Pergamum",
+      },
+    ],
+  },
+  {
+    "label": "Edit",
+    "submenu": [
+      {
+        "id": "editor.undo",
+        "label": "Undo",
+        "role": "undo",
+      },
+      {
+        "id": "editor.redo",
+        "label": "Redo",
+        "role": "redo",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "editor.selection.cut",
+        "label": "Cut",
+        "role": "cut",
+      },
+      {
+        "id": "editor.selection.copy",
+        "label": "Copy",
+        "role": "copy",
+      },
+      {
+        "id": "editor.selection.paste",
+        "label": "Paste",
+        "role": "paste",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "editor.selection.selectAll",
+        "label": "Select All",
+        "role": "selectAll",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+F",
+        "id": "search.project.openFromSelection",
+        "label": "Find in Project...",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+H",
+        "id": "search.project.replace.openFromSelection",
+        "label": "Replace in Project...",
+      },
+    ],
+  },
+  {
+    "label": "View",
+    "submenu": [
+      {
+        "accelerator": "CommandOrControl+P",
+        "id": "workbench.commandPalette.open",
+        "label": "Command Palette...",
+      },
+      {
+        "accelerator": "F1",
+        "label": "Command Palette (F1)",
+        "visible": false,
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+Shift+D",
+        "label": "Toggle Developer Tools",
+        "role": "toggleDevTools",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "accelerator": "CommandOrControl+=",
+        "id": "app.zoom.in",
+        "label": "Zoom In",
+      },
+      {
+        "accelerator": "CommandOrControl+Plus",
+        "label": "Zoom In (+)",
+        "visible": false,
+      },
+      {
+        "accelerator": "CommandOrControl+-",
+        "id": "app.zoom.out",
+        "label": "Zoom Out",
+      },
+      {
+        "accelerator": "CommandOrControl+0",
+        "id": "app.zoom.reset",
+        "label": "Actual Size",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "label": "Toggle Full Screen",
+        "role": "togglefullscreen",
+      },
+    ],
+  },
+  {
+    "label": "Assist",
+    "submenu": [
+      {
+        "id": "assist.lineEndingDistribution.show",
+        "label": "Line Ending Distribution...",
+      },
+      {
+        "id": "assist.paragraphIndent.insert",
+        "label": "Insert Paragraph Indents",
+      },
+      {
+        "id": "assist.paragraphIndent.remove",
+        "label": "Remove Paragraph Indents",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "glossary.entry.manage",
+        "label": "Manage Glossary Entries...",
+      },
+      {
+        "id": "glossary.tag.manage",
+        "label": "Manage Glossary Tags...",
+      },
+    ],
+  },
+  {
+    "label": "Help",
+    "role": "help",
+    "submenu": [
+      {
+        "id": "workbench.showResumeHub",
+        "label": "Show Resume Hub",
+      },
+      {
+        "type": "separator",
+      },
+      {
+        "id": "app.about.open",
+        "label": "About Pergamum",
+      },
+    ],
+  },
+]
+`;
