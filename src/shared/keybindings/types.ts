@@ -131,13 +131,27 @@ export type ReservedKeyLevel =
   | "discouraged"
   | "reload";
 
+/** The Chromium behavior a runtime guard suppresses for a reserved key. */
+export type ReservedRuntimeSuppression = "reload" | "forceReload";
+
 export interface ReservedKeybinding {
   readonly key: string;
   readonly platforms: readonly PergamumPlatform[];
   readonly level: ReservedKeyLevel;
   readonly reason: string;
-  /** reload level only: the commands explicitly allowed to use the key. */
+  /**
+   * The commands explicitly allowed to use the key despite its level (the
+   * `reload` level's single Ruby exception, #635). An explicit, reviewable
+   * exception; never proof that the key is generally safe.
+   */
   readonly allowedCommands?: readonly string[];
+  /**
+   * #644: a separate axis from `level`. When set, the runtime guard
+   * (`src/main/reloadGuard.ts`, renderer fallback) suppresses this key's
+   * Chromium reload / forceReload behavior. Keys with `allowedCommands` are
+   * still delivered to the renderer so the allowed command can run.
+   */
+  readonly runtimeSuppression?: ReservedRuntimeSuppression;
 }
 
 export type KeybindingDiagnosticCode =
@@ -151,6 +165,7 @@ export type KeybindingDiagnosticCode =
   | "duplicateReadonlyKey"
   | "reservedForbiddenKey"
   | "reservedReloadKey"
+  | "reservedRuntimeSuppressionInvalid"
   | "reservedNativeOnlyKey"
   | "reservedDiscouragedKey"
   | "nativeRoleNotReadonly"

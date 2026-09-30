@@ -17,6 +17,11 @@ export {
   type ElectronAcceleratorOptions
 } from "./format";
 export { validateKeybindingCatalog } from "./validate";
+export {
+  classifyReloadShortcut,
+  type ReloadGuardInput,
+  type ReloadShortcutClassification
+} from "./reloadGuard";
 export { listCommonDefaultKeys, resolveEditorKeybindings } from "./editor";
 export {
   listCommandMetadata,

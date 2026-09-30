@@ -309,8 +309,36 @@ describe("reload safety (#642)", () => {
     const accelerators = flatten(template(platform))
       .map((item) => item.accelerator)
       .filter((accelerator): accelerator is string => typeof accelerator === "string");
-    for (const banned of ["CommandOrControl+R", "CommandOrControl+Shift+R", "F5"]) {
+    // #644: every reload / forceReload key, including the hidden aliases' keys.
+    for (const banned of [
+      "CommandOrControl+R",
+      "CommandOrControl+Shift+R",
+      "F5",
+      "CommandOrControl+F5",
+      "Shift+F5"
+    ]) {
       expect(accelerators).not.toContain(banned);
+    }
+  });
+});
+
+describe("menu accelerators vs the reserved reload keys (#644)", () => {
+  it("no menu accelerator (visible or hidden) resolves to a runtime-suppressed key", () => {
+    for (const platform of platforms) {
+      const suppressed = new Set(
+        reservedKeybindings
+          .filter((entry) => entry.runtimeSuppression !== undefined)
+          .map((entry) =>
+            toElectronAccelerator(entry.key, platform, {
+              modStyle: "commandOrControl"
+            })
+          )
+      );
+      for (const item of flatten(template(platform))) {
+        if (typeof item.accelerator === "string") {
+          expect(suppressed.has(item.accelerator), `${platform} ${item.accelerator}`).toBe(false);
+        }
+      }
     }
   });
 });

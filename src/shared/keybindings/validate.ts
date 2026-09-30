@@ -9,7 +9,9 @@
  * Reserved keys: `forbidden` applies to customizable (pergamum) commands;
  * `nativeOnly` applies to any command that is neither native-scope nor
  * nativeRole; `discouraged` warns for customizable commands; `reload` is an
- * error unless the command is in the entry's `allowedCommands`.
+ * error unless the command is in the entry's `allowedCommands`. Entries with
+ * `runtimeSuppression` (reload / forceReload keys, #644) are checked for every
+ * source, not only customizable commands.
  */
 
 import { isValidKeybindingKey, normalizeKeybindingKey } from "./format";
@@ -196,6 +198,20 @@ function validateReservedData(
         key: reserved.key
       });
     }
+    if (
+      reserved.runtimeSuppression !== undefined &&
+      reserved.level !== "forbidden" &&
+      !(reserved.level === "reload" && (reserved.allowedCommands ?? []).length > 0)
+    ) {
+      // A suppressed key must be unusable by commands, or carry an explicit
+      // exception list (the Ruby Mod-r case).
+      diagnostics.push({
+        code: "reservedRuntimeSuppressionInvalid",
+        severity: "error",
+        message: `Runtime-suppressed reserved key ${reserved.key} must be forbidden or a reload key with allowedCommands`,
+        key: reserved.key
+      });
+    }
     for (const platform of reserved.platforms) {
       if (!isPergamumPlatform(platform)) {
         diagnostics.push({
@@ -277,7 +293,19 @@ function validateReservedUse(
     };
     const label = `${binding.command} uses reserved key ${binding.key} on ${platform} (${reserved.reason})`;
 
-    if (reserved.level === "forbidden" && binding.source === "pergamum") {
+    // #644: a runtime-suppressed reload key is checked for EVERY source (a
+    // nativeRole / standard command using it would fight the guard too),
+    // except for the commands the reserved entry explicitly allows.
+    const suppressed = reserved.runtimeSuppression !== undefined;
+    const explicitlyAllowed = (reserved.allowedCommands ?? []).includes(
+      binding.command
+    );
+
+    if (
+      reserved.level === "forbidden" &&
+      !explicitlyAllowed &&
+      (binding.source === "pergamum" || suppressed)
+    ) {
       diagnostics.push({
         ...base,
         code: "reservedForbiddenKey",
@@ -286,8 +314,8 @@ function validateReservedUse(
       });
     } else if (
       reserved.level === "reload" &&
-      binding.source === "pergamum" &&
-      !(reserved.allowedCommands ?? []).includes(binding.command)
+      (binding.source === "pergamum" || suppressed) &&
+      !explicitlyAllowed
     ) {
       diagnostics.push({
         ...base,

@@ -7,7 +7,8 @@
 import type {
   PergamumPlatform,
   ReservedKeybinding,
-  ReservedKeyLevel
+  ReservedKeyLevel,
+  ReservedRuntimeSuppression
 } from "./types";
 
 const darwin: readonly PergamumPlatform[] = ["darwin"];
@@ -20,6 +21,21 @@ function reserved(
   platforms: readonly PergamumPlatform[] = darwin
 ): ReservedKeybinding[] {
   return keys.map((key) => ({ key, platforms, level, reason }));
+}
+
+function reservedSuppressed(
+  keys: readonly string[],
+  level: ReservedKeyLevel,
+  runtimeSuppression: ReservedRuntimeSuppression,
+  reason: string
+): ReservedKeybinding[] {
+  return keys.map((key) => ({
+    key,
+    platforms: allPlatforms,
+    level,
+    reason,
+    runtimeSuppression
+  }));
 }
 
 export const reservedKeybindings: readonly ReservedKeybinding[] = [
@@ -59,17 +75,27 @@ export const reservedKeybindings: readonly ReservedKeybinding[] = [
     "discouraged",
     "macOS Emacs-style text editing keys"
   ),
-  ...reserved(
-    ["Mod-Shift-r", "F5"],
+  // #644: reload / forceReload keys. Every one is runtime-suppressed; none may
+  // be assigned to a command, except Mod-r for Ruby (explicit exception below).
+  ...reservedSuppressed(
+    ["F5"],
     "forbidden",
-    "Electron forceReload / reload; runtime suppression is a future issue",
-    allPlatforms
+    "reload",
+    "Chromium reload (F5); suppressed at runtime, never a Pergamum command key"
+  ),
+  ...reservedSuppressed(
+    ["Mod-Shift-r", "Mod-F5", "Shift-F5"],
+    "forbidden",
+    "forceReload",
+    "Chromium forceReload; suppressed at runtime, never a Pergamum command key"
   ),
   {
     key: "Mod-r",
     platforms: allPlatforms,
     level: "reload",
-    reason: "Electron reload; allowed only for Ruby (#635 PO decision)",
-    allowedCommands: ["editor.markdown.insertRuby"]
+    reason:
+      "Pergamum uses Mod-R for ruby insertion; Chromium reload must remain disabled (#635 PO decision)",
+    allowedCommands: ["editor.markdown.insertRuby"],
+    runtimeSuppression: "reload"
   }
 ];

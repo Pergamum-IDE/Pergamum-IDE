@@ -147,6 +147,11 @@ function allSourceText(): string {
  * while typing in a text field or while a modal dialog is open — not a
  * competing global shortcut system, and unrelated to the Markdown editor's
  * native-edit-command delegation this guard otherwise protects.
+ *
+ * reloadKeyFallback.ts (#644) is the same category: one bubble-phase window
+ * listener that only calls `preventDefault()` on an UNHANDLED reload /
+ * forceReload key (never a command, never `stopPropagation()`), so Chromium's
+ * reload cannot fire; it is unrelated to the native-edit-command delegation.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -173,6 +178,7 @@ const onKeyDownExemptFileNames = new Set([
   "editorTabShortcuts.ts",
   "editorFindShortcuts.ts",
   "globalKeyboardShortcuts.ts",
+  "reloadKeyFallback.ts",
   "App.tsx",
   "EditorSurface.tsx"
 ]);
