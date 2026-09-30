@@ -1,0 +1,673 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
+{
+  "app.quit": [
+    "Mod-q",
+  ],
+  "app.zoom.in": [
+    "Mod-=",
+    "Mod-+",
+  ],
+  "app.zoom.out": [
+    "Mod--",
+  ],
+  "app.zoom.reset": [
+    "Mod-0",
+  ],
+  "developer.toggleDevTools": [
+    "Mod-Shift-d",
+  ],
+  "editor.close": [
+    "Mod-w",
+  ],
+  "editor.comment.toggle": [
+    "Mod-/",
+  ],
+  "editor.cursor.documentEnd": [
+    "Mod-ArrowDown",
+  ],
+  "editor.cursor.documentStart": [
+    "Mod-ArrowUp",
+  ],
+  "editor.cursor.lineEnd": [
+    "Mod-ArrowRight",
+  ],
+  "editor.cursor.lineStart": [
+    "Mod-ArrowLeft",
+  ],
+  "editor.diagnostic.next": [
+    "F8",
+  ],
+  "editor.document.save": [
+    "Mod-s",
+  ],
+  "editor.file.new": [
+    "Mod-n",
+  ],
+  "editor.find.next": [
+    "F3",
+  ],
+  "editor.find.open": [
+    "Mod-f",
+  ],
+  "editor.find.previous": [
+    "Shift-F3",
+  ],
+  "editor.find.replace.open": [
+    "Mod-Alt-f",
+  ],
+  "editor.image.insert": [
+    "Mod-Shift-i",
+  ],
+  "editor.indent": [
+    "Mod-]",
+  ],
+  "editor.line.delete": [
+    "Mod-Shift-k",
+  ],
+  "editor.line.insertBlankLine": [
+    "Mod-Enter",
+  ],
+  "editor.markdown.bold": [
+    "Mod-b",
+  ],
+  "editor.markdown.heading": [
+    "Mod-l",
+  ],
+  "editor.markdown.insertBlockquote": [
+    "Mod-Alt-q",
+  ],
+  "editor.markdown.insertCodeBlock": [
+    "Mod-Shift-b",
+  ],
+  "editor.markdown.insertEmphasisMark": [
+    "Mod-.",
+  ],
+  "editor.markdown.insertHorizontalRule": [
+    "Mod-Shift-l",
+  ],
+  "editor.markdown.insertRuby": [
+    "Mod-r",
+  ],
+  "editor.markdown.insertTable": [
+    "Mod-t",
+  ],
+  "editor.markdown.italic": [
+    "Mod-i",
+  ],
+  "editor.markdown.link": [
+    "Mod-k",
+  ],
+  "editor.markdown.list.checklist": [
+    null,
+  ],
+  "editor.markdown.list.ordered": [
+    null,
+  ],
+  "editor.markdown.list.unordered": [
+    null,
+  ],
+  "editor.markdown.strikethrough": [
+    "Mod-Shift-x",
+  ],
+  "editor.markdown.toggleSyntaxChecker": [
+    "Mod-Shift-c",
+  ],
+  "editor.outdent": [
+    "Mod-[",
+  ],
+  "editor.preview.toggle": [
+    "Mod-Shift-p",
+  ],
+  "editor.redo": [
+    "Mod-Shift-z",
+  ],
+  "editor.saveAll": [
+    "Mod-Alt-s",
+  ],
+  "editor.saveAs": [
+    "Mod-Shift-s",
+    "F12",
+  ],
+  "editor.selection.copy": [
+    "Mod-c",
+  ],
+  "editor.selection.cut": [
+    "Mod-x",
+  ],
+  "editor.selection.nextOccurrence": [
+    "Mod-d",
+  ],
+  "editor.selection.paste": [
+    "Mod-v",
+  ],
+  "editor.selection.selectAll": [
+    "Mod-a",
+  ],
+  "editor.selection.undo": [
+    "Mod-u",
+  ],
+  "editor.tabCapture.bypassOnce": [
+    null,
+  ],
+  "editor.tabCapture.toggle": [
+    "Shift-Alt-m",
+  ],
+  "editor.undo": [
+    "Mod-z",
+  ],
+  "glossary.completion.open": [
+    "Alt-\`",
+  ],
+  "glossary.entry.openFromSelection": [
+    "Mod-g",
+  ],
+  "search.project.openFromSelection": [
+    "Mod-Shift-f",
+  ],
+  "search.project.replace.openFromSelection": [
+    "Mod-Shift-h",
+  ],
+  "window.close": [
+    "Mod-Shift-w",
+  ],
+  "window.minimize": [
+    "Mod-m",
+  ],
+  "window.toggleFullscreen": [
+    "Ctrl-Mod-f",
+  ],
+  "workbench.commandPalette.file.open": [
+    "Mod-o",
+  ],
+  "workbench.commandPalette.glossary.open": [
+    "Mod-@",
+  ],
+  "workbench.commandPalette.heading.open": [
+    null,
+  ],
+  "workbench.commandPalette.line.open": [
+    "Mod-:",
+  ],
+  "workbench.commandPalette.open": [
+    "Mod-p",
+    "F1",
+  ],
+  "workbench.commandPalette.projectSearch.open": [
+    null,
+  ],
+  "workspace.applicationSettings.open": [
+    "Mod-,",
+  ],
+  "workspace.documentMap.toggle": [
+    "Mod-Shift-m",
+  ],
+  "workspace.documentMetrics.toggle": [
+    "Mod-Shift-t",
+  ],
+  "workspace.files.toggle": [
+    "Mod-Shift-e",
+  ],
+  "workspace.glossary.toggle": [
+    "Mod-Shift-g",
+  ],
+  "workspace.project.open": [
+    "Mod-Shift-o",
+  ],
+  "workspace.tabs.next": [
+    "Mod-Alt-ArrowRight",
+  ],
+  "workspace.tabs.previous": [
+    "Mod-Alt-ArrowLeft",
+  ],
+}
+`;
+
+exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
+{
+  "app.quit": [
+    "Mod-q",
+  ],
+  "app.zoom.in": [
+    "Mod-=",
+    "Mod-+",
+  ],
+  "app.zoom.out": [
+    "Mod--",
+  ],
+  "app.zoom.reset": [
+    "Mod-0",
+  ],
+  "developer.toggleDevTools": [
+    "Mod-Shift-d",
+  ],
+  "editor.close": [
+    "Mod-w",
+  ],
+  "editor.comment.toggle": [
+    "Mod-/",
+  ],
+  "editor.cursor.documentEnd": [
+    "Mod-End",
+  ],
+  "editor.cursor.documentStart": [
+    "Mod-Home",
+  ],
+  "editor.cursor.lineEnd": [
+    "End",
+  ],
+  "editor.cursor.lineStart": [
+    "Home",
+  ],
+  "editor.diagnostic.next": [
+    "F8",
+  ],
+  "editor.document.save": [
+    "Mod-s",
+  ],
+  "editor.file.new": [
+    "Mod-n",
+  ],
+  "editor.find.next": [
+    "F3",
+  ],
+  "editor.find.open": [
+    "Mod-f",
+  ],
+  "editor.find.previous": [
+    "Shift-F3",
+  ],
+  "editor.find.replace.open": [
+    "Mod-h",
+  ],
+  "editor.image.insert": [
+    "Mod-Shift-i",
+  ],
+  "editor.indent": [
+    "Mod-]",
+  ],
+  "editor.line.delete": [
+    "Mod-Shift-k",
+  ],
+  "editor.line.insertBlankLine": [
+    "Mod-Enter",
+  ],
+  "editor.markdown.bold": [
+    "Mod-b",
+  ],
+  "editor.markdown.heading": [
+    "Mod-l",
+  ],
+  "editor.markdown.insertBlockquote": [
+    "Mod-Shift-q",
+  ],
+  "editor.markdown.insertCodeBlock": [
+    "Mod-Shift-b",
+  ],
+  "editor.markdown.insertEmphasisMark": [
+    "Mod-.",
+  ],
+  "editor.markdown.insertHorizontalRule": [
+    "Mod-Shift-l",
+  ],
+  "editor.markdown.insertRuby": [
+    "Mod-r",
+  ],
+  "editor.markdown.insertTable": [
+    "Mod-t",
+  ],
+  "editor.markdown.italic": [
+    "Mod-i",
+  ],
+  "editor.markdown.link": [
+    "Mod-k",
+  ],
+  "editor.markdown.list.checklist": [
+    null,
+  ],
+  "editor.markdown.list.ordered": [
+    null,
+  ],
+  "editor.markdown.list.unordered": [
+    null,
+  ],
+  "editor.markdown.strikethrough": [
+    "Mod-Shift-x",
+  ],
+  "editor.markdown.toggleSyntaxChecker": [
+    "Mod-Shift-c",
+  ],
+  "editor.outdent": [
+    "Mod-[",
+  ],
+  "editor.preview.toggle": [
+    "Mod-Shift-p",
+  ],
+  "editor.redo": [
+    "Mod-y",
+  ],
+  "editor.saveAll": [
+    "Mod-Alt-s",
+  ],
+  "editor.saveAs": [
+    "Mod-Shift-s",
+    "F12",
+  ],
+  "editor.selection.copy": [
+    "Mod-c",
+  ],
+  "editor.selection.cut": [
+    "Mod-x",
+  ],
+  "editor.selection.nextOccurrence": [
+    "Mod-d",
+  ],
+  "editor.selection.paste": [
+    "Mod-v",
+  ],
+  "editor.selection.selectAll": [
+    "Mod-a",
+  ],
+  "editor.selection.undo": [
+    "Mod-u",
+  ],
+  "editor.tabCapture.bypassOnce": [
+    null,
+  ],
+  "editor.tabCapture.toggle": [
+    "Ctrl-m",
+  ],
+  "editor.undo": [
+    "Mod-z",
+  ],
+  "glossary.completion.open": [
+    "Ctrl-Space",
+  ],
+  "glossary.entry.openFromSelection": [
+    "Mod-g",
+  ],
+  "search.project.openFromSelection": [
+    "Mod-Shift-f",
+  ],
+  "search.project.replace.openFromSelection": [
+    "Mod-Shift-h",
+  ],
+  "window.close": [
+    "Alt-F4",
+  ],
+  "window.minimize": [
+    null,
+  ],
+  "window.toggleFullscreen": [
+    "F11",
+  ],
+  "workbench.commandPalette.file.open": [
+    "Mod-o",
+  ],
+  "workbench.commandPalette.glossary.open": [
+    "Mod-@",
+  ],
+  "workbench.commandPalette.heading.open": [
+    "Mod-#",
+  ],
+  "workbench.commandPalette.line.open": [
+    "Mod-:",
+  ],
+  "workbench.commandPalette.open": [
+    "Mod-p",
+    "F1",
+  ],
+  "workbench.commandPalette.projectSearch.open": [
+    "Mod-%",
+  ],
+  "workspace.applicationSettings.open": [
+    "Mod-,",
+  ],
+  "workspace.documentMap.toggle": [
+    "Mod-Shift-m",
+  ],
+  "workspace.documentMetrics.toggle": [
+    "Mod-Shift-t",
+  ],
+  "workspace.files.toggle": [
+    "Mod-Shift-e",
+  ],
+  "workspace.glossary.toggle": [
+    "Mod-Shift-g",
+  ],
+  "workspace.project.open": [
+    "Mod-Shift-o",
+  ],
+  "workspace.tabs.next": [
+    "Alt-ArrowRight",
+  ],
+  "workspace.tabs.previous": [
+    "Alt-ArrowLeft",
+  ],
+}
+`;
+
+exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
+{
+  "app.quit": [
+    "Mod-q",
+  ],
+  "app.zoom.in": [
+    "Mod-=",
+    "Mod-+",
+  ],
+  "app.zoom.out": [
+    "Mod--",
+  ],
+  "app.zoom.reset": [
+    "Mod-0",
+  ],
+  "developer.toggleDevTools": [
+    "Mod-Shift-d",
+  ],
+  "editor.close": [
+    "Mod-w",
+  ],
+  "editor.comment.toggle": [
+    "Mod-/",
+  ],
+  "editor.cursor.documentEnd": [
+    "Mod-End",
+  ],
+  "editor.cursor.documentStart": [
+    "Mod-Home",
+  ],
+  "editor.cursor.lineEnd": [
+    "End",
+  ],
+  "editor.cursor.lineStart": [
+    "Home",
+  ],
+  "editor.diagnostic.next": [
+    "F8",
+  ],
+  "editor.document.save": [
+    "Mod-s",
+  ],
+  "editor.file.new": [
+    "Mod-n",
+  ],
+  "editor.find.next": [
+    "F3",
+  ],
+  "editor.find.open": [
+    "Mod-f",
+  ],
+  "editor.find.previous": [
+    "Shift-F3",
+  ],
+  "editor.find.replace.open": [
+    "Mod-h",
+  ],
+  "editor.image.insert": [
+    "Mod-Shift-i",
+  ],
+  "editor.indent": [
+    "Mod-]",
+  ],
+  "editor.line.delete": [
+    "Mod-Shift-k",
+  ],
+  "editor.line.insertBlankLine": [
+    "Mod-Enter",
+  ],
+  "editor.markdown.bold": [
+    "Mod-b",
+  ],
+  "editor.markdown.heading": [
+    "Mod-l",
+  ],
+  "editor.markdown.insertBlockquote": [
+    "Mod-Shift-q",
+  ],
+  "editor.markdown.insertCodeBlock": [
+    "Mod-Shift-b",
+  ],
+  "editor.markdown.insertEmphasisMark": [
+    "Mod-.",
+  ],
+  "editor.markdown.insertHorizontalRule": [
+    "Mod-Shift-l",
+  ],
+  "editor.markdown.insertRuby": [
+    "Mod-r",
+  ],
+  "editor.markdown.insertTable": [
+    "Mod-t",
+  ],
+  "editor.markdown.italic": [
+    "Mod-i",
+  ],
+  "editor.markdown.link": [
+    "Mod-k",
+  ],
+  "editor.markdown.list.checklist": [
+    null,
+  ],
+  "editor.markdown.list.ordered": [
+    null,
+  ],
+  "editor.markdown.list.unordered": [
+    null,
+  ],
+  "editor.markdown.strikethrough": [
+    "Mod-Shift-x",
+  ],
+  "editor.markdown.toggleSyntaxChecker": [
+    "Mod-Shift-c",
+  ],
+  "editor.outdent": [
+    "Mod-[",
+  ],
+  "editor.preview.toggle": [
+    "Mod-Shift-p",
+  ],
+  "editor.redo": [
+    "Mod-y",
+  ],
+  "editor.saveAll": [
+    "Mod-Alt-s",
+  ],
+  "editor.saveAs": [
+    "Mod-Shift-s",
+    "F12",
+  ],
+  "editor.selection.copy": [
+    "Mod-c",
+  ],
+  "editor.selection.cut": [
+    "Mod-x",
+  ],
+  "editor.selection.nextOccurrence": [
+    "Mod-d",
+  ],
+  "editor.selection.paste": [
+    "Mod-v",
+  ],
+  "editor.selection.selectAll": [
+    "Mod-a",
+  ],
+  "editor.selection.undo": [
+    "Mod-u",
+  ],
+  "editor.tabCapture.bypassOnce": [
+    null,
+  ],
+  "editor.tabCapture.toggle": [
+    "Ctrl-m",
+  ],
+  "editor.undo": [
+    "Mod-z",
+  ],
+  "glossary.completion.open": [
+    "Ctrl-Space",
+  ],
+  "glossary.entry.openFromSelection": [
+    "Mod-g",
+  ],
+  "search.project.openFromSelection": [
+    "Mod-Shift-f",
+  ],
+  "search.project.replace.openFromSelection": [
+    "Mod-Shift-h",
+  ],
+  "window.close": [
+    "Alt-F4",
+  ],
+  "window.minimize": [
+    null,
+  ],
+  "window.toggleFullscreen": [
+    "F11",
+  ],
+  "workbench.commandPalette.file.open": [
+    "Mod-o",
+  ],
+  "workbench.commandPalette.glossary.open": [
+    "Mod-@",
+  ],
+  "workbench.commandPalette.heading.open": [
+    "Mod-#",
+  ],
+  "workbench.commandPalette.line.open": [
+    "Mod-:",
+  ],
+  "workbench.commandPalette.open": [
+    "Mod-p",
+    "F1",
+  ],
+  "workbench.commandPalette.projectSearch.open": [
+    "Mod-%",
+  ],
+  "workspace.applicationSettings.open": [
+    "Mod-,",
+  ],
+  "workspace.documentMap.toggle": [
+    "Mod-Shift-m",
+  ],
+  "workspace.documentMetrics.toggle": [
+    "Mod-Shift-t",
+  ],
+  "workspace.files.toggle": [
+    "Mod-Shift-e",
+  ],
+  "workspace.glossary.toggle": [
+    "Mod-Shift-g",
+  ],
+  "workspace.project.open": [
+    "Mod-Shift-o",
+  ],
+  "workspace.tabs.next": [
+    "Alt-ArrowRight",
+  ],
+  "workspace.tabs.previous": [
+    "Alt-ArrowLeft",
+  ],
+}
+`;
