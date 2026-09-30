@@ -15307,7 +15307,8 @@ label.settingsItemHeader {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  /* #649: the page itself does not scroll; only .keyboardShortcutsListScroll does. */
+  overflow: hidden;
   background: var(--pg-color-surface-background);
   color: var(--pg-color-surface-foreground);
   padding-block: 28px;
@@ -15353,6 +15354,66 @@ label.settingsItemHeader {
   background: var(--pg-color-input-background);
   border: 1px solid var(--pg-color-input-border);
   border-radius: 4px;
+}
+
+/* #649: display filters. */
+.keyboardShortcutsFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  max-inline-size: 900px;
+  font-size: 12px;
+}
+
+.keyboardShortcutsFilterField,
+.keyboardShortcutsFilterToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.keyboardShortcutsCategorySelect {
+  padding-block: 3px;
+  padding-inline: 6px;
+  font-size: 12px;
+  color: var(--pg-color-surface-foreground);
+  background: var(--pg-color-input-background);
+  border: 1px solid var(--pg-color-input-border);
+  border-radius: 4px;
+}
+
+.keyboardShortcutsViewGroup {
+  display: inline-flex;
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.keyboardShortcutsViewButton,
+.keyboardShortcutsClearFilters {
+  padding-block: 3px;
+  padding-inline: 10px;
+  font-size: 12px;
+  color: var(--pg-color-surface-foreground);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.keyboardShortcutsClearFilters {
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 4px;
+}
+
+.keyboardShortcutsViewButton[aria-pressed="true"] {
+  background: var(--pg-color-surface-hover);
+  font-weight: 600;
+}
+
+.keyboardShortcutsClearFilters:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .keyboardShortcutsOpenLocation {
@@ -15431,13 +15492,42 @@ label.settingsItemHeader {
   color: var(--pg-color-surface-muted);
 }
 
+/* #649: the list is its own vertical scroll region below the fixed controls. */
+.keyboardShortcutsListScroll {
+  flex: 1;
+  min-block-size: 0;
+  max-inline-size: 900px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 6px;
+}
+
+.keyboardShortcutsListHeader {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 6px;
+  padding-inline: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pg-color-surface-muted);
+  background: var(--pg-color-panel-background);
+  border-block-end: 1px solid var(--pg-color-panel-border);
+}
+
+.keyboardShortcutsListHeaderAttributes {
+  margin-inline-start: auto;
+}
+
 .keyboardShortcutsList {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-inline-size: 900px;
-  border: 1px solid var(--pg-color-panel-border);
-  border-radius: 6px;
 }
 
 /* #648: one group per command; its bindings are indented rows below. */
@@ -15466,6 +15556,11 @@ label.settingsItemHeader {
   flex-direction: column;
   gap: 2px;
   min-inline-size: 0;
+}
+
+.keyboardShortcutCommandDescription {
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
 }
 
 .keyboardShortcutGroupMeta {

@@ -73,6 +73,16 @@ function installApi(initial = rowsFor([])): void {
   };
 }
 
+
+async function showReadonly(): Promise<void> {
+  const toggle = container.querySelector<HTMLInputElement>(
+    ".keyboardShortcutsFilterToggle input"
+  )!;
+  await act(async () => {
+    toggle.click();
+  });
+}
+
 async function flush(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -203,6 +213,7 @@ describe("row actions and read-only rows (#647)", () => {
   it("read-only rows show the shield and 読み取り専用 text, and expose no edit / unbind / reset", async () => {
     installApi();
     await render();
+    await showReadonly();
     for (const commandId of ["editor.selection.copy", "editor.undo", "editor.cursor.lineStart"]) {
       const row = groupOf(commandId);
       const badge = row.querySelector(".keyboardShortcutReadonly") as HTMLElement;
@@ -640,8 +651,8 @@ describe("the screen stays within scope (#647)", () => {
     installApi();
     await render();
     expect(container.querySelector("textarea")).toBeNull();
-    expect(container.textContent).not.toMatch(/chord|コード/i);
-    expect(container.querySelectorAll("input")).toHaveLength(1);
+    expect(container.textContent).not.toMatch(/chord|コード進行/i);
+    expect(container.querySelectorAll("input:not([type=checkbox])")).toHaveLength(1);
   });
 
   it("the default list helper still sources rows from the same shared listing", () => {
@@ -656,7 +667,7 @@ export type _Row = KeyboardShortcutRow;
 
 describe("scroll and focus after a change (#647 dogfood fix)", () => {
   function scroller(): HTMLElement {
-    return container.querySelector(".keyboardShortcutsTab") as HTMLElement;
+    return container.querySelector(".keyboardShortcutsListScroll") as HTMLElement;
   }
 
   async function clickAndSettle(el: HTMLElement | null | undefined): Promise<void> {
@@ -782,6 +793,7 @@ describe("adding a shortcut from the command group (#648)", () => {
   it("editable groups show the add button in the header with the add label; read-only groups do not", async () => {
     installApi();
     await render();
+    await showReadonly();
     const add = addButton("editor.markdown.bold");
     expect(add?.getAttribute("aria-label")).toBe("ショートカットを追加");
     expect(add?.getAttribute("title")).toBe("ショートカットを追加");
@@ -933,7 +945,7 @@ describe("adding a shortcut from the command group (#648)", () => {
     );
     await render();
     const search = await typeSearch("editor.markdown.bold");
-    const scroller = container.querySelector(".keyboardShortcutsTab") as HTMLElement;
+    const scroller = container.querySelector(".keyboardShortcutsListScroll") as HTMLElement;
     scroller.scrollTop = 640;
     addButton("editor.markdown.bold")?.focus();
     await clickAdd("editor.markdown.bold");
@@ -971,5 +983,870 @@ describe("#648 boundary", () => {
     expect(screen).not.toMatch(/resetAll/);
     expect(screen).toContain("add.svg");
     expect(screen).not.toContain("trash");
+  });
+});
+
+describe("display filters (#649)", () => {
+  const toggle = (): HTMLInputElement =>
+    container.querySelector(".keyboardShortcutsFilterToggle input") as HTMLInputElement;
+  const categorySelect = (): HTMLSelectElement =>
+    container.querySelector(".keyboardShortcutsCategorySelect") as HTMLSelectElement;
+  const viewButton = (view: string): HTMLButtonElement =>
+    container.querySelector(`.keyboardShortcutsViewButton[data-view="${view}"]`) as HTMLButtonElement;
+  const clearButton = (): HTMLButtonElement =>
+    container.querySelector(
+      ".keyboardShortcutsFilters .keyboardShortcutsClearFilters"
+    ) as HTMLButtonElement;
+  const groupIds = (): string[] =>
+    [...container.querySelectorAll("li.keyboardShortcutGroup .keyboardShortcutCommandId")].map(
+      (el) => el.textContent ?? ""
+    );
+
+  async function click(el: HTMLElement): Promise<void> {
+    await act(async () => {
+      el.click();
+      await Promise.resolve();
+    });
+    await flush();
+  }
+
+  async function choose(select: HTMLSelectElement, value: string): Promise<void> {
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(select, value);
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  async function typeQuery(value: string): Promise<HTMLInputElement> {
+    const search = container.querySelector<HTMLInputElement>("#keyboardShortcutsSearch")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(search, value);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    return search;
+  }
+
+  it("starts with Show ReadOnly OFF and no ReadOnly groups", async () => {
+    installApi();
+    await render();
+    expect(toggle().checked).toBe(false);
+    expect(toggle().parentElement?.textContent).toBe("読み取り専用を表示する");
+    expect(groupIds()).toContain("editor.markdown.bold");
+    for (const id of ["editor.selection.copy", "editor.undo", "editor.cursor.lineStart"]) {
+      expect(groupIds()).not.toContain(id);
+    }
+    expect(viewButton("all").getAttribute("aria-pressed")).toBe("true");
+    expect(viewButton("modified").getAttribute("aria-pressed")).toBe("false");
+    expect(categorySelect().value).toBe("all");
+    expect(clearButton().disabled).toBe(true);
+  });
+
+  it("the view choice is a group of pressed-state buttons (no mixed radio roles)", async () => {
+    installApi();
+    await render();
+    const group = container.querySelector(".keyboardShortcutsViewGroup") as HTMLElement;
+    expect(group.getAttribute("role")).toBe("group");
+    expect(group.querySelector("[role=radio], [role=radiogroup], [aria-checked]")).toBeNull();
+    expect(group.querySelectorAll("button[aria-pressed]")).toHaveLength(3);
+  });
+
+  it("toggling ON reveals Native / standard / read-only groups; OFF hides them again", async () => {
+    installApi();
+    await render();
+    await click(toggle());
+    for (const id of ["editor.selection.copy", "editor.undo", "editor.cursor.lineStart"]) {
+      expect(groupIds()).toContain(id);
+    }
+    expect(groupOf("editor.selection.copy").querySelector(".keyboardShortcutReadonly")).not.toBeNull();
+    await click(toggle());
+    expect(groupIds()).not.toContain("editor.selection.copy");
+  });
+
+  it("the category dropdown filters groups", async () => {
+    installApi();
+    await render();
+    const options = [...categorySelect().options].map((o) => o.value);
+    expect(options[0]).toBe("all");
+    const category = options[1]!;
+    const label = [...categorySelect().options].find((o) => o.value === category)!.textContent;
+    await choose(categorySelect(), category);
+    const cats = [...container.querySelectorAll("li.keyboardShortcutGroup .keyboardShortcutCategory")].map(
+      (el) => el.textContent
+    );
+    expect(cats.length).toBeGreaterThan(0);
+    expect(cats.every((c) => c === label)).toBe(true);
+    expect(clearButton().disabled).toBe(false);
+  });
+
+  it("Modified shows the whole command group, including default rows", async () => {
+    installApi(rowsFor([{ key: "Mod-Alt-p", command: "workbench.commandPalette.open" }]));
+    await render();
+    await click(viewButton("modified"));
+    expect(viewButton("modified").getAttribute("aria-pressed")).toBe("true");
+    expect(groupIds()).toEqual(["workbench.commandPalette.open"]);
+    const origins = [...groupOf("workbench.commandPalette.open").querySelectorAll(".keyboardShortcutOrigin")].map(
+      (el) => el.textContent
+    );
+    expect(origins).toEqual(["既定", "既定", "ユーザー"]);
+  });
+
+  it("Unassigned shows only commands with no effective key, not ones with just an unbound alias", async () => {
+    installApi(
+      rowsFor([
+        { key: "F1", command: "-workbench.commandPalette.open" },
+        { key: "Mod-b", command: "-editor.markdown.bold" }
+      ])
+    );
+    await render();
+    await click(viewButton("unassigned"));
+    expect(groupIds()).toContain("editor.markdown.bold");
+    expect(groupIds()).not.toContain("workbench.commandPalette.open");
+    for (const id of groupIds()) {
+      const rows = groupOf(id).querySelectorAll("li.keyboardShortcutRow kbd");
+      expect(rows).toHaveLength(0);
+    }
+  });
+
+  it("shows the filter empty state with a clear action, and clearing restores the list", async () => {
+    installApi();
+    await render();
+    await typeQuery("zzzz-no-such-shortcut");
+    expect(container.textContent).toContain("条件に一致するショートカットはありません。");
+    const clear = container.querySelector(
+      ".keyboardShortcutsStatus .keyboardShortcutsClearFilters"
+    ) as HTMLButtonElement;
+    expect(clear).not.toBeNull();
+    await click(clear);
+    expect(groupIds().length).toBeGreaterThan(1);
+    expect(
+      (container.querySelector("#keyboardShortcutsSearch") as HTMLInputElement).value
+    ).toBe("");
+  });
+
+  it("Clear filters resets query, category, view and Show ReadOnly", async () => {
+    installApi();
+    await render();
+    await typeQuery("a");
+    await choose(categorySelect(), [...categorySelect().options][1]!.value);
+    await click(viewButton("modified"));
+    await click(toggle());
+    expect(clearButton().disabled).toBe(false);
+    await click(clearButton());
+    expect((container.querySelector("#keyboardShortcutsSearch") as HTMLInputElement).value).toBe("");
+    expect(categorySelect().value).toBe("all");
+    expect(viewButton("all").getAttribute("aria-pressed")).toBe("true");
+    expect(toggle().checked).toBe(false);
+    expect(clearButton().disabled).toBe(true);
+    expect(applyKeybindingChange).not.toHaveBeenCalled();
+  });
+
+  it("filters stay after add, edit, unbind and reset", async () => {
+    installApi(rowsFor([{ key: "Mod-Alt-p", command: "workbench.commandPalette.open" }]));
+    applyKeybindingChange.mockResolvedValue(
+      okResult([
+        { key: "Mod-Alt-p", command: "workbench.commandPalette.open" },
+        { key: "Mod-Alt-o", command: "workbench.commandPalette.open" }
+      ])
+    );
+    await render();
+    await click(viewButton("modified"));
+    const search = await typeQuery("palette");
+    const addButton = groupOf("workbench.commandPalette.open").querySelector(
+      ".keyboardShortcutAction-add"
+    ) as HTMLElement;
+    await click(addButton);
+    await press({ key: "o", code: "KeyO", ctrlKey: true, altKey: true });
+    expect(viewButton("modified").getAttribute("aria-pressed")).toBe("true");
+    expect(search.value).toBe("palette");
+    expect(groupIds()).toEqual(["workbench.commandPalette.open"]);
+
+    // Unbind a user row while filtered: the filter is kept.
+    applyKeybindingChange.mockResolvedValue(
+      okResult([{ key: "Mod-Alt-p", command: "workbench.commandPalette.open" }])
+    );
+    await click(button(rowOf("workbench.commandPalette.open", 3), "unbind")!);
+    expect(viewButton("modified").getAttribute("aria-pressed")).toBe("true");
+    expect(search.value).toBe("palette");
+  });
+
+  it("a group that stops matching after a confirmed change disappears, filters unchanged", async () => {
+    installApi(rowsFor([{ key: "Mod-Alt-p", command: "workbench.commandPalette.open" }]));
+    applyKeybindingChange.mockResolvedValue(okResult([]));
+    await render();
+    await click(viewButton("modified"));
+    await click(button(rowOf("workbench.commandPalette.open", 2), "unbind")!);
+    expect(groupIds()).toEqual([]);
+    expect(viewButton("modified").getAttribute("aria-pressed")).toBe("true");
+    expect(container.textContent).toContain("条件に一致するショートカットはありません。");
+  });
+});
+
+describe("#649 boundary", () => {
+  it("adds no reset-all, table header, zebra, JSON editor, file watcher, chord, Sparkle or globalShortcut", async () => {
+    const { readFileSync } = await import("node:fs");
+    const screen = readFileSync("src/renderer/KeyboardShortcutsScreen.tsx", "utf8");
+    const search = readFileSync("src/renderer/keyboardShortcutSearch.ts", "utf8");
+    for (const [name, text] of [["screen", screen], ["search", search]]) {
+      expect(text, name).not.toMatch(/resetAll|globalShortcut|fs\.watch|chokidar|<textarea|sparkle/i);
+      expect(text, name).not.toMatch(/<thead|<table|zebra|nth-child/i);
+    }
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    expect(css).not.toMatch(/keyboardShortcut[\w-]*zebra/i);
+    // The filters only read group metadata: no source checks in the component.
+    expect(screen).not.toMatch(/source === "(nativeRole|standard)"/);
+  });
+});
+
+describe("Show ReadOnly toggle and category labels (#649 dogfood)", () => {
+  const toggle = (): HTMLInputElement =>
+    container.querySelector(".keyboardShortcutsFilterToggle input") as HTMLInputElement;
+  const categorySelect = (): HTMLSelectElement =>
+    container.querySelector(".keyboardShortcutsCategorySelect") as HTMLSelectElement;
+  const optionLabels = (): string[] =>
+    [...categorySelect().options].map((o) => o.textContent ?? "");
+  const optionValues = (): string[] => [...categorySelect().options].map((o) => o.value);
+
+  async function click(el: HTMLElement): Promise<void> {
+    await act(async () => {
+      el.click();
+      await Promise.resolve();
+    });
+  }
+
+  async function choose(value: string): Promise<void> {
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(categorySelect(), value);
+      categorySelect().dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  it("is the app toggle switch (settingsSwitchInput, role=switch), labelled 読み取り専用を表示する, OFF", async () => {
+    installApi();
+    await render();
+    expect(toggle().className).toBe("settingsSwitchInput");
+    expect(toggle().getAttribute("role")).toBe("switch");
+    expect(toggle().checked).toBe(false);
+    expect(toggle().parentElement?.textContent).toBe("読み取り専用を表示する");
+    // It is a real, focusable input, so the keyboard keeps working.
+    expect(toggle().tabIndex).toBeGreaterThanOrEqual(0);
+    expect(toggle().disabled).toBe(false);
+  });
+
+  it("the English label is Show ReadOnly", () => {
+    expect(t("en", "keyboardShortcuts.filter.showReadonly")).toBe("Show ReadOnly");
+    expect(t("ja", "keyboardShortcuts.filter.showReadonly")).toBe("読み取り専用を表示する");
+  });
+
+  it("hides ReadOnly groups initially and never shows unregistered commands, even when ON", async () => {
+    installApi();
+    await render();
+    const ids = (): string[] =>
+      [...container.querySelectorAll(".keyboardShortcutGroup .keyboardShortcutCommandId")].map(
+        (el) => el.textContent ?? ""
+      );
+    for (const id of ["editor.selection.copy", "editor.undo", "editor.cursor.lineStart"]) {
+      expect(ids()).not.toContain(id);
+    }
+    await click(toggle());
+    for (const id of ["editor.selection.copy", "editor.undo", "editor.cursor.lineStart"]) {
+      expect(ids()).toContain(id);
+    }
+    // Every shown group has a runtime handler: metadata-only commands stay out.
+    const notRegistered = rowsFor([]).items.filter((i) => i.handlerStatus === "notYetRegistered");
+    expect(notRegistered).toHaveLength(0);
+  });
+
+  it("the Edit category is labelled 基本編集 and Editor 本文編集; values stay Edit / Editor", async () => {
+    installApi();
+    await render();
+    await click(toggle());
+    const values = optionValues();
+    expect(values).toContain("Edit");
+    expect(values).toContain("Editor");
+    const labelOf = (value: string): string | undefined =>
+      [...categorySelect().options].find((o) => o.value === value)?.textContent ?? undefined;
+    expect(labelOf("Edit")).toBe("基本編集");
+    expect(labelOf("Editor")).toBe("本文編集");
+    expect(labelOf("Markdown")).toBe("マークダウン");
+    expect(optionLabels()).not.toContain("Edit");
+  });
+
+  it("the English labels are Clipboard / Editor", () => {
+    expect(t("en", "keyboardShortcuts.category.edit")).toBe("Clipboard");
+    expect(t("en", "keyboardShortcuts.category.editor")).toBe("Editor");
+  });
+
+  it("selecting Edit (基本編集) filters by the internal value and the group header shows the label", async () => {
+    installApi();
+    await render();
+    await click(toggle());
+    await choose("Edit");
+    const headers = [...container.querySelectorAll(".keyboardShortcutGroup .keyboardShortcutCategory")].map(
+      (el) => el.textContent
+    );
+    expect(headers.length).toBeGreaterThan(0);
+    expect(headers.every((h) => h === "基本編集")).toBe(true);
+  });
+
+  it("the ReadOnly-only Edit category leaves the dropdown when the toggle is turned OFF, and a selected Edit resets to all", async () => {
+    installApi();
+    await render();
+    expect(optionValues()).not.toContain("Edit");
+    await click(toggle());
+    expect(optionValues()).toContain("Edit");
+    await choose("Edit");
+    expect(categorySelect().value).toBe("Edit");
+    await click(toggle());
+    expect(optionValues()).not.toContain("Edit");
+    expect(categorySelect().value).toBe("all");
+  });
+});
+
+describe("category display labels (#649 final)", () => {
+  const JA: Record<string, string> = {
+    Application: "アプリケーション",
+    "Command Palette": "コマンドパレット",
+    Developer: "開発者向け",
+    Edit: "基本編集",
+    Editor: "本文編集",
+    File: "ファイル",
+    "File Explorer": "ファイルエクスプローラー",
+    Glossary: "語彙集",
+    Markdown: "マークダウン",
+    Search: "検索",
+    View: "表示",
+    Window: "ウィンドウ"
+  };
+
+  it("every known category has a Japanese label; Edit and Editor, View and 表示 follow the table", async () => {
+    const { KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS } = await import(
+      "../../src/renderer/keyboardShortcutSearch"
+    );
+    expect(Object.keys(KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS).sort()).toEqual(
+      Object.keys(JA).sort()
+    );
+    for (const [category, label] of Object.entries(JA)) {
+      expect(t("ja", KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS[category]!)).toBe(label);
+    }
+  });
+
+  it("English keeps the existing category names (Edit is shown as Clipboard)", async () => {
+    const { KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS } = await import(
+      "../../src/renderer/keyboardShortcutSearch"
+    );
+    for (const category of Object.keys(JA)) {
+      const expected = category === "Edit" ? "Clipboard" : category;
+      expect(t("en", KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS[category]!)).toBe(expected);
+    }
+  });
+
+  it("the dropdown shows only Japanese labels, keeps the internal values and the catalog order", async () => {
+    installApi();
+    await render();
+    const toggleEl = container.querySelector(".keyboardShortcutsFilterToggle input") as HTMLInputElement;
+    await act(async () => {
+      toggleEl.click();
+    });
+    const select = container.querySelector(".keyboardShortcutsCategorySelect") as HTMLSelectElement;
+    const options = [...select.options].slice(1);
+    expect(options.length).toBeGreaterThan(3);
+    for (const option of options) {
+      expect(option.textContent).toBe(JA[option.value]);
+    }
+    const groupOrder: string[] = [];
+    const { groupKeyboardShortcutRows } = await import("../../src/shared/keybindings");
+    for (const g of groupKeyboardShortcutRows(rowsFor([]).items)) {
+      if (!groupOrder.includes(g.category)) groupOrder.push(g.category);
+    }
+    expect(options.map((o) => o.value)).toEqual(groupOrder);
+  });
+
+  it("the localized category label is searchable; the internal value still works", async () => {
+    installApi();
+    await render();
+    const search = container.querySelector<HTMLInputElement>("#keyboardShortcutsSearch")!;
+    const type = async (value: string): Promise<void> => {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+        setter.call(search, value);
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+    const ids = (): string[] =>
+      [...container.querySelectorAll(".keyboardShortcutGroup .keyboardShortcutCommandId")].map(
+        (el) => el.textContent ?? ""
+      );
+    await type("マークダウン");
+    expect(ids()).toContain("editor.markdown.bold");
+    await type("Markdown");
+    expect(ids()).toContain("editor.markdown.bold");
+    await type("語彙集");
+    expect(ids().length).toBeGreaterThan(0);
+  });
+});
+
+describe("command description (#649 addendum)", () => {
+  const groupIds = (): string[] =>
+    [...container.querySelectorAll(".keyboardShortcutGroup .keyboardShortcutCommandId")].map(
+      (el) => el.textContent ?? ""
+    );
+
+  async function typeQuery(value: string): Promise<void> {
+    const search = container.querySelector<HTMLInputElement>("#keyboardShortcutsSearch")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(search, value);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  function withDescription(
+    commandId: string,
+    description: string
+  ): ReturnType<typeof rowsFor> {
+    const base = rowsFor([]);
+    return {
+      ...base,
+      items: base.items.map((item) =>
+        item.commandId === commandId ? { ...item, description } : item
+      )
+    };
+  }
+
+  it("shows the command's description under the commandId, weaker than the title", async () => {
+    installApi(withDescription("editor.markdown.bold", "Wraps the selection in strong emphasis."));
+    await render();
+    const block = groupOf("editor.markdown.bold").querySelector(
+      ".keyboardShortcutGroupTitleBlock"
+    ) as HTMLElement;
+    const children = [...block.children].map((c) => c.className);
+    expect(children).toEqual([
+      "keyboardShortcutTitle",
+      "keyboardShortcutCommandId",
+      "keyboardShortcutCommandDescription"
+    ]);
+    // Japanese UI: the localized description, not the catalog text.
+    expect(block.querySelector(".keyboardShortcutCommandDescription")?.textContent).toBe(
+      "選択範囲を太字にします。"
+    );
+    // The right-hand meta and the binding rows stay.
+    expect(groupOf("editor.markdown.bold").querySelector(".keyboardShortcutGroupMeta")).not.toBeNull();
+    expect(groupOf("editor.markdown.bold").querySelectorAll("li.keyboardShortcutRow")).toHaveLength(1);
+  });
+
+  it("renders no description line when it is empty or blank", async () => {
+    installApi(withDescription("editor.markdown.bold", ""));
+    await render();
+    expect(groupOf("editor.markdown.bold").querySelector(".keyboardShortcutCommandDescription")).toBeNull();
+    expect(groupOf("editor.markdown.bold").querySelector(".keyboardShortcutGroupTitleBlock")?.children).toHaveLength(2);
+  });
+
+  it("finds a group by its description, case-insensitively, and shows the whole group", async () => {
+    installApi(withDescription("editor.markdown.bold", "Zyzzyva emphasis helper"));
+    await render();
+    await typeQuery("ZYZZYVA");
+    expect(groupIds()).toEqual(["editor.markdown.bold"]);
+    expect(groupOf("editor.markdown.bold").querySelectorAll("li.keyboardShortcutRow")).toHaveLength(1);
+  });
+
+  it("a description-only match still shows every binding of a multi-key group", async () => {
+    const base = rowsFor([{ key: "Mod-Alt-9", command: "editor.markdown.bold" }]);
+    installApi({
+      ...base,
+      items: base.items.map((i) =>
+        i.commandId === "editor.markdown.bold" ? { ...i, description: "Zyzzyva helper" } : i
+      )
+    });
+    await render();
+    await typeQuery("zyzzyva");
+    expect(groupOf("editor.markdown.bold").querySelectorAll("li.keyboardShortcutRow")).toHaveLength(2);
+  });
+});
+
+describe("localized command descriptions (#649 blocker)", () => {
+  const groupIds = (): string[] =>
+    [...container.querySelectorAll(".keyboardShortcutGroup .keyboardShortcutCommandId")].map(
+      (el) => el.textContent ?? ""
+    );
+
+  async function typeQuery(value: string): Promise<void> {
+    const search = container.querySelector<HTMLInputElement>("#keyboardShortcutsSearch")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(search, value);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("shows the Japanese description and never the raw English one, for every listed command", async () => {
+    installApi();
+    await render();
+    await act(async () => {
+      (container.querySelector(".keyboardShortcutsFilterToggle input") as HTMLInputElement).click();
+    });
+    const shown = [...container.querySelectorAll(".keyboardShortcutGroup")];
+    expect(shown.length).toBeGreaterThan(50);
+    const items = rowsFor([]).items;
+    for (const group of shown) {
+      const id = group.querySelector(".keyboardShortcutCommandId")!.textContent!;
+      const raw = items.find((i) => i.commandId === id)!.description;
+      const text = group.querySelector(".keyboardShortcutCommandDescription")?.textContent ?? "";
+      expect(text, id).not.toBe("");
+      expect(text, id).not.toBe(raw);
+      expect(text, id).toMatch(/[ぁ-んァ-ヶ一-龠]/);
+      expect(group.textContent, id).not.toContain(raw);
+    }
+  });
+
+  it("the commandId is shown unchanged", async () => {
+    installApi();
+    await render();
+    expect(groupIds()).toContain("workbench.commandPalette.file.open");
+    expect(
+      groupOf("workbench.commandPalette.file.open").querySelector(".keyboardShortcutCommandDescription")
+        ?.textContent
+    ).toBe("コマンドパレットをファイル検索モード(プレフィックスなし)で開きます。");
+  });
+
+  it("searches both the Japanese description and the raw English metadata description", async () => {
+    installApi();
+    await render();
+    await typeQuery("ファイル検索モード");
+    expect(groupIds()).toContain("workbench.commandPalette.file.open");
+    await typeQuery("file mode (empty prefix)");
+    expect(groupIds()).toContain("workbench.commandPalette.file.open");
+    // But the raw text is never displayed.
+    expect(container.textContent).not.toContain("file mode (empty prefix)");
+  });
+
+  it("a command without a description draws no line", async () => {
+    const base = rowsFor([]);
+    installApi({
+      ...base,
+      items: base.items.map((i) =>
+        i.commandId === "editor.markdown.italic" ? { ...i, description: "" } : i
+      )
+    });
+    await render();
+    // The localized text exists for this commandId, so an empty catalog
+    // description still draws nothing: the group line is driven by metadata.
+    expect(
+      groupOf("editor.markdown.italic").querySelector(".keyboardShortcutCommandDescription")
+    ).toBeNull();
+  });
+});
+
+describe("command description i18n (#649 blocker)", () => {
+  it("English shows the catalog description (same text, same key path)", async () => {
+    const { commandDescriptionKey } = await import("../../src/renderer/keyboardShortcutSearch");
+    for (const item of rowsFor([]).items) {
+      const key = commandDescriptionKey(item.commandId);
+      expect(key, item.commandId).not.toBeNull();
+      expect(t("en", key!), item.commandId).toBe(item.description);
+      expect(t("ja", key!), item.commandId).not.toBe(item.description);
+    }
+  });
+
+  it("an unknown command falls back to no localized key", async () => {
+    const { commandDescriptionKey } = await import("../../src/renderer/keyboardShortcutSearch");
+    expect(commandDescriptionKey("no.such.command")).toBeNull();
+  });
+});
+
+describe("English UI description (#649 blocker)", () => {
+  it("shows the English description in the English UI", async () => {
+    installApi();
+    const enTranslate: Translate = (key, values) => t("en", key, values);
+    await act(async () => {
+      root.render(<KeyboardShortcutsScreen translate={enTranslate} />);
+    });
+    await flush();
+    expect(
+      groupOf("workbench.commandPalette.file.open").querySelector(
+        ".keyboardShortcutCommandDescription"
+      )?.textContent
+    ).toBe("Opens the Command Palette in file mode (empty prefix).");
+  });
+});
+
+describe("description fallback by locale (#649 final)", () => {
+  const RAW = "Zyzzyva untranslated English description.";
+
+  function untranslated(): ReturnType<typeof rowsFor> {
+    const base = rowsFor([]);
+    return {
+      ...base,
+      items: base.items.map((i) =>
+        i.commandId === "editor.markdown.bold"
+          ? { ...i, commandId: "test.untranslated.command", rowId: "test.untranslated", description: RAW }
+          : i
+      )
+    };
+  }
+
+  async function renderWith(language: "ja" | "en"): Promise<void> {
+    installApi(untranslated());
+    const tr: Translate = (key, values) => t(language, key, values);
+    await act(async () => {
+      root.render(<KeyboardShortcutsScreen translate={tr} language={language} />);
+    });
+    await flush();
+  }
+
+  async function typeQuery(value: string): Promise<void> {
+    const search = container.querySelector<HTMLInputElement>("#keyboardShortcutsSearch")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(search, value);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("ja + missing translation: no description element and no raw English on screen", async () => {
+    await renderWith("ja");
+    const group = groupOf("test.untranslated.command");
+    expect(group).toBeDefined();
+    expect(group.querySelector(".keyboardShortcutCommandDescription")).toBeNull();
+    expect(container.textContent).not.toContain(RAW);
+    expect(group.querySelector(".keyboardShortcutGroupTitleBlock")?.children).toHaveLength(2);
+  });
+
+  it("ja + missing translation: the raw English description is still searchable (and still not shown)", async () => {
+    await renderWith("ja");
+    await typeQuery("zyzzyva");
+    const ids = [...container.querySelectorAll(".keyboardShortcutGroup .keyboardShortcutCommandId")].map(
+      (el) => el.textContent
+    );
+    expect(ids).toEqual(["test.untranslated.command"]);
+    expect(container.textContent).not.toContain(RAW);
+  });
+
+  it("en + missing translation: falls back to the metadata description", async () => {
+    await renderWith("en");
+    expect(
+      groupOf("test.untranslated.command").querySelector(".keyboardShortcutCommandDescription")
+        ?.textContent
+    ).toBe(RAW);
+  });
+
+  it("displayCommandDescription prefers the translation in both languages", async () => {
+    const { displayCommandDescription } = await import("../../src/renderer/keyboardShortcutSearch");
+    const ja: Translate = (key, values) => t("ja", key, values);
+    const en: Translate = (key, values) => t("en", key, values);
+    expect(displayCommandDescription("editor.markdown.bold", "raw", ja, "ja")).toBe(
+      "選択範囲を太字にします。"
+    );
+    expect(displayCommandDescription("editor.markdown.bold", "raw", en, "en")).toBe(
+      "Wraps the selection in bold markup."
+    );
+    expect(displayCommandDescription("x.unknown", "raw", ja, "ja")).toBe("");
+    expect(displayCommandDescription("x.unknown", "raw", en, "en")).toBe("raw");
+  });
+});
+
+describe("list scroll region, sticky header and conditions (#649 dogfood 2)", () => {
+  const listScroll = (): HTMLElement =>
+    container.querySelector(".keyboardShortcutsListScroll") as HTMLElement;
+  const conditionsToggle = (): HTMLInputElement =>
+    container.querySelector(".keyboardShortcutsConditionsToggle input") as HTMLInputElement;
+  const readonlyToggle = (): HTMLInputElement =>
+    container.querySelector(
+      ".keyboardShortcutsFilterToggle:not(.keyboardShortcutsConditionsToggle) input"
+    ) as HTMLInputElement;
+  const conditionTexts = (): string[] =>
+    [...container.querySelectorAll(".keyboardShortcutWhen")].map((el) => el.textContent ?? "");
+  const groupCount = (): number => container.querySelectorAll("li.keyboardShortcutGroup").length;
+
+  async function click(el: HTMLElement): Promise<void> {
+    await act(async () => {
+      el.click();
+      await Promise.resolve();
+    });
+    await flush();
+  }
+
+  async function typeQuery(value: string): Promise<void> {
+    const search = container.querySelector<HTMLInputElement>("#keyboardShortcutsSearch")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(search, value);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  it("has a dedicated list scroll container; the controls and the count live outside it", async () => {
+    installApi();
+    await render();
+    const scroll = listScroll();
+    expect(scroll).not.toBeNull();
+    expect(scroll.querySelector("li.keyboardShortcutGroup")).not.toBeNull();
+    for (const selector of [
+      "#keyboardShortcutsSearch",
+      ".keyboardShortcutsCategorySelect",
+      ".keyboardShortcutsViewGroup",
+      ".keyboardShortcutsFilterToggle",
+      ".keyboardShortcutsConditionsToggle",
+      ".keyboardShortcutsClearFilters",
+      ".keyboardShortcutsRestartNote",
+      ".keyboardShortcutsTitle"
+    ]) {
+      const el = container.querySelector(selector)!;
+      expect(el, selector).not.toBeNull();
+      expect(scroll.contains(el), selector).toBe(false);
+    }
+    const count = [...container.querySelectorAll(".keyboardShortcutsStatus")].find((el) =>
+      el.textContent?.includes("件")
+    )!;
+    expect(scroll.contains(count)).toBe(false);
+  });
+
+  it("the page itself does not scroll: the tab is overflow hidden and the list region scrolls in CSS", async () => {
+    const { readFileSync } = await import("node:fs");
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    const tab = css.match(/\.keyboardShortcutsTab \{[^}]*\}/)![0];
+    expect(tab).toContain("overflow: hidden");
+    const scroll = css.match(/\.keyboardShortcutsListScroll \{[^}]*\}/)![0];
+    expect(scroll).toContain("flex: 1");
+    expect(scroll).toContain("min-block-size: 0");
+    expect(scroll).toContain("overflow-y: auto");
+    expect(scroll).not.toMatch(/calc\(100vh/);
+    const header = css.match(/\.keyboardShortcutsListHeader \{[^}]*\}/)![0];
+    expect(header).toContain("position: sticky");
+    expect(header).toContain("inset-block-start: 0");
+    expect(header).toContain("var(--pg-color-panel-background)");
+  });
+
+  it("the sticky header is the first child of the scroll region with Japanese column labels", async () => {
+    installApi();
+    await render();
+    const header = listScroll().firstElementChild as HTMLElement;
+    expect(header.className).toBe("keyboardShortcutsListHeader");
+    expect(header.getAttribute("aria-hidden")).toBe("true");
+    expect(
+      [...header.children].map((c) => c.textContent)
+    ).toEqual(["コマンド", "属性", "ショートカット"]);
+  });
+
+  it("the English header labels are Command / Attributes / Shortcut", async () => {
+    installApi();
+    const en: Translate = (key, values) => t("en", key, values);
+    await act(async () => {
+      root.render(<KeyboardShortcutsScreen translate={en} language="en" />);
+    });
+    await flush();
+    const header = listScroll().firstElementChild as HTMLElement;
+    expect([...header.children].map((c) => c.textContent)).toEqual([
+      "Command",
+      "Attributes",
+      "Shortcut"
+    ]);
+  });
+
+  it("conditions are hidden by default; category / scope / source stay", async () => {
+    installApi();
+    await render();
+    expect(conditionsToggle().checked).toBe(false);
+    expect(conditionsToggle().className).toBe("settingsSwitchInput");
+    expect(conditionsToggle().getAttribute("role")).toBe("switch");
+    expect(conditionsToggle().parentElement?.textContent).toBe("適用条件を表示する");
+    expect(conditionTexts()).toEqual([]);
+    expect(container.textContent).not.toContain("適用条件:");
+    const bold = groupOf("editor.markdown.bold");
+    expect(bold.querySelector(".keyboardShortcutCategory")).not.toBeNull();
+    expect(bold.querySelector(".keyboardShortcutScope")).not.toBeNull();
+    expect(bold.querySelector(".keyboardShortcutSource")).not.toBeNull();
+  });
+
+  it("ON shows 適用条件: <raw when>; OFF hides it again; groups without a when draw nothing", async () => {
+    installApi();
+    await render();
+    await click(conditionsToggle());
+    expect(conditionTexts().length).toBeGreaterThan(0);
+    expect(
+      groupOf("editor.markdown.bold").querySelector(".keyboardShortcutWhen")?.textContent
+    ).toBe("適用条件: editorFocus && markdownDocument && !readOnly");
+    for (const text of conditionTexts()) {
+      expect(text).toMatch(/^適用条件: \S/);
+    }
+    await click(conditionsToggle());
+    expect(conditionTexts()).toEqual([]);
+  });
+
+  it("English UI shows Condition: <raw when>, and the toggle label is Show conditions", async () => {
+    installApi();
+    const en: Translate = (key, values) => t("en", key, values);
+    await act(async () => {
+      root.render(<KeyboardShortcutsScreen translate={en} language="en" />);
+    });
+    await flush();
+    expect(conditionsToggle().parentElement?.textContent).toBe("Show conditions");
+    await click(conditionsToggle());
+    expect(
+      groupOf("editor.markdown.bold").querySelector(".keyboardShortcutWhen")?.textContent
+    ).toBe("Condition: editorFocus && markdownDocument && !readOnly");
+  });
+
+  it("toggling conditions changes neither the list count nor the filter state", async () => {
+    installApi();
+    await render();
+    await typeQuery("bold");
+    const before = groupCount();
+    const query = (container.querySelector("#keyboardShortcutsSearch") as HTMLInputElement).value;
+    await click(conditionsToggle());
+    expect(groupCount()).toBe(before);
+    await click(conditionsToggle());
+    expect(groupCount()).toBe(before);
+    expect((container.querySelector("#keyboardShortcutsSearch") as HTMLInputElement).value).toBe(
+      query
+    );
+    expect(readonlyToggle().checked).toBe(false);
+  });
+
+  it("Clear filters leaves the conditions option as it is", async () => {
+    installApi();
+    await render();
+    await click(conditionsToggle());
+    await typeQuery("bold");
+    await click(readonlyToggle());
+    const clear = container.querySelector(
+      ".keyboardShortcutsFilters .keyboardShortcutsClearFilters"
+    ) as HTMLButtonElement;
+    await click(clear);
+    expect(conditionsToggle().checked).toBe(true);
+    expect(readonlyToggle().checked).toBe(false);
+    expect((container.querySelector("#keyboardShortcutsSearch") as HTMLInputElement).value).toBe("");
+    expect(conditionTexts().length).toBeGreaterThan(0);
+  });
+
+  it("searching by a raw when still works while conditions are hidden", async () => {
+    installApi();
+    await render();
+    await typeQuery("markdownDocument");
+    expect(groupCount()).toBeGreaterThan(0);
+    expect(conditionTexts()).toEqual([]);
+  });
+
+  it("scroll restoration after a mutation applies to the list container, and filters persist", async () => {
+    installApi();
+    applyKeybindingChange.mockResolvedValue(
+      okResult([{ key: "Mod-Alt-9", command: "editor.markdown.bold" }])
+    );
+    await render();
+    await click(conditionsToggle());
+    listScroll().scrollTop = 420;
+    const addBtn = groupOf("editor.markdown.bold").querySelector(
+      ".keyboardShortcutAction-add"
+    ) as HTMLElement;
+    addBtn.focus();
+    await click(addBtn);
+    await press({ key: "9", code: "Digit9", ctrlKey: true, altKey: true });
+    expect(listScroll().scrollTop).toBe(420);
+    expect(conditionsToggle().checked).toBe(true);
+    expect(
+      (document.activeElement as HTMLElement).closest("li.keyboardShortcutRow")?.textContent
+    ).toContain("Ctrl+Alt+9");
   });
 });

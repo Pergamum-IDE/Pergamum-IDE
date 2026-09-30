@@ -110,6 +110,25 @@ async function render(): Promise<void> {
   });
 }
 
+
+async function showReadonly(): Promise<void> {
+  const toggle = container.querySelector<HTMLInputElement>(
+    ".keyboardShortcutsFilterToggle input"
+  )!;
+  await act(async () => {
+    toggle.click();
+  });
+}
+
+async function showConditions(): Promise<void> {
+  const toggle = container.querySelector<HTMLInputElement>(
+    ".keyboardShortcutsConditionsToggle input"
+  )!;
+  await act(async () => {
+    toggle.click();
+  });
+}
+
 function type(value: string): void {
   const input = container.querySelector("input") as HTMLInputElement;
   const setter = Object.getOwnPropertyDescriptor(
@@ -152,23 +171,25 @@ describe("KeyboardShortcutsScreen rows (#646)", () => {
   it("renders the title, search field, open-location button and the list", async () => {
     install(data());
     await render();
+    await showReadonly();
     expect(container.textContent).toContain("キーボードショートカット");
     expect(container.querySelector("input[type=search]")).not.toBeNull();
     expect(container.textContent).toContain("keybindings.json の場所を開く");
     expect(rowTexts()).toHaveLength(5);
   });
 
-  it("each row shows title, commandId, key label, category, scope, source and when", async () => {
+  it("each row shows title, commandId, key label, category, scope, source and (with conditions ON) the condition", async () => {
     install(data());
     await render();
+    await showConditions();
     const bold = rowTexts().find((text) => text.includes("editor.markdown.bold")) ?? "";
     expect(bold).toContain("太字");
     expect(bold).toContain("editor.markdown.bold");
     expect(bold).toContain("Ctrl+B");
-    expect(bold).toContain("Markdown");
+    expect(bold).toContain("マークダウン");
     expect(bold).toContain("editor");
     expect(bold).toContain("Pergamum");
-    expect(bold).toContain("when: editorFocus && markdownDocument && !readOnly");
+    expect(bold).toContain("適用条件: editorFocus && markdownDocument && !readOnly");
   });
 
   it("uses the platform key label from the data, never the raw notation as the visible label", async () => {
@@ -184,6 +205,7 @@ describe("KeyboardShortcutsScreen rows (#646)", () => {
   it("maps sources to Pergamum / Native / 標準機能", async () => {
     install(data());
     await render();
+    await showReadonly();
     const texts = rowTexts();
     expect(texts.find((x) => x.includes("editor.markdown.bold"))).toContain("Pergamum");
     expect(texts.find((x) => x.includes("editor.selection.copy"))).toContain("Native");
@@ -193,6 +215,7 @@ describe("KeyboardShortcutsScreen rows (#646)", () => {
   it("readonly rows show the ReadOnly text (and an icon); editable rows do not", async () => {
     install(data());
     await render();
+    await showReadonly();
     const copy = [...container.querySelectorAll("li.keyboardShortcutGroup")].find((li) =>
       li.textContent?.includes("editor.selection.copy")
     ) as HTMLElement;
@@ -219,11 +242,13 @@ describe("KeyboardShortcutsScreen rows (#646)", () => {
     expect(container.querySelectorAll(".keyboardShortcutUnassigned")).toHaveLength(1);
   });
 
-  it("a missing when is shown as a dash", async () => {
+  it("a command without a when draws no condition at all, even with conditions ON", async () => {
     install(data());
     await render();
+    await showConditions();
     const open = rowTexts().find((x) => x.includes("workspace.keyboardShortcuts.open")) ?? "";
-    expect(open).toContain("when: —");
+    expect(open).not.toContain("適用条件");
+    expect(open).not.toContain("when");
   });
 
   it("one command group with one binding row per key (#648)", async () => {
@@ -296,6 +321,7 @@ describe("KeyboardShortcutsScreen search (#646)", () => {
   it("filters by category and by source", async () => {
     install(data());
     await render();
+    await showReadonly();
     type("Edit");
     expect(rowTexts().some((x) => x.includes("editor.selection.copy"))).toBe(true);
     type("標準機能");
@@ -308,6 +334,7 @@ describe("KeyboardShortcutsScreen search (#646)", () => {
   it("an empty search shows every row again", async () => {
     install(data());
     await render();
+    await showReadonly();
     type("ルビ");
     expect(rowTexts()).toHaveLength(1);
     type("");
@@ -325,6 +352,7 @@ describe("KeyboardShortcutsScreen search (#646)", () => {
   it("shows the result count", async () => {
     install(data());
     await render();
+    await showReadonly();
     expect(container.textContent).toContain("5 件");
     type("Ctrl+B");
     expect(container.textContent).toContain("1 件");
@@ -357,6 +385,7 @@ describe("KeyboardShortcutsScreen diagnostics (#646)", () => {
       ])
     );
     await render();
+    await showReadonly();
     const section = container.querySelector(".keyboardShortcutsDiagnostics") as HTMLElement;
     expect(section.textContent).toContain("keybindings.json に 2 件の問題があります。");
     expect(section.textContent).toContain("Entry 0: Mod-i is already bound to editor.markdown.italic");
@@ -439,7 +468,7 @@ describe("KeyboardShortcutsScreen has no JSON editor or chord UI (#647)", () => 
     await render();
     expect(container.querySelector("textarea")).toBeNull();
     expect(container.querySelector("[contenteditable]")).toBeNull();
-    expect(container.querySelectorAll("input")).toHaveLength(1);
+    expect(container.querySelectorAll("input:not([type=checkbox])")).toHaveLength(1);
     expect(container.textContent).not.toMatch(/chord|コード進行|when を編集/i);
   });
 

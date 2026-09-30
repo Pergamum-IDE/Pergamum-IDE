@@ -13238,7 +13238,7 @@ export function App(): JSX.Element {
                       <DebugLogPanel translate={translate} />
                     </section>
                   ) : isKeyboardShortcutsTabActive ? (
-                    <KeyboardShortcutsScreen translate={translate} />
+                    <KeyboardShortcutsScreen translate={translate} language={displayLanguage} />
                   ) : isResumeHubTabActive ? (
                     <ResumeHub
                       recentDocuments={recentProjectDocuments}
