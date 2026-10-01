@@ -163,7 +163,7 @@ export const keybindingCommands: readonly KeybindingCommand[] = [
   pergamum({
     id: "workbench.commandPalette.open",
     title: "Open Command Palette",
-    category: "View",
+    category: "Command Palette",
     description: "Opens the Command Palette (also bound to F1).",
     handlerStatus: registered,
     when: whenWorkbench

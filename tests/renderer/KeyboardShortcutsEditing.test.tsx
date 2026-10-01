@@ -443,8 +443,8 @@ describe("saving a change (#647)", () => {
     expect(dialog.textContent).toContain("Ctrl+I");
     expect(dialog.textContent).toContain("Italic");
     expect(dialog.textContent).toContain("editor.markdown.italic");
-    expect(dialog.textContent).toContain("Markdown");
-    expect(dialog.textContent).toContain("editor");
+    expect(dialog.textContent).toContain("マークダウン");
+    expect(dialog.textContent).toContain("スコープ: エディタ");
     expect(getEffectiveKeybindingsRevision()).toBe(revision);
     // The list is unchanged: the default Ctrl+B row is still there.
     expect(rowOf("editor.markdown.bold").textContent).toContain("Ctrl+B");
@@ -1190,7 +1190,7 @@ describe("display filters (#649)", () => {
     await click(button(rowOf("workbench.commandPalette.open", 2), "unbind")!);
     expect(groupIds()).toEqual([]);
     expect(viewButton("modified").getAttribute("aria-pressed")).toBe("true");
-    expect(container.textContent).toContain("条件に一致するショートカットはありません。");
+    expect(container.textContent).toContain("変更されたショートカットはありません。");
   });
 });
 

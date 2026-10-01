@@ -554,3 +554,169 @@ describe("KeyboardShortcutsScreen has no JSON editor or chord UI (#647)", () => 
     expect(container.textContent).not.toMatch(/[A-Za-z]:\|\/Users\/|\/home\//);
   });
 });
+
+describe("KeyboardShortcutsScreen polish (#653)", () => {
+  async function showAllReadonly(): Promise<void> {
+    await showReadonly();
+  }
+
+  function viewButton(view: string): HTMLButtonElement {
+    return container.querySelector<HTMLButtonElement>(
+      `.keyboardShortcutsViewButton[data-view="${view}"]`
+    )!;
+  }
+
+  it("the screen heading is an h1, with the new description (ja / en)", async () => {
+    install(data());
+    await render();
+    const heading = container.querySelector("#keyboardShortcutsTitle")!;
+    expect(heading.tagName).toBe("H1");
+    expect(heading.textContent).toBe("キーボードショートカット");
+    expect(container.querySelector(".keyboardShortcutsDescription")?.textContent).toBe(
+      "現在有効なショートカットの一覧です。ショートカットの変更や、設定ファイルの直接編集ができます。"
+    );
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    install(data());
+    await render("en");
+    expect(container.querySelector("#keyboardShortcutsTitle")!.tagName).toBe("H1");
+    expect(container.querySelector(".keyboardShortcutsDescription")?.textContent).toBe(
+      "The shortcuts currently in effect. You can change shortcuts here or edit the settings file directly."
+    );
+  });
+
+  it("keeps the English catalog title as the main line, then the commandId and the localized description", async () => {
+    install(
+      data([
+        row({
+          commandId: "workbench.commandPalette.open",
+          title: "Open Command Palette",
+          category: "Command Palette",
+          description: "Opens the Command Palette (also bound to F1).",
+          scope: "app",
+          key: "Mod-p",
+          keyLabel: "Ctrl+P"
+        })
+      ])
+    );
+    await render();
+    const group = container.querySelector("li.keyboardShortcutGroup")!;
+    expect(group.querySelector(".keyboardShortcutTitle")?.textContent).toBe("Open Command Palette");
+    expect(group.querySelector(".keyboardShortcutCommandId")?.textContent).toBe(
+      "workbench.commandPalette.open"
+    );
+    expect(group.querySelector(".keyboardShortcutCommandDescription")?.textContent).toBe(
+      "コマンドパレットを開きます(F1 でも開けます)。"
+    );
+    expect(group.querySelector(".keyboardShortcutCategory")?.textContent).toBe("コマンドパレット");
+  });
+
+  it("shows localized scope, source and origin (no internal enum values)", async () => {
+    install(data());
+    await render();
+    await showAllReadonly();
+    const text = container.textContent ?? "";
+    expect(container.querySelector(".keyboardShortcutScope")?.textContent).toBe("エディタ");
+    expect(text).not.toMatch(/\b(nativeRole|standardBehavior)\b/);
+    const sources = [...container.querySelectorAll<HTMLElement>(".keyboardShortcutSource")];
+    expect(sources.map((s) => s.title).every((title) => title !== "")).toBe(true);
+    expect(container.querySelector(".keyboardShortcutOrigin")?.getAttribute("title")).toBe(
+      "Pergamum の既定の割り当てです。"
+    );
+  });
+
+  it("explains why a read-only command cannot be changed, from its readonlyReason", async () => {
+    install(data());
+    await render();
+    await showAllReadonly();
+    const tooltipOf = (commandId: string): string | null =>
+      [...container.querySelectorAll("li.keyboardShortcutGroup")]
+        .find((li) => li.querySelector(".keyboardShortcutCommandId")?.textContent === commandId)
+        ?.querySelector(".keyboardShortcutReadonly")
+        ?.getAttribute("title") ?? null;
+    expect(tooltipOf("editor.selection.copy")).toBe(
+      "OS / Electron の標準機能のため変更できません。"
+    );
+    expect(tooltipOf("editor.comment.toggle")).toBe(
+      "エディタやOSの標準的なキー操作のため変更できません。"
+    );
+    // The label stays "read-only" and the icon is decorative.
+    const badge = container.querySelector(".keyboardShortcutReadonly")!;
+    expect(badge.textContent).toBe("読み取り専用");
+    expect(badge.querySelector(".keyboardShortcutReadonlyIcon")?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("the condition label stays 適用条件, with a reference-only tooltip and no evaluation claim", async () => {
+    install(data());
+    await render();
+    await showConditions();
+    const when = container.querySelector<HTMLElement>(".keyboardShortcutWhen")!;
+    expect(when.textContent).toContain("適用条件:");
+    expect(when.title).toBe("条件情報は参照用です。現在、条件式の編集・評価には対応していません。");
+    expect(when.title).not.toContain("有効になります");
+  });
+
+  describe("empty states", () => {
+    it("Modified with nothing modified has its own message and no clear-filters button", async () => {
+      install(data());
+      await render();
+      await act(async () => viewButton("modified").click());
+      const status = container.querySelector(".keyboardShortcutsStatus[role=status]")!;
+      expect(status.textContent).toContain("変更されたショートカットはありません。");
+      expect(status.textContent).toContain("編集・追加・解除すると、ここに表示されます。");
+      expect(container.querySelector(".keyboardShortcutsStatus .keyboardShortcutsClearFilters")).toBeNull();
+    });
+
+    it("Unassigned with nothing unassigned has its own message", async () => {
+      install(data([row({})]));
+      await render();
+      await act(async () => viewButton("unassigned").click());
+      expect(container.textContent).toContain("未割当のコマンドはありません。");
+      expect(container.querySelector(".keyboardShortcutsStatus .keyboardShortcutsClearFilters")).toBeNull();
+    });
+
+    it("a query with no match is the generic message with a hint and the clear-filters button", async () => {
+      install(data());
+      await render();
+      type("zzzz-nothing");
+      const status = container.querySelector(".keyboardShortcutsStatus[role=status]")!;
+      expect(status.textContent).toContain("条件に一致するショートカットはありません。");
+      expect(status.textContent).toContain("検索語やフィルタを変更してください。");
+      await act(async () => {
+        container.querySelector<HTMLButtonElement>(".keyboardShortcutsStatus .keyboardShortcutsClearFilters")!.click();
+      });
+      expect(rowTexts().length).toBeGreaterThan(0);
+    });
+
+    it("a match hidden only by 'Show read-only' says so", async () => {
+      install(data());
+      await render();
+      type("コピー");
+      expect(container.textContent).toContain("条件に一致する変更可能なショートカットはありません。");
+      expect(container.textContent).toContain("「読み取り専用を表示する」を有効にすると");
+      await showAllReadonly();
+      expect(rowTexts().some((text) => text.includes("コピー"))).toBe(true);
+    });
+
+    it("English empty messages", async () => {
+      install(data());
+      await render("en");
+      await act(async () => viewButton("modified").click());
+      expect(container.textContent).toContain("No shortcuts have been changed.");
+    });
+  });
+
+  it("a load failure is not a diagnostics message (and diagnostics do not look like a load failure)", async () => {
+    install(new Error("boom"));
+    await render();
+    expect(container.textContent).toContain("ショートカットの一覧を読み込めませんでした。");
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    install(data(sampleRows, [{ code: "jsonParseError", severity: "error", message: "bad" }]));
+    await render();
+    expect(container.textContent).not.toContain("一覧を読み込めませんでした");
+    expect(container.querySelector(".keyboardShortcutsDiagnostics")).not.toBeNull();
+  });
+});
