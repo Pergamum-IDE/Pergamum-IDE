@@ -142,7 +142,57 @@ describe("parseUserKeybindingsJson (#645)", () => {
       JSON.stringify([{ key: "Mod-k", command: "editor.markdown.link", when: 1 }])
     );
     expect(parsed.entries).toEqual([]);
-    expect(parsed.diagnostics.map((d) => d.code)).toEqual(["unsupportedWhen"]);
+    expect(parsed.diagnostics.map((d) => d.code)).toEqual(["invalidWhenType"]);
+    expect(parsed.diagnostics[0]).toMatchObject({ field: "when", index: 0 });
+  });
+
+  it("separates type errors from missing fields and reports key and command problems together (#651)", () => {
+    const parsed = parseUserKeybindingsJson(
+      JSON.stringify([
+        { key: 1, command: "editor.find.open" },
+        { key: "Mod-f", command: 2 },
+        { key: 1, command: 2 },
+        {},
+        { key: "  ", command: "" }
+      ])
+    );
+    expect(parsed.entries).toEqual([]);
+    expect(parsed.diagnostics.map((d) => [d.index, d.code, d.field])).toEqual([
+      [0, "invalidKeyType", "key"],
+      [1, "invalidCommandType", "command"],
+      [2, "invalidCommandType", "command"],
+      [2, "invalidKeyType", "key"],
+      [3, "missingCommand", "command"],
+      [3, "missingKey", "key"],
+      [4, "missingCommand", "command"],
+      [4, "missingKey", "key"]
+    ]);
+    expect(parsed.diagnostics.every((d) => d.severity === "error")).toBe(true);
+  });
+
+  it("an unknown field is a warning that names the field and keeps the entry (#651)", () => {
+    const parsed = parseUserKeybindingsJson(
+      JSON.stringify([{ key: "Mod-s", command: "editor.document.save", args: {} }])
+    );
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.diagnostics).toMatchObject([
+      { code: "unknownField", severity: "warning", field: "args", index: 0 }
+    ]);
+  });
+
+  it("adds line / column to a syntax error only as numbers, never quoting the file (#651)", () => {
+    const parsed = parseUserKeybindingsJson(
+      '[\n  {"key": "secret-text" "x"}\n]'
+    );
+    const [diagnostic] = parsed.diagnostics;
+    expect(diagnostic?.code).toBe("jsonParseError");
+    expect(diagnostic?.message).not.toContain("secret-text");
+    // Best effort: when present, the position is a plain 1-based number pair.
+    if (diagnostic?.line !== undefined) {
+      expect(diagnostic.line).toBe(2);
+      expect(diagnostic.column).toBeGreaterThan(0);
+    }
+    expect(diagnostic?.line === undefined).toBe(diagnostic?.column === undefined);
   });
 });
 
@@ -285,6 +335,37 @@ describe("resolveEffectiveKeybindings (#645)", () => {
     expect(codes(missing)).toEqual(["unbindTargetNotFound"]);
     expect(missing.diagnostics[0]?.severity).toBe("warning");
     expect(keysOf(missing, "editor.find.replace.open")).toEqual(["Mod-h"]);
+  });
+
+  it("an unbind with an unknown `when` is invalid and unbinds nothing (#651)", () => {
+    const result = effective("win32", [
+      { key: "Mod-h", command: "-editor.find.replace.open", when: "foo && bar" }
+    ]);
+    expect(keysOf(result, "editor.find.replace.open")).toEqual(["Mod-h"]);
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: "unsupportedWhen",
+        severity: "error",
+        field: "when",
+        when: "foo && bar",
+        command: "editor.find.replace.open",
+        key: "Mod-h",
+        index: 0
+      }
+    ]);
+    expect(result.diagnostics[0]?.message).toBe(
+      'Entry 0: "when" is not supported for editor.find.replace.open'
+    );
+  });
+
+  it("conflictingKey names the other command (#651)", () => {
+    const result = effective("win32", [
+      { key: "Mod-b", command: "editor.markdown.italic" }
+    ]);
+    expect(result.diagnostics[0]).toMatchObject({
+      code: "conflictingKey",
+      relatedCommand: "editor.markdown.bold"
+    });
   });
 
   it("applies unbinds BEFORE positives regardless of file order (the issue's example)", () => {

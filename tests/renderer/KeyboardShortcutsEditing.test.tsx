@@ -475,7 +475,7 @@ describe("saving a change (#647)", () => {
     await render();
     const revision = getEffectiveKeybindingsRevision();
     await capture("editor.markdown.bold", { key: "9", code: "Digit9", ctrlKey: true, altKey: true });
-    expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("保存に失敗しました。");
+    expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("保存できませんでした。");
     expect(getEffectiveKeybindingsRevision()).toBe(revision);
     expect(rowOf("editor.markdown.bold").textContent).toContain("Ctrl+B");
   });
@@ -485,7 +485,7 @@ describe("saving a change (#647)", () => {
     applyKeybindingChange.mockRejectedValue(new Error("ipc"));
     await render();
     await capture("editor.markdown.bold", { key: "9", code: "Digit9", ctrlKey: true, altKey: true });
-    expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("保存に失敗しました。");
+    expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("保存できませんでした。");
   });
 
   it("an unreadable keybindings.json is explained (and nothing is overwritten)", async () => {
@@ -900,7 +900,7 @@ describe("adding a shortcut from the command group (#648)", () => {
   it.each([
     ["duplicate", "既に同じショートカット"],
     ["reserved", "予約されている"],
-    ["saveFailed", "保存に失敗しました"]
+    ["saveFailed", "保存できませんでした"]
   ])("a %s response shows the dialog and changes nothing", async (reason, text) => {
     installApi();
     applyKeybindingChange.mockResolvedValue({ ok: false, failure: { reason } });
@@ -1935,7 +1935,7 @@ describe("external keybindings.json changes (#650)", () => {
       { code: "jsonParseError", severity: "error", message: "keybindings.json is not valid JSON" }
     ]);
     const section = container.querySelector(".keyboardShortcutsDiagnostics") as HTMLElement;
-    expect(section.textContent).toContain("keybindings.json is not valid JSON");
+    expect(section.textContent).toContain("JSONの形式が正しくありません。");
     // And they clear when the file is valid again.
     await externalChange([]);
     expect(container.querySelector(".keyboardShortcutsDiagnostics")).toBeNull();

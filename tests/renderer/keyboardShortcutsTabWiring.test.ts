@@ -113,8 +113,8 @@ describe("Keyboard Shortcuts special tab wiring (#646)", () => {
     expect(ja["keyboardShortcuts.source.pergamum"]).toBe("Pergamum");
     expect(ja["keyboardShortcuts.source.nativeRole"]).toBe("Native");
     expect(ja["keyboardShortcuts.source.standard"]).toBe("標準機能");
-    expect(ja["keyboardShortcuts.diagnostics.summary"]).toBe(
-      "keybindings.json に {count} 件の問題があります。"
+    expect(ja["keyboardShortcuts.diagnostics.summary.errors"]).toBe(
+      "keybindings.json に {count} 件のエラーがあります。"
     );
   });
 });

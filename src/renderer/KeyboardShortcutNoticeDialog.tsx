@@ -33,13 +33,13 @@ export function KeyboardShortcutNoticeDialog({
   let message: string;
   switch (notice.reason) {
     case "conflict":
-      message = translate("keyboardShortcuts.notice.conflict");
+      message = translate("keybindings.diagnostic.conflictingKey");
       break;
     case "reserved":
-      message = translate("keyboardShortcuts.notice.reserved");
+      message = translate("keybindings.diagnostic.reservedKey");
       break;
     case "saveFailed":
-      message = translate("keyboardShortcuts.notice.saveFailed");
+      message = translate("keybindings.diagnostic.fileWriteError");
       break;
     case "fileInvalid":
       message = translate("keyboardShortcuts.notice.fileInvalid");
@@ -48,7 +48,7 @@ export function KeyboardShortcutNoticeDialog({
       message = translate("keyboardShortcuts.unsupportedKey");
       break;
     case "duplicate":
-      message = translate("keyboardShortcuts.notice.duplicate");
+      message = translate("keybindings.diagnostic.duplicateUserEntry");
       break;
     case "stale":
       message = translate("keyboardShortcuts.notice.stale");
