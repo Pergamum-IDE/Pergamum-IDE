@@ -24,6 +24,7 @@ import {
   deriveKeyboardShortcutCategories,
   isDefaultKeyboardShortcutFilter,
   KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS,
+  classifyEmptyKeyboardShortcutResult,
   displayCommandDescription,
   normalizeKeyboardShortcutFilter,
   type KeyboardShortcutFilterState,
@@ -242,6 +243,28 @@ export function KeyboardShortcutsScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [groups, filter, translate]
   );
+  // #653: only when nothing is shown - would the same filter find something
+  // with the read-only commands visible?
+  const readonlyHiddenWouldMatch = useMemo(
+    () =>
+      visibleGroups.length === 0 &&
+      !filter.showReadonly &&
+      applyKeyboardShortcutFilter(
+        groups,
+        { ...filter, showReadonly: true },
+        sourceLabel,
+        originLabel,
+        categoryLabel,
+        descriptionLabel
+      ).length > 0,
+    // Same label helpers as `visibleGroups`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [groups, filter, translate, visibleGroups.length]
+  );
+  const emptyKind = classifyEmptyKeyboardShortcutResult(
+    filter,
+    readonlyHiddenWouldMatch
+  );
   const categories = useMemo(
     () => deriveKeyboardShortcutCategories(groups, filter.showReadonly),
     [groups, filter.showReadonly]
@@ -415,9 +438,9 @@ export function KeyboardShortcutsScreen({
       aria-labelledby="keyboardShortcutsTitle"
     >
       <header className="keyboardShortcutsHeader">
-        <h2 id="keyboardShortcutsTitle" className="keyboardShortcutsTitle">
+        <h1 id="keyboardShortcutsTitle" className="keyboardShortcutsTitle">
           {translate("keyboardShortcuts.title")}
-        </h2>
+        </h1>
         <p className="keyboardShortcutsDescription">
           {translate("keyboardShortcuts.description")}
         </p>
@@ -617,9 +640,16 @@ export function KeyboardShortcutsScreen({
         </p>
       ) : visibleGroups.length === 0 ? (
         <div className="keyboardShortcutsStatus" role="status">
-          {filtersActive ? (
+          {emptyKind === "readonlyHidden" ? (
+            <p>{translate("keyboardShortcuts.empty.readonlyHidden")}</p>
+          ) : emptyKind === "noModified" ? (
+            <p>{translate("keyboardShortcuts.empty.modified")}</p>
+          ) : emptyKind === "noUnassigned" ? (
+            <p>{translate("keyboardShortcuts.empty.unassigned")}</p>
+          ) : filtersActive ? (
             <>
               <p>{translate("keyboardShortcuts.filter.empty")}</p>
+              <p>{translate("keyboardShortcuts.filter.empty.hint")}</p>
               <button
                 type="button"
                 className="keyboardShortcutsClearFilters"
@@ -669,12 +699,20 @@ export function KeyboardShortcutsScreen({
                   </div>
                   <span className="keyboardShortcutGroupMeta">
                     <span className="keyboardShortcutCategory">{categoryLabel(group.category)}</span>
-                    <span className="keyboardShortcutScope">{group.scope}</span>
-                    <span className="keyboardShortcutSource">
+                    <span className="keyboardShortcutScope">
+                      {translate(`keyboardShortcuts.scope.${group.scope}`)}
+                    </span>
+                    <span
+                      className="keyboardShortcutSource"
+                      title={translate(`keyboardShortcuts.source.${group.source}.tooltip`)}
+                    >
                       {sourceLabel(group.source)}
                     </span>
                     {showConditions && group.when !== null ? (
-                      <span className="keyboardShortcutWhen">
+                      <span
+                        className="keyboardShortcutWhen"
+                        title={translate("keyboardShortcuts.when.tooltip")}
+                      >
                         {translate("keyboardShortcuts.when", { when: group.when })}
                       </span>
                     ) : null}
@@ -693,7 +731,13 @@ export function KeyboardShortcutsScreen({
                   ) : (
                     <span
                       className="keyboardShortcutReadonly"
-                      title={translate("keyboardShortcuts.readonly.tooltip")}
+                      title={
+                        group.readonlyReason === null
+                          ? translate("keyboardShortcuts.readonly.tooltip")
+                          : translate(
+                              `keyboardShortcuts.readonly.tooltip.${group.readonlyReason}`
+                            )
+                      }
                     >
                       <span
                         className="keyboardShortcutReadonlyIcon"
@@ -732,6 +776,9 @@ export function KeyboardShortcutsScreen({
                         {row.originKind !== null ? (
                           <span
                             className={`keyboardShortcutOrigin keyboardShortcutOrigin-${row.originKind}`}
+                            title={translate(
+                              `keyboardShortcuts.origin.${row.originKind}.tooltip`
+                            )}
                           >
                             {originLabel(row.originKind)}
                           </span>

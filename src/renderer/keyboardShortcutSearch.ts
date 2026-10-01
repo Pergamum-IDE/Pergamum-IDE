@@ -184,6 +184,36 @@ export function normalizeKeyboardShortcutFilter(
 }
 
 /**
+ * #653: which message an empty result gets. `readonlyHiddenWouldMatch` says
+ * whether the same filter would find something with `showReadonly` on.
+ * A hidden read-only match is the most specific explanation; the plain
+ * Modified / Unassigned views (no query, no category) have their own; any
+ * other combination is a generic "nothing matches".
+ */
+export type KeyboardShortcutEmptyKind =
+  | "readonlyHidden"
+  | "noModified"
+  | "noUnassigned"
+  | "noMatch";
+
+export function classifyEmptyKeyboardShortcutResult(
+  filter: KeyboardShortcutFilterState,
+  readonlyHiddenWouldMatch: boolean
+): KeyboardShortcutEmptyKind {
+  if (!filter.showReadonly && readonlyHiddenWouldMatch) {
+    return "readonlyHidden";
+  }
+  const plainView = filter.query.trim() === "" && filter.category === "all";
+  if (plainView && filter.view === "modified") {
+    return "noModified";
+  }
+  if (plainView && filter.view === "unassigned") {
+    return "noUnassigned";
+  }
+  return "noMatch";
+}
+
+/**
  * #649: every active condition is ANDed: assignable (unless
  * `showReadonly`), category, view, then the text query. A group that
  * passes is returned whole, with all of its bindings.

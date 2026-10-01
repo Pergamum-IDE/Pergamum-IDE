@@ -1,6 +1,7 @@
 import type { ApplyKeybindingChangeFailureReason } from "../shared/api";
 import type { Translate } from "../shared/i18n";
 import type { KeybindingEditConflict } from "../shared/keybindings";
+import { KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS } from "./keyboardShortcutSearch";
 import { InfoDialog } from "./dialog/InfoDialog";
 
 /**
@@ -64,6 +65,10 @@ export function KeyboardShortcutNoticeDialog({
   }
 
   const keyLabel = conflict?.keyLabel ?? notice.keyLabel;
+  const categoryText = (category: string): string => {
+    const labelKey = KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS[category];
+    return labelKey === undefined ? category : translate(labelKey);
+  };
 
   return (
     <InfoDialog
@@ -98,12 +103,12 @@ export function KeyboardShortcutNoticeDialog({
               </li>
               <li>
                 {translate("keyboardShortcuts.notice.conflict.category", {
-                  category: conflict.category
+                  category: categoryText(conflict.category)
                 })}
               </li>
               <li>
                 {translate("keyboardShortcuts.notice.conflict.scope", {
-                  scope: conflict.scope
+                  scope: translate(`keyboardShortcuts.scope.${conflict.scope}`)
                 })}
               </li>
             </>
