@@ -640,7 +640,9 @@ export const WINDOW_CHANNELS = {
   zoomIn: "window:zoomIn",
   zoomOut: "window:zoomOut",
   resetZoom: "window:resetZoom",
-  onZoomFactorChanged: "window:onZoomFactorChanged"
+  onZoomFactorChanged: "window:onZoomFactorChanged",
+  /** renderer -> main, one-shot: startup visual settings are applied (#659) */
+  startupVisualReady: "window:startupVisualReady"
 } as const;
 
 /**
@@ -1905,5 +1907,11 @@ export interface PergamumApi {
     onZoomFactorChanged: (
       callback: (zoomFactor: number) => void
     ) => () => void;
+    /**
+     * #659: tells Main that this window's startup visual settings (color
+     * theme / fonts) are applied to the DOM, so the initially hidden Main
+     * Window may be shown. Main ignores repeats and unknown senders.
+     */
+    startupVisualReady: () => Promise<void>;
   };
 }

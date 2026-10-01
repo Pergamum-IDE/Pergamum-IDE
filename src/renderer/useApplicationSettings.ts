@@ -56,6 +56,9 @@ export function useApplicationSettings(): UseApplicationSettingsResult {
         setSettings(loadedSettings);
         setDisplayLanguage(loadedSettings.workbench.language);
         setError(null);
+        // #659: same synchronous block as `setSettings`, so a render never
+        // sees `isLoading === false` with the pre-load settings.
+        setIsLoading(false);
       })
       .catch((loadError: unknown) => {
         if (!isMounted) {
@@ -63,11 +66,7 @@ export function useApplicationSettings(): UseApplicationSettingsResult {
         }
 
         setError(errorMessage(loadError));
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       });
 
     return () => {

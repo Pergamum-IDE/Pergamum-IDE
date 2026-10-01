@@ -2,34 +2,24 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 /**
- * #274 BLOCKER 4: the saved maximize / fullscreen Window mode must be
- * applied to the cold-start BrowserWindow BEFORE the renderer content is
- * loaded, so the renderer's Session restore (layout → documents/editors →
- * #273 View State) can never run ahead of the Window mode being applied.
+ * #274 BLOCKER 4 (revised by #659): the saved maximize / fullscreen Window
+ * mode used to be applied before the renderer load. Electron's `maximize()`
+ * / `setFullScreen()` SHOW a hidden window, so with the #659 hidden startup
+ * that put a normal-sized unthemed frame on screen. The mode is now applied
+ * by `startupWindowReveal` immediately before `show()`, never while the
+ * window is hidden.
  *
  * `resolveWindowPlacement` / `applyWindowSessionMode` for the three modes
- * (normal / maximized / fullscreen) are unit-tested in
- * `windowStateRestore.test.ts`; this guards the ordering in `main.ts`.
+ * are unit-tested in `windowStateRestore.test.ts`; this guards the wiring.
  */
-describe("cold-start Window mode wiring (#274 BLOCKER 4)", () => {
+describe("cold-start Window mode wiring (#274 / #659)", () => {
   const main = readFileSync("src/main/main.ts", "utf8");
 
-  it("applies the Window mode before loadURL / loadFile", () => {
-    const applyIndex = main.indexOf(
-      "applyWindowSessionMode(mainWindow, placement.mode)"
-    );
-    const loadUrlIndex = main.indexOf("mainWindow.loadURL(");
-    const loadFileIndex = main.indexOf("mainWindow.loadFile(");
-
-    expect(applyIndex).toBeGreaterThan(-1);
-    expect(loadUrlIndex).toBeGreaterThan(-1);
-    expect(loadFileIndex).toBeGreaterThan(-1);
-
-    expect(applyIndex).toBeLessThan(loadUrlIndex);
-    expect(applyIndex).toBeLessThan(loadFileIndex);
-
-    // The old "apply after the await load" hook is gone.
-    expect(main).not.toContain("applyModeAfterLoad");
+  it("never applies the Window mode while the window is hidden", () => {
+    expect(main).not.toMatch(/applyWindowSessionMode\w*\(/);
+    expect(main).not.toMatch(/\.maximize\(/);
+    expect(main).not.toMatch(/\.setFullScreen\(true\)/);
+    expect(main).toContain("startupWindowReveal.track(startingWindow, placement.mode)");
   });
 
   it("only the initial cold-start window gets saved placement + mode", () => {
