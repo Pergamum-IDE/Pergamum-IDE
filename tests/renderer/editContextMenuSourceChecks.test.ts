@@ -157,6 +157,13 @@ function allSourceText(): string {
  * listener that only calls `preventDefault()` on an UNHANDLED reload /
  * forceReload key (never a command, never `stopPropagation()`), so Chromium's
  * reload cannot fire; it is unrelated to the native-edit-command delegation.
+ *
+ * ApplicationMenuBar.tsx (#663) is the same category: while one of its popups
+ * is open, a window-level key listener only dismisses the popup on Escape
+ * (removed as soon as the menu closes). It binds no shortcut, runs no command
+ * and ignores every other key; keyboard navigation is #665, and shortcuts stay
+ * with the native menu backend. Unrelated to the native-edit-command
+ * delegation.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -185,6 +192,7 @@ const onKeyDownExemptFileNames = new Set([
   "globalKeyboardShortcuts.ts",
   "reloadKeyFallback.ts",
   "KeyboardShortcutCaptureDialog.tsx",
+  "ApplicationMenuBar.tsx",
   "App.tsx",
   "EditorSurface.tsx"
 ]);

@@ -1,7 +1,7 @@
 import {
+  BrowserWindow,
   Menu,
   ipcMain,
-  type BrowserWindow,
   type MenuItemConstructorOptions
 } from "electron";
 import {
@@ -13,6 +13,7 @@ import type { Language } from "../shared/i18n";
 import type { ResolvedKeybinding } from "../shared/keybindings";
 import type { DebugLogger } from "./debugLogger";
 import { buildNativeMenuTemplate } from "./applicationMenuAdapter";
+import { hideNativeMenuBar } from "./nativeMenuBarVisibility";
 import {
   createMenuAcceleratorLookup,
   nodePlatformToPergamumPlatform
@@ -151,6 +152,10 @@ export async function installApplicationMenu(
   Menu.setApplicationMenu(
     createApplicationMenu(settings.workbench.language, options)
   );
+  // #663: the Renderer menu bar is the visible one on Windows / Linux; the
+  // installed native menu stays as the accelerator / role backend. Installing
+  // a menu re-shows the native bar, so hide it again here.
+  hideNativeMenuBar(BrowserWindow.getAllWindows());
   // A rebuilt menu starts with every item enabled: restore what the renderer
   // had reported.
   applyApplicationMenuEnablement({ ...lastMenuEnablement });
