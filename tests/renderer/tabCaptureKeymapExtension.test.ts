@@ -486,6 +486,52 @@ describe("tabCaptureKeymapExtension (#467)", () => {
       }
     });
 
+    it("IME composition (#654): Tab is left to the IME and Escape does not arm the bypass", () => {
+      resetTabCaptureBypass();
+      const view = mountEditor({ doc: "- item", captureTabInEditor: true });
+      try {
+        const composingEscape = new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          isComposing: true,
+          bubbles: true,
+          cancelable: true
+        });
+        view.contentDOM.dispatchEvent(composingEscape);
+        expect(isTabCaptureBypassActive()).toBe(false);
+
+        const composingTab = new KeyboardEvent("keydown", {
+          key: "Tab",
+          code: "Tab",
+          isComposing: true,
+          bubbles: true,
+          cancelable: true
+        });
+        view.contentDOM.dispatchEvent(composingTab);
+        expect(composingTab.defaultPrevented).toBe(false);
+        expect(view.state.doc.toString()).toBe("- item");
+
+        // Legacy engines: keyCode 229 with a stale isComposing=false.
+        const legacyTab = new KeyboardEvent("keydown", {
+          key: "Tab",
+          code: "Tab",
+          keyCode: 229,
+          bubbles: true,
+          cancelable: true
+        });
+        view.contentDOM.dispatchEvent(legacyTab);
+        expect(legacyTab.defaultPrevented).toBe(false);
+        expect(view.state.doc.toString()).toBe("- item");
+
+        // Outside composition the capture still works.
+        const plainTab = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(plainTab);
+        expect(plainTab.defaultPrevented).toBe(true);
+      } finally {
+        view.destroy();
+      }
+    });
+
     it("Ctrl+M no longer arms the one-shot bypass (#636: it toggles the setting)", () => {
       resetTabCaptureBypass();
       const toggle = vi.fn();
