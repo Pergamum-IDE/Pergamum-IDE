@@ -18,6 +18,7 @@ import {
   type SetKeybindingCaptureModeResult
 } from "../shared/api";
 import {
+  hasResettableKeybindingChanges,
   listKeyboardShortcutRows,
   type KeybindingDiagnostic,
   type KeybindingEditRequest,
@@ -26,11 +27,13 @@ import {
 import { setKeybindingCaptureActive } from "./keybindingCapture";
 import {
   applyKeybindingChange,
+  type ApplyKeybindingChangeOutcome,
   type LoadedKeybindings,
   ensureKeybindingsDirectory,
   getStartupKeybindings,
   loadKeybindings,
   readUserKeybindings,
+  resetAllUserKeybindings,
   saveUserKeybindings
 } from "./keybindingsStore";
 import { nodePlatformToPergamumPlatform } from "./menuAccelerators";
@@ -149,6 +152,40 @@ export function registerKeybindingsIpc(
   const openDirectory =
     dependencies.openDirectory ?? ((directory: string) => shell.openPath(directory));
 
+  /** Shared by every save: applies the new state to the menu, builds the reply. */
+  async function toApplyResult(
+    outcome: ApplyKeybindingChangeOutcome
+  ): Promise<ApplyKeybindingChangeResult> {
+    if (!outcome.ok) {
+      return {
+        ok: false,
+        platform,
+        diagnostics: outcome.diagnostics,
+        failure: {
+          reason: outcome.reason,
+          ...(outcome.conflict === undefined ? {} : { conflict: outcome.conflict })
+        }
+      };
+    }
+    try {
+      await dependencies.onKeybindingsApplied?.(outcome.loaded);
+    } catch {
+      // The change is saved and applied; a failed menu rebuild only leaves
+      // the menu accelerators stale until the next start.
+    }
+    return {
+      ok: true,
+      platform,
+      items: listKeyboardShortcutRows(outcome.loaded.effective.keybindings, platform),
+      keybindings: outcome.loaded.effective.keybindings,
+      diagnostics: outcome.loaded.diagnostics,
+      resettable: hasResettableKeybindingChanges(
+        outcome.loaded.userEntries,
+        outcome.loaded.diagnostics
+      )
+    };
+  }
+
   ipcMain.handle(
     KEYBINDINGS_CHANNELS.getUserKeybindings,
     async (): Promise<GetUserKeybindingsResult> => {
@@ -190,7 +227,11 @@ export function registerKeybindingsIpc(
       return {
         platform,
         items: listKeyboardShortcutRows(loaded.effective.keybindings, platform),
-        diagnostics: loaded.diagnostics
+        diagnostics: loaded.diagnostics,
+        resettable: hasResettableKeybindingChanges(
+          loaded.userEntries,
+          loaded.diagnostics
+        )
       };
     }
   );
@@ -221,32 +262,14 @@ export function registerKeybindingsIpc(
           failure: { reason: "invalid" }
         };
       }
-      const outcome = await applyKeybindingChange(parsed, platform);
-      if (!outcome.ok) {
-        return {
-          ok: false,
-          platform,
-          diagnostics: outcome.diagnostics,
-          failure: {
-            reason: outcome.reason,
-            ...(outcome.conflict === undefined ? {} : { conflict: outcome.conflict })
-          }
-        };
-      }
-      try {
-        await dependencies.onKeybindingsApplied?.(outcome.loaded);
-      } catch {
-        // The change is saved and applied; a failed menu rebuild only leaves
-        // the menu accelerators stale until the next start.
-      }
-      return {
-        ok: true,
-        platform,
-        items: listKeyboardShortcutRows(outcome.loaded.effective.keybindings, platform),
-        keybindings: outcome.loaded.effective.keybindings,
-        diagnostics: outcome.loaded.diagnostics
-      };
+      return toApplyResult(await applyKeybindingChange(parsed, platform));
     }
+  );
+
+  ipcMain.handle(
+    KEYBINDINGS_CHANNELS.resetAllKeybindings,
+    async (): Promise<ApplyKeybindingChangeResult> =>
+      toApplyResult(await resetAllUserKeybindings(platform))
   );
 
   ipcMain.handle(

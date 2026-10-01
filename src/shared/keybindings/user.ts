@@ -106,6 +106,19 @@ function syntaxErrorPosition(
   };
 }
 
+/**
+ * #652: whether "Reset All" has anything to do. The user entries are the
+ * source of truth; any diagnostic also counts, because a malformed / invalid
+ * keybindings.json can show no entries at all and Reset All is how a user
+ * recovers from it.
+ */
+export function hasResettableKeybindingChanges(
+  userEntries: readonly UserKeybindingEntry[],
+  diagnostics: readonly KeybindingDiagnostic[]
+): boolean {
+  return userEntries.length > 0 || diagnostics.length > 0;
+}
+
 export function parseUserKeybindingsJson(source: string): ParsedUserKeybindings {
   const result: ParsedUserKeybindings = {
     entries: [],

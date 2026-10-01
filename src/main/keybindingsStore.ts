@@ -279,8 +279,22 @@ async function applyKeybindingChangeLocked(
     };
   }
 
+  return writeAndApplyEntries(edit.entries, platform, directory);
+}
+
+/**
+ * Writes the entries atomically and, only after the write succeeded, re-reads
+ * and re-resolves the file and makes it the applied state (its fingerprint is
+ * recorded here, so the watcher event of this very write is a no-op). A failed
+ * write changes neither the file nor the applied state. Caller holds the lock.
+ */
+async function writeAndApplyEntries(
+  entries: readonly UserKeybindingEntry[],
+  platform: PergamumPlatform,
+  directory?: string
+): Promise<ApplyKeybindingChangeOutcome> {
   try {
-    await writeUserKeybindings(edit.entries, directory);
+    await writeUserKeybindings(entries, directory);
   } catch {
     return {
       ok: false,
@@ -298,6 +312,21 @@ async function applyKeybindingChangeLocked(
   const loaded = await loadKeybindings(platform, directory);
   setStartupKeybindings(loaded);
   return { ok: true, loaded };
+}
+
+/**
+ * #652: Reset All - replaces keybindings.json with an empty array (the file is
+ * kept, never deleted). Unlike a single edit this is also a RECOVERY
+ * operation: a malformed / invalid file is deliberately overwritten, so the
+ * file-level protection of `applyKeybindingChange` does not apply. The lock,
+ * the atomic write, the fingerprint ownership and the applied-state update are
+ * the ones every other save uses.
+ */
+export function resetAllUserKeybindings(
+  platform: PergamumPlatform,
+  directory?: string
+): Promise<ApplyKeybindingChangeOutcome> {
+  return withKeybindingsLock(() => writeAndApplyEntries([], platform, directory));
 }
 
 export type ReloadKeybindingsOutcome =

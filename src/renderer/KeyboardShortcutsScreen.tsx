@@ -30,6 +30,7 @@ import {
   type KeyboardShortcutView
 } from "./keyboardShortcutSearch";
 import { KeyboardShortcutCaptureDialog } from "./KeyboardShortcutCaptureDialog";
+import { KeyboardShortcutsResetAllDialog } from "./KeyboardShortcutsResetAllDialog";
 import { keybindingDiagnosticMessage } from "./keybindings/keybindingDiagnosticMessage";
 import {
   KeyboardShortcutNoticeDialog,
@@ -121,6 +122,7 @@ export function KeyboardShortcutsScreen({
   const [capture, setCapture] = useState<CaptureState | null>(null);
   const [notice, setNotice] = useState<KeyboardShortcutNotice | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resetAllOpen, setResetAllOpen] = useState(false);
   const openerRef = useRef<Element | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
@@ -289,7 +291,8 @@ export function KeyboardShortcutsScreen({
           data: {
             platform: result.platform,
             items: result.items,
-            diagnostics: result.diagnostics
+            diagnostics: result.diagnostics,
+            resettable: result.resettable ?? false
           }
         });
       } else {
@@ -317,6 +320,42 @@ export function KeyboardShortcutsScreen({
           searchRef.current?.focus({ preventScroll: true });
         }
       });
+    }
+  }
+
+  /**
+   * #652: Reset All. Like a single edit, the list and the renderer's effective
+   * keybindings change only after main reports a successful save; a failure
+   * leaves everything as it was and says so.
+   */
+  async function resetAll(): Promise<void> {
+    setResetAllOpen(false);
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    const scrollTop = listScrollRef.current?.scrollTop ?? 0;
+    try {
+      const result = await window.pergamum.keybindings.resetAllKeybindings();
+      if (result.ok && result.items !== undefined && result.keybindings !== undefined) {
+        setEffectiveKeybindings(result.platform, result.keybindings);
+        pendingRestoreRef.current = { scrollTop, commandId: "", action: "reset" };
+        setState({
+          kind: "ready",
+          data: {
+            platform: result.platform,
+            items: result.items,
+            diagnostics: result.diagnostics,
+            resettable: result.resettable ?? false
+          }
+        });
+      } else {
+        setNotice({ reason: "resetFailed" });
+      }
+    } catch {
+      setNotice({ reason: "resetFailed" });
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -408,6 +447,17 @@ export function KeyboardShortcutsScreen({
           }}
         >
           {translate("keyboardShortcuts.openLocation")}
+        </button>
+        <button
+          type="button"
+          className="keyboardShortcutsResetAll"
+          disabled={busy || state.kind !== "ready" || !state.data.resettable}
+          onClick={(event) => {
+            openerRef.current = event.currentTarget;
+            setResetAllOpen(true);
+          }}
+        >
+          {translate("keyboardShortcuts.resetAll")}
         </button>
       </div>
 
@@ -750,6 +800,17 @@ export function KeyboardShortcutsScreen({
           opener={openerRef.current}
           onCapture={handleCaptured}
           onCancel={() => setCapture(null)}
+        />
+      ) : null}
+
+      {resetAllOpen ? (
+        <KeyboardShortcutsResetAllDialog
+          translate={translate}
+          opener={openerRef.current}
+          onConfirm={() => {
+            void resetAll();
+          }}
+          onCancel={() => setResetAllOpen(false)}
         />
       ) : null}
 

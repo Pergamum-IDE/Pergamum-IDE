@@ -401,6 +401,8 @@ export const KEYBINDINGS_CHANNELS = {
   getKeyboardShortcutItems: "keybindings:getKeyboardShortcutItems",
   openKeybindingsJsonLocation: "keybindings:openKeybindingsJsonLocation",
   applyKeybindingChange: "keybindings:applyKeybindingChange",
+  /** #652: replaces keybindings.json with [] (also recovers a broken file). */
+  resetAllKeybindings: "keybindings:resetAllKeybindings",
   setCaptureMode: "keybindings:setCaptureMode",
   /** main -> renderer: a key pressed while the capture mode is on. */
   captureInput: "keybindings:captureInput",
@@ -452,6 +454,8 @@ export interface ApplyKeybindingChangeResult {
   readonly items?: readonly KeyboardShortcutRow[];
   readonly keybindings?: readonly ResolvedKeybinding[];
   readonly diagnostics: readonly KeybindingDiagnostic[];
+  /** #652: on success, whether Reset All still has something to reset. */
+  readonly resettable?: boolean;
   /** On failure: nothing was saved. */
   readonly failure?: {
     readonly reason: ApplyKeybindingChangeFailureReason;
@@ -467,6 +471,11 @@ export interface GetKeyboardShortcutItemsResult {
   readonly platform: PergamumPlatform;
   readonly items: readonly KeyboardShortcutRow[];
   readonly diagnostics: readonly KeybindingDiagnostic[];
+  /**
+   * #652: whether "Reset All" is available: there are user entries, or the
+   * file has diagnostics (a broken file must stay recoverable).
+   */
+  readonly resettable: boolean;
 }
 
 export interface OpenKeybindingsJsonLocationResult {
@@ -1668,6 +1677,11 @@ export interface PergamumApi {
     applyKeybindingChange: (
       request: KeybindingEditRequest
     ) => Promise<ApplyKeybindingChangeResult>;
+    /**
+     * #652: Reset All - saves [] as keybindings.json, even over a broken file.
+     * Changes nothing when the save fails.
+     */
+    resetAllKeybindings: () => Promise<ApplyKeybindingChangeResult>;
     /**
      * #647: while on, main swallows every key press (so no menu accelerator or
      * command fires) and forwards it via `onCaptureInput`.

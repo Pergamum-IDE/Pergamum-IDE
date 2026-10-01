@@ -9,7 +9,10 @@ import { InfoDialog } from "./dialog/InfoDialog";
  */
 
 export interface KeyboardShortcutNotice {
-  readonly reason: ApplyKeybindingChangeFailureReason | "unsupported";
+  readonly reason:
+    | ApplyKeybindingChangeFailureReason
+    | "unsupported"
+    | "resetFailed";
   readonly conflict?: KeybindingEditConflict;
   /** The label of the key the user pressed, when known. */
   readonly keyLabel?: string;
@@ -43,6 +46,9 @@ export function KeyboardShortcutNoticeDialog({
       break;
     case "fileInvalid":
       message = translate("keyboardShortcuts.notice.fileInvalid");
+      break;
+    case "resetFailed":
+      message = translate("keyboardShortcuts.notice.resetFailed");
       break;
     case "unsupported":
       message = translate("keyboardShortcuts.unsupportedKey");
