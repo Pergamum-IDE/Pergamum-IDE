@@ -181,7 +181,7 @@ describe("openKeybindingsJsonLocation (#646)", () => {
 });
 
 describe("registration (#646)", () => {
-  it("registers the keybindings channels (#647 adds apply-change and capture mode)", () => {
+  it("registers the keybindings channels (#647 adds apply-change and capture mode, #652 reset-all)", () => {
     registerKeybindingsIpc("win32");
     expect([...electronMock.handlers.keys()].sort()).toEqual(
       [
@@ -191,6 +191,7 @@ describe("registration (#646)", () => {
         "keybindings:getKeyboardShortcutItems",
         "keybindings:openKeybindingsJsonLocation",
         "keybindings:applyKeybindingChange",
+        "keybindings:resetAllKeybindings",
         "keybindings:setCaptureMode"
       ].sort()
     );

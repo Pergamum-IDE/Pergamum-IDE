@@ -64,5 +64,6 @@ export {
   serializeUserKeybindingsJson,
   type EffectiveKeybindingResult,
   type ParsedUserKeybindings,
-  type UserKeybindingEntry
+  type UserKeybindingEntry,
+  hasResettableKeybindingChanges
 } from "./user";

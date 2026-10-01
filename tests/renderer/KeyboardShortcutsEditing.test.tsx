@@ -57,7 +57,8 @@ function installApi(initial = rowsFor([])): void {
   getKeyboardShortcutItems.mockReset().mockResolvedValue({
     platform: "win32",
     items: initial.items,
-    diagnostics: []
+    diagnostics: [],
+    resettable: false
   } satisfies GetKeyboardShortcutItemsResult);
   (window as unknown as { pergamum: unknown }).pergamum = {
     keybindings: {
@@ -991,7 +992,6 @@ describe("#648 boundary", () => {
       expect(text, file).not.toMatch(/globalShortcut|fs\.watch|chokidar|<textarea|sparkle/i);
     }
     const screen = readFileSync("src/renderer/KeyboardShortcutsScreen.tsx", "utf8");
-    expect(screen).not.toMatch(/resetAll/);
     expect(screen).toContain("add.svg");
     expect(screen).not.toContain("trash");
   });
@@ -1195,12 +1195,12 @@ describe("display filters (#649)", () => {
 });
 
 describe("#649 boundary", () => {
-  it("adds no reset-all, table header, zebra, JSON editor, file watcher, chord, Sparkle or globalShortcut", async () => {
+  it("adds no table header, zebra, JSON editor, file watcher, chord, Sparkle or globalShortcut", async () => {
     const { readFileSync } = await import("node:fs");
     const screen = readFileSync("src/renderer/KeyboardShortcutsScreen.tsx", "utf8");
     const search = readFileSync("src/renderer/keyboardShortcutSearch.ts", "utf8");
     for (const [name, text] of [["screen", screen], ["search", search]]) {
-      expect(text, name).not.toMatch(/resetAll|globalShortcut|fs\.watch|chokidar|<textarea|sparkle/i);
+      expect(text, name).not.toMatch(/globalShortcut|fs\.watch|chokidar|<textarea|sparkle/i);
       expect(text, name).not.toMatch(/<thead|<table|zebra|nth-child/i);
     }
     const css = readFileSync("src/renderer/styles.css", "utf8");

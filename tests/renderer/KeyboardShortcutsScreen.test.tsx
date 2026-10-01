@@ -152,7 +152,7 @@ function data(
   items: KeyboardShortcutRow[] = sampleRows,
   diagnostics: GetKeyboardShortcutItemsResult["diagnostics"] = []
 ): GetKeyboardShortcutItemsResult {
-  return { platform: "win32", items, diagnostics };
+  return { platform: "win32", items, diagnostics, resettable: diagnostics.length > 0 };
 }
 
 beforeEach(() => {

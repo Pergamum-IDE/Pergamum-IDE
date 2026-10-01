@@ -244,6 +244,8 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(KEYBINDINGS_CHANNELS.openKeybindingsJsonLocation),
     applyKeybindingChange: (request) =>
       ipcRenderer.invoke(KEYBINDINGS_CHANNELS.applyKeybindingChange, request),
+    resetAllKeybindings: () =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.resetAllKeybindings),
     setCaptureMode: (enabled) =>
       ipcRenderer.invoke(KEYBINDINGS_CHANNELS.setCaptureMode, enabled),
     onCaptureInput: (listener) => {
