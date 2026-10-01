@@ -143,6 +143,7 @@ import {
   applyWorkbenchUiFontFamilyList
 } from "./workbenchFontFamily";
 import { applyColorThemeById } from "./colorTheme";
+import { notifyStartupVisualReady } from "./startupVisualReady";
 import {
   decideJapaneseLintToggle,
   japaneseLintSourceForPath
@@ -2918,6 +2919,29 @@ export function App(): JSX.Element {
   useEffect(() => {
     applyPreviewFontFamilyList(effectiveSettings.preview.fontFamilyList);
   }, [effectiveSettings.preview.fontFamilyList]);
+  // #659: Main keeps the window hidden until this fires. It MUST stay after
+  // the visual-settings effects above: effects of one commit run in
+  // declaration order, so by the time Application Settings have finished
+  // loading (successfully or not — a failure keeps the built-in defaults)
+  // the theme / font CSS is already on <html>. One-shot: runtime setting
+  // changes and StrictMode re-runs never notify again.
+  // The reply arrives after Main applied the saved window mode and showed the
+  // window; Session restore waits for it (#274 order).
+  const [startupWindowModeReady, setStartupWindowModeReady] = useState(false);
+  useEffect(() => {
+    if (isSettingsLoading) {
+      return;
+    }
+    let isMounted = true;
+    void notifyStartupVisualReady().then(() => {
+      if (isMounted) {
+        setStartupWindowModeReady(true);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [isSettingsLoading]);
   // #501 slice 8 blocker fix: `project.documents` is otherwise only set once
   // at project open and patched by specific file operations — it does not
   // react to `textFiles.enablePlainTextDocuments` changing at runtime, so
@@ -9644,7 +9668,11 @@ export function App(): JSX.Element {
   };
 
   useEffect(() => {
-    if (isSettingsLoading || coldStartRestoreAttemptedRef.current) {
+    if (
+      isSettingsLoading ||
+      !startupWindowModeReady ||
+      coldStartRestoreAttemptedRef.current
+    ) {
       return;
     }
 
@@ -9674,7 +9702,7 @@ export function App(): JSX.Element {
         setColdStartRestoreSettled(true);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSettingsLoading]);
+  }, [isSettingsLoading, startupWindowModeReady]);
 
   useEffect(() => {
     if (pendingMarkdownLaunchTargetForRestore === null) {

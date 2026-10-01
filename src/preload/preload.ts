@@ -568,7 +568,9 @@ const pergamumApi: PergamumApi = {
       return () => {
         ipcRenderer.off(WINDOW_CHANNELS.onZoomFactorChanged, listener);
       };
-    }
+    },
+    startupVisualReady: () =>
+      ipcRenderer.invoke(WINDOW_CHANNELS.startupVisualReady)
   }
 };
 

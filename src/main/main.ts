@@ -90,10 +90,13 @@ import {
   type ColdStartRestoreRead
 } from "./sessionRestoreRead";
 import {
-  applyWindowSessionMode,
   resolveWindowPlacement,
   type DisplayWorkAreaLike
 } from "./windowStateRestore";
+import {
+  createStartupWindowReveal,
+  installStartupRevealFailsafe
+} from "./startupWindowReveal";
 import { installAppShutdownCleanup } from "./shutdownCleanup";
 import { extractStartupProjectFilePathFromArgv } from "./startupProjectArgv";
 import { resolveColdStartLaunchTarget } from "./startupLaunchTarget";
@@ -113,6 +116,9 @@ import { registerRecoveryCandidateIpc } from "./recoveryCandidateIpc";
 import { rekeyRecoveryDocumentPaths } from "./recoveryDocumentPathRekey";
 
 let mainWindow: BrowserWindow | null = null;
+// #659: Main Windows start hidden and are shown once their renderer reports
+// that the startup visual settings are applied (see startupWindowReveal.ts).
+const startupWindowReveal = createStartupWindowReveal<BrowserWindow>();
 // #650: stops the keybindings.json watcher (set once it is started).
 let stopKeybindingsLiveReload: (() => void) | null = null;
 let windowLifecycleController: WindowLifecycleController | null = null;
@@ -208,6 +214,9 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
     minWidth: 800,
     minHeight: 560,
     ...(placement.bounds ?? {}),
+    // #659: shown by `startupWindowReveal` after the renderer has applied
+    // the startup visual settings, so no unthemed frame is ever visible.
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -232,12 +241,18 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
     coldStartWebContentsId = mainWindow.webContents.id;
   }
 
-  // #274 (BLOCKER 4): apply the saved maximize / fullscreen mode BEFORE the
-  // renderer content is loaded, so the renderer's Session restore (which
-  // only begins after its bundle + settings have loaded) can never run
-  // ahead of the Window mode being applied. Order contract:
-  //   Window (+ mode) → renderer load → layout → documents/editors → #273.
-  applyWindowSessionMode(mainWindow, placement.mode);
+  // #274 / #659: the saved maximize / fullscreen mode is NOT applied here.
+  // Electron's `maximize()` / `setFullScreen()` show a hidden window, which
+  // flashed a normal-sized unthemed frame. `startupWindowReveal` applies the
+  // mode immediately before `show()`, once the renderer reports startup
+  // visual readiness. Order: renderer load → settings/theme → mode → show.
+  // The renderer awaits the `startupVisualReady` reply before it starts
+  // Session restore, so #274's "Window mode before Session restore" holds.
+  const startingWindow = mainWindow;
+  startupWindowReveal.track(startingWindow, placement.mode);
+  // Failsafe: a renderer that never reports ready must not leave the window
+  // invisible. Normal startup never waits for it.
+  installStartupRevealFailsafe(startupWindowReveal, startingWindow);
 
   windowLifecycleController?.registerWindow(mainWindow);
   sessionStoreController?.attachWindow(mainWindow);
@@ -494,6 +509,16 @@ app.whenReady().then(async () => {
     const nextState = !window.isFullScreen();
     window.setFullScreen(nextState);
     return nextState;
+  });
+
+  // #659: one-shot per window; unknown / destroyed / repeated senders are
+  // ignored by `startupWindowReveal`.
+  ipcMain.handle(WINDOW_CHANNELS.startupVisualReady, (event): void => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window || window.isDestroyed()) {
+      return;
+    }
+    startupWindowReveal.reveal(window);
   });
 
   ipcMain.handle(WINDOW_CHANNELS.getFullscreenState, (event): boolean => {
