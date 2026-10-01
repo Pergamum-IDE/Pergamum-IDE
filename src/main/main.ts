@@ -27,6 +27,17 @@ import { registerMarkdownImageLinkDiagnosticsIpc } from "./markdownImageLinkDiag
 import { registerPergamumAssetProtocol } from "./pergamumAssetProtocol";
 import { PERGAMUM_ASSET_SCHEME } from "../shared/pergamumAssetUrl";
 import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
+import { installReloadShortcutGuard } from "./reloadGuard";
+import { registerKeybindingsIpc } from "./keybindingsIpc";
+import {
+  ensureKeybindingsDirectory,
+  loadKeybindings,
+  setStartupKeybindings
+} from "./keybindingsStore";
+import { startKeybindingsLiveReload } from "./keybindingsWatcher";
+import { installKeybindingCapture } from "./keybindingCapture";
+import type { ResolvedKeybinding } from "../shared/keybindings";
+import { nodePlatformToPergamumPlatform } from "./menuAccelerators";
 import {
   currentActiveProjectFilePath,
   currentProjectId,
@@ -48,7 +59,12 @@ import {
   registerJapaneseMachineCheckIpc
 } from "./japaneseMachineCheckIpc";
 import { isJapaneseLintRejectionWindow } from "./japaneseLintRejectionGuard";
-import { SESSION_CHANNELS, WINDOW_CHANNELS, type ColdStartRestorePayload } from "../shared/api";
+import {
+  KEYBINDINGS_CHANNELS,
+  SESSION_CHANNELS,
+  WINDOW_CHANNELS,
+  type ColdStartRestorePayload
+} from "../shared/api";
 import {
   DEFAULT_ZOOM_FACTOR,
   getNextZoomInFactor,
@@ -97,6 +113,8 @@ import { registerRecoveryCandidateIpc } from "./recoveryCandidateIpc";
 import { rekeyRecoveryDocumentPaths } from "./recoveryDocumentPathRekey";
 
 let mainWindow: BrowserWindow | null = null;
+// #650: stops the keybindings.json watcher (set once it is started).
+let stopKeybindingsLiveReload: (() => void) | null = null;
 let windowLifecycleController: WindowLifecycleController | null = null;
 let sessionStoreController: SessionStoreController | null = null;
 // #274: the cold-start restore payload (bounded restore-set read + launch
@@ -198,6 +216,12 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
     }
   });
 
+  // #644: swallow Chromium's reload / forceReload keys that no renderer
+  // command uses (plain Mod-R is left alone: it is Ruby insertion).
+  installReloadShortcutGuard(mainWindow.webContents);
+  // #647: key capture for the Keyboard Shortcuts editor (off until asked).
+  installKeybindingCapture(mainWindow.webContents);
+
   const restoredZoomFactor =
     coldStartSessionState?.zoomFactor !== undefined
       ? restoreZoomFactor(coldStartSessionState.zoomFactor)
@@ -258,6 +282,8 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
 function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
   installAppShutdownCleanup(app, async () => {
     try {
+      // #650: stop the keybindings.json watcher and its timers.
+      stopKeybindingsLiveReload?.();
       // #625: stop the Japanese lint Worker (never rejects).
       await releaseJapaneseLintWorker();
       await disposeJapaneseMachineCheck();
@@ -366,13 +392,26 @@ app.whenReady().then(async () => {
     systemTerminationSource: powerMonitor
   });
 
-  await installApplicationMenu({
+  // #645: the user's keybindings.json overlaid on the defaults, read once at
+  // startup (no live reload). A missing / malformed file falls back to the
+  // defaults; diagnostics are available to the renderer over IPC.
+  const loadedKeybindings = await loadKeybindings(
+    nodePlatformToPergamumPlatform(process.platform)
+  );
+  setStartupKeybindings(loadedKeybindings);
+  const applicationMenuOptions = (
+    keybindingRows: readonly ResolvedKeybinding[]
+  ) => ({
     getMainWindow: () => mainWindow,
     requestApplicationQuit: () => {
       windowLifecycleController?.requestApplicationQuit();
     },
-    debugLogger
+    debugLogger,
+    keybindingRows
   });
+  await installApplicationMenu(
+    applicationMenuOptions(loadedKeybindings.effective.keybindings)
+  );
   registerApplicationMenuIpc();
   registerDebugLogIpc(debugLogger);
   registerContextMenuIpc(debugLogger);
@@ -404,6 +443,34 @@ app.whenReady().then(async () => {
       )
   );
   registerSettingsIpc();
+  // The one runtime-apply path: a Keyboard Shortcuts save (#647) and an
+  // external reload of keybindings.json (#650) both rebuild the menu with
+  // the new accelerators through it.
+  const applyKeybindingsToMenu = async (
+    loaded: Awaited<ReturnType<typeof loadKeybindings>>
+  ): Promise<void> => {
+    await installApplicationMenu(
+      applicationMenuOptions(loaded.effective.keybindings)
+    );
+  };
+  registerKeybindingsIpc(process.platform, {
+    onKeybindingsApplied: applyKeybindingsToMenu
+  });
+  try {
+    const keybindingsDirectory = await ensureKeybindingsDirectory();
+    stopKeybindingsLiveReload = startKeybindingsLiveReload({
+      platform: nodePlatformToPergamumPlatform(process.platform),
+      directory: keybindingsDirectory,
+      applyToRuntime: applyKeybindingsToMenu,
+      notify: (payload) => {
+        if (mainWindow !== null && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(KEYBINDINGS_CHANNELS.changed, payload);
+        }
+      }
+    }).stop;
+  } catch {
+    // Without a watcher, edits to keybindings.json still apply after a restart.
+  }
   registerFontCacheIpc();
   registerJapaneseLintIpc();
   registerJapaneseMachineCheckIpc();

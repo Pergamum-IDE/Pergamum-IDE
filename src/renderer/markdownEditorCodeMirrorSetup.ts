@@ -38,7 +38,8 @@
  *    line") are dropped. ADR-0014 makes `Mod+]` / `Mod+[` the formal
  *    indent / outdent keybinding, but dispatched through a single
  *    Markdown-context-aware command (`indentCommands.ts`'s
- *    `editorIndentKeymap`), not CodeMirror's generic one. `Tab` /
+ *    `editorIndentKeybindingHandlers`, keys from the catalog), not
+ *    CodeMirror's generic one. `Tab` /
  *    `Shift-Tab` are untouched - neither `defaultKeymap` nor this base
  *    setup binds them (no `indentWithTab`), so they keep CodeMirror's own
  *    default of falling through to ordinary focus movement.
@@ -70,29 +71,47 @@ import { lintKeymap } from "@codemirror/lint";
 import { EditorState, type Extension } from "@codemirror/state";
 import { createEditorThemeExtension } from "./editorThemeExtension";
 import { createJapaneseLintExtension } from "./japaneseLint/japaneseLintGutterExtension";
-import { editorIndentKeymap, fencedCodeIndentUnitFacet } from "./indentCommands";
+import {
+  EDITOR_INDENT_COMMAND_IDS,
+  fencedCodeIndentUnitFacet
+} from "./indentCommands";
+import { listCommonDefaultKeys } from "../shared/keybindings";
 import type { FencedCodeIndentUnit } from "../shared/settings";
 
 /**
- * #424: `searchKeymap` bindings that open (or fall back to opening) the
+ * #424 / #641: `searchKeymap` bindings that open (or fall back to opening) the
  * native `@codemirror/search` panel. Filtered out of the base keymap so
- * Pergamum's own Find panel is the only Ctrl+F surface.
+ * Pergamum's own Find panel is the only Ctrl+F surface. The keys are the
+ * catalog keys of the commands that take them over: `editor.find.open`
+ * (Mod-f), `editor.find.next` (F3) and `glossary.entry.openFromSelection`
+ * (Mod-g).
+ *
+ * Deliberately NOT derived for every catalog key: a generic "drop any
+ * standard binding the catalog also uses" filter would remove bindings such as
+ * `Mod-i` (`selectParentSyntax`) that must keep working whenever a Pergamum
+ * handler declines. (`searchKeymap` carries Shift-F3 / Shift-Mod-g as the
+ * `shift` variant of its F3 / Mod-g bindings, so those go with them.)
  */
-const NATIVE_SEARCH_PANEL_KEYS: ReadonlySet<string> = new Set([
-  "Mod-f",
-  "F3",
-  "Mod-g"
-]);
+export const NATIVE_SEARCH_PANEL_KEYS: ReadonlySet<string> = new Set(
+  listCommonDefaultKeys([
+    "editor.find.open",
+    "editor.find.next",
+    "glossary.entry.openFromSelection"
+  ])
+);
 
 const searchKeymapWithoutPanelOpeners = searchKeymap.filter(
   (binding) => binding.key === undefined || !NATIVE_SEARCH_PANEL_KEYS.has(binding.key)
 );
 
 /**
- * #463: `defaultKeymap`'s own `Mod-[` / `Mod-]` (`indentLess` /
- * `indentMore`). Replaced by `editorIndentKeymap`'s context-aware commands.
+ * #463 / #641: `defaultKeymap`'s own `Mod-[` / `Mod-]` (`indentLess` /
+ * `indentMore`). Replaced by the context-aware `editor.indent` /
+ * `editor.outdent`, whose keys are the catalog keys.
  */
-const REPLACED_INDENT_KEYS: ReadonlySet<string> = new Set(["Mod-[", "Mod-]"]);
+export const REPLACED_INDENT_KEYS: ReadonlySet<string> = new Set(
+  listCommonDefaultKeys(EDITOR_INDENT_COMMAND_IDS)
+);
 
 const defaultKeymapWithoutIndentBindings = defaultKeymap.filter(
   (binding) => binding.key === undefined || !REPLACED_INDENT_KEYS.has(binding.key)
@@ -148,7 +167,8 @@ export function createMarkdownEditorBaseSetup(
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymapWithoutIndentBindings,
-      ...editorIndentKeymap,
+      // (#647: Mod-] / Mod-[ - editor.indent / editor.outdent - are run by the
+      // catalog-derived editor keymap dispatcher, not from here.)
       ...searchKeymapWithoutPanelOpeners,
       ...historyKeymap,
       ...foldKeymap,

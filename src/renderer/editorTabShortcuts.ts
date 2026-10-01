@@ -1,5 +1,11 @@
 import { useEffect, useRef } from "react";
 import type { DocumentTab } from "./openDocuments";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform } from "./platformModifier";
+import {
+  matchRendererShortcut,
+  rendererShortcutCommandIds
+} from "./keybindings/rendererShortcuts";
 import {
   orderedWorkspaceTabs,
   workspaceTabIdEquals,
@@ -102,17 +108,30 @@ export function shouldHandleTabSwitchShortcut(
     isComposing?: boolean;
     defaultPrevented?: boolean;
   },
-  isModalActive: boolean = isModalOrDialogActive(event.target)
+  isModalActive: boolean = isModalOrDialogActive(event.target),
+  platform: PergamumPlatform = getRuntimePlatform()
 ): TabSwitchDirection | null {
   if (event.defaultPrevented || event.isComposing) {
     return null;
   }
 
-  if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
-    return null;
-  }
-
-  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+  // #643: the keys come from the catalog (workspace.tabs.previous / .next):
+  // win32/linux Alt+Arrow; darwin Cmd+Option+Arrow (#636) - a bare
+  // Option+Arrow stays word movement on macOS.
+  const direction: TabSwitchDirection | null = matchRendererShortcut(
+    event,
+    rendererShortcutCommandIds.tabsPrevious,
+    platform
+  )
+    ? "previous"
+    : matchRendererShortcut(
+          event,
+          rendererShortcutCommandIds.tabsNext,
+          platform
+        )
+      ? "next"
+      : null;
+  if (direction === null) {
     return null;
   }
 
@@ -124,7 +143,7 @@ export function shouldHandleTabSwitchShortcut(
     return null;
   }
 
-  return event.key === "ArrowLeft" ? "previous" : "next";
+  return direction;
 }
 
 export interface UseTabSwitchShortcutsOptions {

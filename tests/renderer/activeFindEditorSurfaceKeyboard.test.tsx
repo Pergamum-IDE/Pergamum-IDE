@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { stubRuntimePlatform } from "./helpers/runtimePlatform";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { EditorView } from "@codemirror/view";
@@ -198,11 +199,16 @@ describe("EditorSurface — Ctrl+F / Ctrl+H open the active Find panel (#424 Sli
     expect(searchTab.getAttribute("aria-selected")).toBe("false");
   });
 
-  it("Mod+F (metaKey) also opens Search mode", () => {
-    renderEditorSurface();
-    keydownOnEditor({ key: "f", code: "KeyF", metaKey: true });
-    expect(findPanel()).not.toBeNull();
-    expect(modeTabs()[0].getAttribute("aria-selected")).toBe("true");
+  it("Mod+F (Cmd+F on darwin) also opens Search mode", () => {
+    const restorePlatform = stubRuntimePlatform("macos");
+    try {
+      renderEditorSurface();
+      keydownOnEditor({ key: "f", code: "KeyF", metaKey: true });
+      expect(findPanel()).not.toBeNull();
+      expect(modeTabs()[0].getAttribute("aria-selected")).toBe("true");
+    } finally {
+      restorePlatform();
+    }
   });
 
   it("the panel STAYS open across follow-up renders (not closed by an effect)", () => {

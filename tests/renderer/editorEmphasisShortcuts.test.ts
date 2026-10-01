@@ -3,10 +3,16 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createEmphasisMarkKeymapExtension,
-  isEmphasisMarkShortcutTrigger,
+  createEmphasisMarkKeybindingHandlers,
   type MarkdownEditorEmphasisMarkShortcutConfig
 } from "../../src/renderer/editorEmphasisShortcuts";
+import { handlerFires, keymapFor } from "./helpers/editorKeymapHarness";
+
+const EMPHASIS_COMMAND = "editor.markdown.insertEmphasisMark";
+const isEmphasisMarkShortcutTrigger = (
+  event: KeyboardEvent,
+  platform?: "darwin" | "win32" | "linux"
+): boolean => handlerFires(EMPHASIS_COMMAND, event, platform);
 
 let view: EditorView | null = null;
 
@@ -34,7 +40,10 @@ function createView(input: {
         : undefined,
       extensions: [
         EditorState.readOnly.of(input.readOnly ?? false),
-        createEmphasisMarkKeymapExtension({ getConfig: () => input.config })
+        keymapFor({
+          handlers: createEmphasisMarkKeybindingHandlers(() => input.config),
+          commandIds: [EMPHASIS_COMMAND]
+        })
       ]
     })
   });
@@ -55,11 +64,16 @@ function periodKeydown(overrides: Partial<KeyboardEventInit> = {}): KeyboardEven
 
 describe("isEmphasisMarkShortcutTrigger", () => {
   it("returns true for Ctrl+.", () => {
-    expect(periodKeydown({ ctrlKey: true })).satisfies(isEmphasisMarkShortcutTrigger);
+    expect(isEmphasisMarkShortcutTrigger(periodKeydown({ ctrlKey: true }))).toBe(true);
   });
 
-  it("returns true for Cmd+.", () => {
-    expect(periodKeydown({ ctrlKey: false, metaKey: true })).satisfies(isEmphasisMarkShortcutTrigger);
+  it("returns true on darwin for Cmd+.", () => {
+    expect(isEmphasisMarkShortcutTrigger(periodKeydown({ ctrlKey: false, metaKey: true }), "darwin")).toBe(true);
+    // Ctrl alone is an OS text-editing key on darwin and is not consumed.
+    expect(isEmphasisMarkShortcutTrigger(periodKeydown({ ctrlKey: true }), "darwin")).toBe(false);
+    // Cmd alone is not Mod on win32 / linux.
+    expect(isEmphasisMarkShortcutTrigger(periodKeydown({ ctrlKey: false, metaKey: true }), "win32")).toBe(false);
+    expect(isEmphasisMarkShortcutTrigger(periodKeydown({ ctrlKey: false, metaKey: true }), "linux")).toBe(false);
   });
 
   it("returns false if Alt or Shift is pressed", () => {
@@ -77,7 +91,7 @@ describe("isEmphasisMarkShortcutTrigger", () => {
   });
 });
 
-describe("createEmphasisMarkKeymapExtension", () => {
+describe("Emphasis mark shortcut via the catalog-derived editor keymap", () => {
   it("does nothing when config is null", () => {
     const v = createView({ config: null, selection: { anchor: 0, head: 5 } });
     const event = periodKeydown();

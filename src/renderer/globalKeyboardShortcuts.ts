@@ -18,33 +18,26 @@
  */
 
 import { useEffect, useRef } from "react";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform } from "./platformModifier";
+import type { CatalogKeyEvent } from "./keybindings/catalogKeyMatch";
+import { matchRendererShortcut } from "./keybindings/rendererShortcuts";
 import {
   isEditableTextInputTarget,
   isModalOrDialogActive
 } from "./editorTabShortcuts";
 
-export interface GlobalKeyboardShortcutMatch {
-  /** Compared against `KeyboardEvent.key`, case-insensitively. */
-  readonly key: string;
-  /** Matches either Ctrl (Windows/Linux) or Cmd (macOS). */
-  readonly ctrlOrCmd?: boolean;
-  readonly shift?: boolean;
-  readonly alt?: boolean;
-  /**
-   * #556: skips the `shift` / `alt` checks above and matches on `key` alone
-   * (plus `ctrlOrCmd`). Needed for symbol shortcuts (`#`, `@`, `:`, `%`)
-   * whose producing keystroke legitimately varies by keyboard layout — e.g.
-   * `#` is Shift+3 on a US layout, so a strict `shift: false` check would
-   * never match it. The character itself identifies the shortcut, not which
-   * modifiers produced it.
-   */
-  readonly ignoreShiftAndAltState?: boolean;
-}
-
 export interface GlobalKeyboardShortcut {
   /** Unique, stable identifier — for debugging only (not matched on). */
   readonly id: string;
-  readonly match: GlobalKeyboardShortcutMatch;
+  /**
+   * #643: the catalog command whose key triggers this shortcut (one of
+   * `rendererShortcutCommandIds`). The key itself comes from the keybinding
+   * catalog for the runtime platform; a platform where the catalog key is
+   * `null` (e.g. the Command Palette `#` / `%` on darwin) has no binding, so
+   * the shortcut never fires there.
+   */
+  readonly commandId: string;
   readonly handler: () => void;
   /** Default `true`: stay silent while an editable text input (other than
    *  the CodeMirror editor content itself) has focus. */
@@ -54,50 +47,17 @@ export interface GlobalKeyboardShortcut {
 }
 
 /**
- * #556: on Windows, AltGr (used to type `@` / `#` / etc. on many European
- * keyboard layouts, e.g. German AltGr+Q for `@`) is reported by Chromium as
- * a synthetic `ctrlKey: true, altKey: true` combination — indistinguishable
- * from a real Ctrl+Alt chord by those flags alone. Without this check, a
- * `ctrlOrCmd`-requiring shortcut would misfire every time such a layout
- * types that character normally (e.g. inside the CodeMirror editor, which
- * `isEditableTextInputTarget` deliberately does not suppress).
+ * Whether `event` triggers the catalog command `commandId` as a global
+ * shortcut (see `matchRendererShortcut` for the matching rules: Mod is
+ * exactly Cmd / Ctrl, AltGraph is not Ctrl+Alt, symbol keys ignore
+ * Shift / Alt, composition never matches).
  */
-function isAltGraphEvent(event: {
-  readonly getModifierState?: (key: string) => boolean;
-}): boolean {
-  return (
-    typeof event.getModifierState === "function" &&
-    event.getModifierState("AltGraph")
-  );
-}
-
 export function matchesGlobalKeyboardShortcut(
-  event: {
-    readonly key: string;
-    readonly ctrlKey: boolean;
-    readonly metaKey: boolean;
-    readonly shiftKey: boolean;
-    readonly altKey: boolean;
-    readonly getModifierState?: (key: string) => boolean;
-  },
-  match: GlobalKeyboardShortcutMatch
+  event: CatalogKeyEvent,
+  commandId: string,
+  platform: PergamumPlatform = getRuntimePlatform()
 ): boolean {
-  const ctrlOrCmd = event.ctrlKey || event.metaKey;
-  if (Boolean(match.ctrlOrCmd) !== ctrlOrCmd) {
-    return false;
-  }
-  if (match.ctrlOrCmd && isAltGraphEvent(event)) {
-    return false;
-  }
-  if (!match.ignoreShiftAndAltState) {
-    if (Boolean(match.shift) !== event.shiftKey) {
-      return false;
-    }
-    if (Boolean(match.alt) !== event.altKey) {
-      return false;
-    }
-  }
-  return event.key.toLowerCase() === match.key.toLowerCase();
+  return matchRendererShortcut(event, commandId, platform);
 }
 
 /**
@@ -120,7 +80,7 @@ export function useGlobalKeyboardShortcuts(
       }
 
       for (const shortcut of shortcutsRef.current) {
-        if (!matchesGlobalKeyboardShortcut(event, shortcut.match)) {
+        if (!matchesGlobalKeyboardShortcut(event, shortcut.commandId)) {
           continue;
         }
 

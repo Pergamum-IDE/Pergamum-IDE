@@ -11,6 +11,15 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { resolveDefaultKeybindings } from "../../src/shared/keybindings";
+
+/** The catalog's win32 key for a command (the shortcut key is catalog-derived, #643). */
+function catalogKey(commandId: string): string | null | undefined {
+  return resolveDefaultKeybindings("win32").find(
+    (binding) => binding.command === commandId
+  )?.key;
+}
+
 
 function globalShortcutsBlock(): string {
   const source = readFileSync("src/renderer/App.tsx", "utf8");
@@ -33,7 +42,10 @@ describe("direct Command Palette mode shortcut wiring (source-level assertions, 
     const block = globalShortcutsBlock();
 
     expect(block).toContain('id: "openCommandPaletteFileMode"');
-    expect(block).toContain('match: { key: "o", ctrlOrCmd: true }');
+    expect(block).toContain(
+      "commandId: rendererShortcutCommandIds.commandPaletteFile"
+    );
+    expect(catalogKey("workbench.commandPalette.file.open")).toBe("Mod-o");
     expect(block).toContain('openCommandPaletteWithPrefix("")');
   });
 
@@ -41,9 +53,12 @@ describe("direct Command Palette mode shortcut wiring (source-level assertions, 
     const block = globalShortcutsBlock();
 
     expect(block).toContain('id: "openCommandPaletteHeadingJump"');
+    // #636 / #643: the key is the catalog's Mod-#; it is null on darwin (Cmd+Shift+3
+    // is a system screenshot key), so nothing is registered there.
     expect(block).toContain(
-      'match: { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true }'
+      "commandId: rendererShortcutCommandIds.commandPaletteHeading"
     );
+    expect(catalogKey("workbench.commandPalette.heading.open")).toBe("Mod-#");
     expect(block).toContain('openCommandPaletteWithPrefix("#")');
   });
 
@@ -52,8 +67,9 @@ describe("direct Command Palette mode shortcut wiring (source-level assertions, 
 
     expect(block).toContain('id: "openCommandPaletteGlossaryJump"');
     expect(block).toContain(
-      'match: { key: "@", ctrlOrCmd: true, ignoreShiftAndAltState: true }'
+      "commandId: rendererShortcutCommandIds.commandPaletteGlossary"
     );
+    expect(catalogKey("workbench.commandPalette.glossary.open")).toBe("Mod-@");
     expect(block).toContain('openCommandPaletteWithPrefix("@")');
   });
 
@@ -62,8 +78,9 @@ describe("direct Command Palette mode shortcut wiring (source-level assertions, 
 
     expect(block).toContain('id: "openCommandPaletteLineJump"');
     expect(block).toContain(
-      'match: { key: ":", ctrlOrCmd: true, ignoreShiftAndAltState: true }'
+      "commandId: rendererShortcutCommandIds.commandPaletteLine"
     );
+    expect(catalogKey("workbench.commandPalette.line.open")).toBe("Mod-:");
     expect(block).toContain('openCommandPaletteWithPrefix(":")');
   });
 
@@ -71,9 +88,12 @@ describe("direct Command Palette mode shortcut wiring (source-level assertions, 
     const block = globalShortcutsBlock();
 
     expect(block).toContain('id: "openCommandPaletteProjectSearch"');
+    // #636 / #643: the catalog's Mod-%; null on darwin (Cmd+Shift+5 is a system
+    // screenshot key).
     expect(block).toContain(
-      'match: { key: "%", ctrlOrCmd: true, ignoreShiftAndAltState: true }'
+      "commandId: rendererShortcutCommandIds.commandPaletteProjectSearch"
     );
+    expect(catalogKey("workbench.commandPalette.projectSearch.open")).toBe("Mod-%");
     expect(block).toContain('openCommandPaletteWithPrefix("%")');
   });
 
@@ -88,7 +108,8 @@ describe("direct Command Palette mode shortcut wiring (source-level assertions, 
     const block = globalShortcutsBlock();
 
     expect(block).toContain(
-      'match: { key: "p", ctrlOrCmd: true, shift: true }'
+      "commandId: rendererShortcutCommandIds.previewToggle"
     );
+    expect(catalogKey("editor.preview.toggle")).toBe("Mod-Shift-p");
   });
 });

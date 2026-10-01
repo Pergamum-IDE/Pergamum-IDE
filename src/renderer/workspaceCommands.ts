@@ -19,6 +19,7 @@ export type WorkspaceFocusCommandId =
 export interface WorkspaceCommandController {
   focusSidebarMode(mode: SidebarMode): void;
   openApplicationSettings(): void;
+  openKeyboardShortcuts(): void;
   showResumeHub(): void;
   canShowResumeHub(): boolean;
 }
@@ -36,6 +37,8 @@ export interface WorkspaceCommandTitles {
   focusDocumentMetricsDescription: string;
   openApplicationSettings: string;
   openApplicationSettingsDescription: string;
+  openKeyboardShortcuts: string;
+  openKeyboardShortcutsDescription: string;
   showResumeHub: string;
   showResumeHubDescription: string;
 }
@@ -71,6 +74,10 @@ export function createWorkspaceCommandTitles(
     ),
     openApplicationSettingsDescription: translate(
       "command.workspace.applicationSettings.open.description"
+    ),
+    openKeyboardShortcuts: translate("command.workspace.keyboardShortcuts.open"),
+    openKeyboardShortcutsDescription: translate(
+      "command.workspace.keyboardShortcuts.open.description"
     ),
     showResumeHub: translate("command.workbench.showResumeHub"),
     showResumeHubDescription: translate(
@@ -159,6 +166,16 @@ export function createWorkspaceCommands(
       paletteOrder: 110,
       execute: () => {
         controller.openApplicationSettings();
+      }
+    },
+    {
+      id: workspaceCommandIds.openKeyboardShortcuts,
+      title: titles.openKeyboardShortcuts,
+      description: titles.openKeyboardShortcutsDescription,
+      category: "file",
+      paletteOrder: 105,
+      execute: () => {
+        controller.openKeyboardShortcuts();
       }
     },
     {

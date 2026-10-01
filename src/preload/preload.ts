@@ -13,6 +13,7 @@ import {
   GLOSSARY_CHANNELS,
   IMAGE_ATTACHMENT_CHANNELS,
   IMAGE_INSERTION_CHANNELS,
+  KEYBINDINGS_CHANNELS,
   MARKDOWN_IMAGE_LINK_DIAGNOSTICS_CHANNELS,
   LIFECYCLE_CHANNELS,
   PROJECT_CHANNELS,
@@ -229,6 +230,46 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(SETTINGS_CHANNELS.saveSettings, settings),
     exportJson: (request) =>
       ipcRenderer.invoke(SETTINGS_CHANNELS.exportJson, request)
+  },
+  keybindings: {
+    getUserKeybindings: () =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.getUserKeybindings),
+    getEffectiveKeybindings: () =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.getEffectiveKeybindings),
+    saveUserKeybindings: (entries) =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.saveUserKeybindings, entries),
+    getKeyboardShortcutItems: () =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.getKeyboardShortcutItems),
+    openKeybindingsJsonLocation: () =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.openKeybindingsJsonLocation),
+    applyKeybindingChange: (request) =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.applyKeybindingChange, request),
+    resetAllKeybindings: () =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.resetAllKeybindings),
+    setCaptureMode: (enabled) =>
+      ipcRenderer.invoke(KEYBINDINGS_CHANNELS.setCaptureMode, enabled),
+    onCaptureInput: (listener) => {
+      const handler = (_event: unknown, input: unknown): void => {
+        if (typeof input === "object" && input !== null) {
+          listener(input as Parameters<typeof listener>[0]);
+        }
+      };
+      ipcRenderer.on(KEYBINDINGS_CHANNELS.captureInput, handler);
+      return () => {
+        ipcRenderer.removeListener(KEYBINDINGS_CHANNELS.captureInput, handler);
+      };
+    },
+    onKeybindingsChanged: (listener) => {
+      const handler = (_event: unknown, payload: unknown): void => {
+        if (typeof payload === "object" && payload !== null) {
+          listener(payload as Parameters<typeof listener>[0]);
+        }
+      };
+      ipcRenderer.on(KEYBINDINGS_CHANNELS.changed, handler);
+      return () => {
+        ipcRenderer.removeListener(KEYBINDINGS_CHANNELS.changed, handler);
+      };
+    }
   },
   session: {
     persist: (snapshot) =>

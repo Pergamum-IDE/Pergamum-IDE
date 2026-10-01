@@ -117,6 +117,16 @@ import type {
 } from "./recoveryCandidate";
 import type { RendererSessionSnapshot, SessionRecord } from "./session";
 import type { ColdStartLaunchTarget } from "./sessionRestore";
+import type {
+  KeybindingDiagnostic,
+  KeyboardShortcutRow,
+  KeybindingEditConflict,
+  KeybindingEditFailureReason,
+  KeybindingEditRequest,
+  PergamumPlatform,
+  ResolvedKeybinding,
+  UserKeybindingEntry
+} from "./keybindings";
 
 export type { AppPlatform } from "./platform";
 export type {
@@ -379,6 +389,122 @@ export const SETTINGS_CHANNELS = {
   saveSettings: "settings:saveSettings",
   exportJson: "settings:exportJson"
 } as const;
+
+/**
+ * #645: user keybindings (`keybindings.json` next to Application Settings).
+ * The renderer never sees the file path; results are plain serializable data.
+ */
+export const KEYBINDINGS_CHANNELS = {
+  getUserKeybindings: "keybindings:getUserKeybindings",
+  getEffectiveKeybindings: "keybindings:getEffectiveKeybindings",
+  saveUserKeybindings: "keybindings:saveUserKeybindings",
+  getKeyboardShortcutItems: "keybindings:getKeyboardShortcutItems",
+  openKeybindingsJsonLocation: "keybindings:openKeybindingsJsonLocation",
+  applyKeybindingChange: "keybindings:applyKeybindingChange",
+  /** #652: replaces keybindings.json with [] (also recovers a broken file). */
+  resetAllKeybindings: "keybindings:resetAllKeybindings",
+  setCaptureMode: "keybindings:setCaptureMode",
+  /** main -> renderer: a key pressed while the capture mode is on. */
+  captureInput: "keybindings:captureInput",
+  /** main -> renderer (#650): keybindings.json was changed from outside. */
+  changed: "keybindings:changed"
+} as const;
+
+/**
+ * #650: sent after an external edit of keybindings.json was reloaded. It only
+ * says THAT something changed (no path, no file content): the renderer
+ * re-fetches the effective keybindings and the shortcut list over the
+ * existing IPC.
+ */
+export interface KeybindingsChangedPayload {
+  /** Increases with every notification (this app run). */
+  readonly version: number;
+  /** How many diagnostics the applied keybindings now carry. */
+  readonly diagnosticsCount: number;
+}
+
+/**
+ * #647: one key press forwarded by the main process while the Keyboard
+ * Shortcuts capture dialog is open. Only the key identity and modifiers; never
+ * text, selection or paths.
+ */
+export interface KeybindingCaptureInput {
+  readonly key: string;
+  readonly code: string;
+  readonly ctrlKey: boolean;
+  readonly metaKey: boolean;
+  readonly altKey: boolean;
+  readonly shiftKey: boolean;
+  readonly repeat: boolean;
+}
+
+export interface SetKeybindingCaptureModeResult {
+  readonly ok: boolean;
+}
+
+export type ApplyKeybindingChangeFailureReason =
+  | KeybindingEditFailureReason
+  | "fileInvalid"
+  | "saveFailed";
+
+export interface ApplyKeybindingChangeResult {
+  readonly ok: boolean;
+  readonly platform: PergamumPlatform;
+  /** On success: the refreshed list, the new effective keybindings, diagnostics. */
+  readonly items?: readonly KeyboardShortcutRow[];
+  readonly keybindings?: readonly ResolvedKeybinding[];
+  readonly diagnostics: readonly KeybindingDiagnostic[];
+  /** #652: on success, whether Reset All still has something to reset. */
+  readonly resettable?: boolean;
+  /** On failure: nothing was saved. */
+  readonly failure?: {
+    readonly reason: ApplyKeybindingChangeFailureReason;
+    readonly conflict?: KeybindingEditConflict;
+  };
+}
+
+/**
+ * #646: what the Keyboard Shortcuts screen shows - the keybindings IN EFFECT
+ * (applied at startup) and the diagnostics from that same load. No path.
+ */
+export interface GetKeyboardShortcutItemsResult {
+  readonly platform: PergamumPlatform;
+  readonly items: readonly KeyboardShortcutRow[];
+  readonly diagnostics: readonly KeybindingDiagnostic[];
+  /**
+   * #652: whether "Reset All" is available: there are user entries, or the
+   * file has diagnostics (a broken file must stay recoverable).
+   */
+  readonly resettable: boolean;
+}
+
+export interface OpenKeybindingsJsonLocationResult {
+  readonly ok: boolean;
+}
+
+export interface GetUserKeybindingsResult {
+  readonly entries: readonly UserKeybindingEntry[];
+  readonly diagnostics: readonly KeybindingDiagnostic[];
+}
+
+export interface GetEffectiveKeybindingsResult {
+  /** The main process' platform the keybindings were resolved for. */
+  readonly platform: PergamumPlatform;
+  readonly keybindings: readonly ResolvedKeybinding[];
+  /** File parse diagnostics followed by overlay diagnostics. */
+  readonly diagnostics: readonly KeybindingDiagnostic[];
+}
+
+export type SaveUserKeybindingsResult =
+  | {
+      readonly ok: true;
+      readonly diagnostics: readonly KeybindingDiagnostic[];
+    }
+  | {
+      /** Nothing was written; `diagnostics` holds the errors. */
+      readonly ok: false;
+      readonly diagnostics: readonly KeybindingDiagnostic[];
+    };
 
 export const IMAGE_ATTACHMENT_CHANNELS = {
   save: "imageAttachment:save"
@@ -1532,6 +1658,43 @@ export interface PergamumApi {
     exportJson: (
       request: ExportSettingsJsonRequest
     ) => Promise<ExportSettingsJsonResult>;
+  };
+  /**
+   * #645: user keybindings foundation for the future Keyboard Shortcuts UI.
+   * Keybindings are applied at startup only (no live reload of edits).
+   */
+  keybindings: {
+    getUserKeybindings: () => Promise<GetUserKeybindingsResult>;
+    getEffectiveKeybindings: () => Promise<GetEffectiveKeybindingsResult>;
+    saveUserKeybindings: (
+      entries: readonly UserKeybindingEntry[]
+    ) => Promise<SaveUserKeybindingsResult>;
+    /** #646: the read-only Keyboard Shortcuts screen's data. */
+    getKeyboardShortcutItems: () => Promise<GetKeyboardShortcutItemsResult>;
+    /** #646: opens the folder holding keybindings.json in the OS file manager. */
+    openKeybindingsJsonLocation: () => Promise<OpenKeybindingsJsonLocationResult>;
+    /** #647: one change / unbind / reset; validated and saved in main. */
+    applyKeybindingChange: (
+      request: KeybindingEditRequest
+    ) => Promise<ApplyKeybindingChangeResult>;
+    /**
+     * #652: Reset All - saves [] as keybindings.json, even over a broken file.
+     * Changes nothing when the save fails.
+     */
+    resetAllKeybindings: () => Promise<ApplyKeybindingChangeResult>;
+    /**
+     * #647: while on, main swallows every key press (so no menu accelerator or
+     * command fires) and forwards it via `onCaptureInput`.
+     */
+    setCaptureMode: (enabled: boolean) => Promise<SetKeybindingCaptureModeResult>;
+    /** Returns the unsubscribe function. */
+    onCaptureInput: (
+      listener: (input: KeybindingCaptureInput) => void
+    ) => () => void;
+    /** #650: an external edit of keybindings.json was reloaded. Returns the unsubscribe function. */
+    onKeybindingsChanged: (
+      listener: (payload: KeybindingsChangedPayload) => void
+    ) => () => void;
   };
   /**
    * #272: continuous Session persistence (the "write it out" side only —

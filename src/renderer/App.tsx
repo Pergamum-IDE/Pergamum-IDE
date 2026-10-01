@@ -213,6 +213,12 @@ import { DEFAULT_ZOOM_FACTOR } from "../shared/zoom";
 import { StatusBarZoomControls } from "./components/StatusBarZoomControls";
 import { useTabSwitchShortcuts } from "./editorTabShortcuts";
 import { useGlobalKeyboardShortcuts } from "./globalKeyboardShortcuts";
+import { rendererShortcutCommandIds } from "./keybindings/rendererShortcuts";
+import { useReloadKeyFallback } from "./reloadKeyFallback";
+import {
+  publishTabCaptureToggle,
+  unpublishTabCaptureToggle
+} from "./tabCaptureKeymapExtension";
 import { type WorkspaceTab } from "./workspaceTabs";
 import { ChoiceDialog } from "./dialog/ChoiceDialog";
 import { ConfirmDialog } from "./dialog/ConfirmDialog";
@@ -592,6 +598,7 @@ import {
 } from "./projectSettingsCommands";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { ResumeHub } from "./ResumeHub";
+import { KeyboardShortcutsScreen } from "./KeyboardShortcutsScreen";
 import {
   shouldShowFullScreenWelcomeSurface,
   shouldShowWelcomeSurface
@@ -1439,6 +1446,10 @@ export function App(): JSX.Element {
   }
 
   const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
+  // #646: the read-only Keyboard Shortcuts special tab. App-level (not
+  // project-scoped) like Application Settings; explicitly selected only.
+  const [isKeyboardShortcutsTabOpen, setIsKeyboardShortcutsTabOpen] =
+    useState(false);
   // #375: the Glossary Tag Manager special tab. Project-scoped (tags are
   // project-owned) — closed on project close. Opening / activating it NEVER
   // opens the "new tag" dialog — that is only the "Add tag" button.
@@ -2185,6 +2196,26 @@ export function App(): JSX.Element {
   } = useApplicationSettings();
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  // #636: `editor.tabCapture.toggle` (Ctrl+M / macOS Shift+Option+M) flips the
+  // existing `editor.captureTabInEditor` setting through the normal
+  // settings-save path (`changeSettings`), never by writing JSON directly.
+  const changeSettingsRef = useRef<
+    (next: SaveApplicationSettingsRequest) => Promise<boolean>
+  >(async () => false);
+  useEffect(() => {
+    const toggle = (): void => {
+      const current = settingsRef.current;
+      void changeSettingsRef.current({
+        ...current,
+        editor: {
+          ...current.editor,
+          captureTabInEditor: !current.editor.captureTabInEditor
+        }
+      });
+    };
+    publishTabCaptureToggle(toggle);
+    return () => unpublishTabCaptureToggle(toggle);
+  }, []);
   // #625: a stable fingerprint of the Japanese lint rule settings. When the
   // user changes a rule or threshold it changes, which makes the open
   // editor re-run the instant check with the new rules right away.
@@ -2316,6 +2347,9 @@ export function App(): JSX.Element {
   // #538: the Resume Hub special tab — active when opened as a special tab
   const isResumeHubTabActive =
     isResumeHubTabOpen && activeSpecialTabId === "resumeHub";
+  // #646: the Keyboard Shortcuts special tab - same "explicitly selected" rule.
+  const isKeyboardShortcutsTabActive =
+    isKeyboardShortcutsTabOpen && activeSpecialTabId === "keyboardShortcuts";
   // When the Settings tab is the only open tab (zero document tabs), it is the
   // active surface even though `activeSpecialTabId` may not have been set —
   // but never while a Glossary management tab, the Project Settings tab, the
@@ -2327,6 +2361,7 @@ export function App(): JSX.Element {
     !isDebugLogTabActive &&
     !isProjectSettingsTabActive &&
     !isResumeHubTabActive &&
+    !isKeyboardShortcutsTabActive &&
     (activeSpecialTabId === "settings" || !hasOpenDocumentTab);
   // A full-editor-area special tab (Settings, Project Settings, a Glossary
   // management tab, the Debug Log tab, or the Resume Hub tab) is showing instead of an editor.
@@ -2338,7 +2373,8 @@ export function App(): JSX.Element {
     isGlossaryTagManagerTabActive ||
     isGlossaryEntryManagerTabActive ||
     isDebugLogTabActive ||
-    isResumeHubTabActive;
+    isResumeHubTabActive ||
+    isKeyboardShortcutsTabActive;
 
   const activeEditableSurfaceContent = useMemo(() => {
     if (isEditorAreaSpecialTabActive || !currentEditor) {
@@ -4082,6 +4118,9 @@ export function App(): JSX.Element {
         openApplicationSettings: () => {
           openSettingsTab();
         },
+        openKeyboardShortcuts: () => {
+          openKeyboardShortcutsTab();
+        },
         showResumeHub: () => {
           showResumeHubCommandRef.current();
         },
@@ -4316,12 +4355,14 @@ export function App(): JSX.Element {
     openDocumentsState,
     isSettingsTabOpen,
     isDebugLogTabOpen,
+    isKeyboardShortcutsTabOpen,
     projectIsOpen: project !== null
   });
   const shouldShowWelcome = shouldShowWelcomeSurface({
     openDocumentsState,
     isSettingsTabOpen,
-    isDebugLogTabOpen
+    isDebugLogTabOpen,
+    isKeyboardShortcutsTabOpen
   });
   const activeActivityMode = resolveActiveActivityMode(
     sidebarMode,
@@ -4340,6 +4381,14 @@ export function App(): JSX.Element {
         kind: "special",
         id: "settings",
         title: translate("settings.application.title")
+      });
+    }
+
+    if (isKeyboardShortcutsTabOpen) {
+      list.push({
+        kind: "special",
+        id: "keyboardShortcuts",
+        title: translate("keyboardShortcuts.title")
       });
     }
 
@@ -4386,6 +4435,7 @@ export function App(): JSX.Element {
     return list;
   }, [
     isSettingsTabOpen,
+    isKeyboardShortcutsTabOpen,
     isProjectSettingsTabOpen,
     isGlossaryTagManagerTabOpen,
     isGlossaryEntryManagerTabOpen,
@@ -4413,11 +4463,13 @@ export function App(): JSX.Element {
           ? specialWorkspaceTabId("projectSettings")
           : isDebugLogTabActive
             ? specialWorkspaceTabId("debugLog")
-            : isSettingsTabActive
-              ? specialWorkspaceTabId("settings")
-              : openDocumentsState.activeDocumentId
-                ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
-                : undefined;
+            : isKeyboardShortcutsTabActive
+              ? specialWorkspaceTabId("keyboardShortcuts")
+              : isSettingsTabActive
+                ? specialWorkspaceTabId("settings")
+                : openDocumentsState.activeDocumentId
+                  ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
+                  : undefined;
 
   // #355 → #354: "Select in File Explorer" (and every other tab context-menu
   // command) now dispatches through `handleTabAction` below, defined after
@@ -5204,6 +5256,12 @@ export function App(): JSX.Element {
     setActiveSpecialTabId("settings");
   }
 
+  // #646: open (or re-activate) the read-only Keyboard Shortcuts tab.
+  function openKeyboardShortcutsTab(): void {
+    setIsKeyboardShortcutsTabOpen(true);
+    setActiveSpecialTabId("keyboardShortcuts");
+  }
+
   // #396: open (or re-activate) the Project Settings special tab. Opening it
   // again just activates the existing one — never a duplicate tab. Project-scoped,
   // so no-op if no project is open.
@@ -5259,6 +5317,10 @@ export function App(): JSX.Element {
       setActiveSpecialTabId(tabId);
     }
 
+    if (tabId === "keyboardShortcuts" && isKeyboardShortcutsTabOpen) {
+      setActiveSpecialTabId(tabId);
+    }
+
     if (tabId === "projectSettings" && isProjectSettingsTabOpen) {
       setActiveSpecialTabId(tabId);
     }
@@ -5291,6 +5353,8 @@ export function App(): JSX.Element {
   }
 
   // #480: Alt+Left / Alt+Right tab switching shortcuts.
+  // #644: an unhandled reload key never falls through to Chromium's reload.
+  useReloadKeyFallback();
   useTabSwitchShortcuts({
     tabs,
     specialTabs,
@@ -5322,7 +5386,7 @@ export function App(): JSX.Element {
   useGlobalKeyboardShortcuts([
     {
       id: "toggleMarkdownSyntaxChecker",
-      match: { key: "c", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.toggleSyntaxChecker,
       handler: () => {
         if (canUseMarkdownSyntaxChecker) {
           handleToggleMarkdownSyntaxChecker();
@@ -5331,7 +5395,7 @@ export function App(): JSX.Element {
     },
     {
       id: "insertImage",
-      match: { key: "i", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.imageInsert,
       handler: () => {
         if (canInsertImage) {
           void handleInsertImage(null);
@@ -5340,7 +5404,7 @@ export function App(): JSX.Element {
     },
     {
       id: "togglePreview",
-      match: { key: "p", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.previewToggle,
       handler: () => {
         if (isPreviewEligible) {
           handleTogglePreviewVisible();
@@ -5349,27 +5413,27 @@ export function App(): JSX.Element {
     },
     {
       id: "openCommandPaletteFileMode",
-      match: { key: "o", ctrlOrCmd: true },
+      commandId: rendererShortcutCommandIds.commandPaletteFile,
       handler: () => openCommandPaletteWithPrefix("")
     },
     {
       id: "openCommandPaletteHeadingJump",
-      match: { key: "#", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      commandId: rendererShortcutCommandIds.commandPaletteHeading,
       handler: () => openCommandPaletteWithPrefix("#")
     },
     {
       id: "openCommandPaletteGlossaryJump",
-      match: { key: "@", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      commandId: rendererShortcutCommandIds.commandPaletteGlossary,
       handler: () => openCommandPaletteWithPrefix("@")
     },
     {
       id: "openCommandPaletteLineJump",
-      match: { key: ":", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      commandId: rendererShortcutCommandIds.commandPaletteLine,
       handler: () => openCommandPaletteWithPrefix(":")
     },
     {
       id: "openCommandPaletteProjectSearch",
-      match: { key: "%", ctrlOrCmd: true, ignoreShiftAndAltState: true },
+      commandId: rendererShortcutCommandIds.commandPaletteProjectSearch,
       handler: () => openCommandPaletteWithPrefix("%")
     },
     // #558: pane toggle shortcuts. Each calls `handleActivityBarModeClick`
@@ -5380,22 +5444,22 @@ export function App(): JSX.Element {
     // in the shortcut handler itself.
     {
       id: "toggleFileExplorer",
-      match: { key: "e", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.toggleFiles,
       handler: () => handleActivityBarModeClick("files")
     },
     {
       id: "toggleGlossaryPane",
-      match: { key: "g", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.toggleGlossary,
       handler: () => handleActivityBarModeClick("glossary")
     },
     {
       id: "toggleDocumentMap",
-      match: { key: "m", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.toggleDocumentMap,
       handler: () => handleActivityBarModeClick("documentMap")
     },
     {
       id: "toggleDocumentMetrics",
-      match: { key: "t", ctrlOrCmd: true, shift: true },
+      commandId: rendererShortcutCommandIds.toggleDocumentMetrics,
       handler: () => handleActivityBarModeClick("documentMetrics")
     }
   ]);
@@ -5403,6 +5467,14 @@ export function App(): JSX.Element {
   function closeSpecialTab(tabId: SpecialTabId): void {
     if (tabId === "settings") {
       setIsSettingsTabOpen(false);
+      setActiveSpecialTabId((current) =>
+        current === tabId ? null : current
+      );
+      return;
+    }
+
+    if (tabId === "keyboardShortcuts") {
+      setIsKeyboardShortcutsTabOpen(false);
       setActiveSpecialTabId((current) =>
         current === tabId ? null : current
       );
@@ -12314,6 +12386,7 @@ export function App(): JSX.Element {
   // below. `changeSettings` itself keeps its original, simpler job: save,
   // and report success/failure — it returns whether the save succeeded so
   // the blur handler can skip the restart check after a failed save.
+  changeSettingsRef.current = changeSettings;
   async function changeSettings(
     nextSettings: SaveApplicationSettingsRequest
   ): Promise<boolean> {
@@ -13164,6 +13237,8 @@ export function App(): JSX.Element {
                     <section className="debugLogTab">
                       <DebugLogPanel translate={translate} />
                     </section>
+                  ) : isKeyboardShortcutsTabActive ? (
+                    <KeyboardShortcutsScreen translate={translate} language={displayLanguage} />
                   ) : isResumeHubTabActive ? (
                     <ResumeHub
                       recentDocuments={recentProjectDocuments}

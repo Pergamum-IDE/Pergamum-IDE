@@ -4,10 +4,24 @@ import { EditorView } from "@codemirror/view";
 import { searchPanelOpen } from "@codemirror/search";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createActiveFindKeymapExtension,
+  ACTIVE_FIND_OPEN_COMMAND_ID,
+  ACTIVE_FIND_REPLACE_COMMAND_ID,
+  createActiveFindKeybindingHandlers,
   type MarkdownEditorActiveFindConfig
 } from "../../src/renderer/find/activeFindKeymapExtension";
+import { keymapFor } from "./helpers/editorKeymapHarness";
+
+function createActiveFindKeymapExtension(input: {
+  getConfig: () => MarkdownEditorActiveFindConfig | null;
+  diagnostics?: { editorInstanceId: string; expectActiveFindSurface: boolean };
+}) {
+  return keymapFor({
+    handlers: createActiveFindKeybindingHandlers(input),
+    commandIds: [ACTIVE_FIND_OPEN_COMMAND_ID, ACTIVE_FIND_REPLACE_COMMAND_ID]
+  });
+}
 import { createMarkdownEditorBaseSetup } from "../../src/renderer/markdownEditorCodeMirrorSetup";
+import { stubRuntimePlatform } from "./helpers/runtimePlatform";
 
 let view: EditorView | null = null;
 
@@ -65,7 +79,7 @@ function replaceKeydown(overrides: Partial<KeyboardEventInit> = {}): KeyboardEve
   });
 }
 
-describe("createActiveFindKeymapExtension (#424)", () => {
+describe("Active Find shortcuts via the catalog-derived editor keymap (#424, #641)", () => {
   it("Ctrl+F opens in search mode, Ctrl+H opens in replace mode; both preventDefault", () => {
     const requestOpen = vi.fn();
     const testView = createView({ config: { requestOpen } });
@@ -81,15 +95,73 @@ describe("createActiveFindKeymapExtension (#424)", () => {
     expect(requestOpen).toHaveBeenNthCalledWith(2, "replace", "");
   });
 
-  it("also handles Cmd+H (metaKey) for macOS replace mode", () => {
+  describe("darwin (#636)", () => {
+    let restorePlatform: () => void;
+    beforeEach(() => {
+      restorePlatform = stubRuntimePlatform("macos");
+    });
+    afterEach(() => restorePlatform());
+
+    it("Cmd+Option+F opens replace mode", () => {
+      const requestOpen = vi.fn();
+      const testView = createView({ config: { requestOpen } });
+
+      const event = findKeydown({ ctrlKey: false, metaKey: true, altKey: true });
+      testView.contentDOM.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(requestOpen).toHaveBeenCalledWith("replace", "");
+    });
+
+    it("Cmd+H is NOT used for replace (macOS hides the app)", () => {
+      const requestOpen = vi.fn();
+      const testView = createView({ config: { requestOpen } });
+
+      const event = replaceKeydown({ ctrlKey: false, metaKey: true });
+      testView.contentDOM.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(requestOpen).not.toHaveBeenCalled();
+    });
+
+    it("Cmd+F opens search mode", () => {
+      const requestOpen = vi.fn();
+      const testView = createView({ config: { requestOpen } });
+
+      const event = findKeydown({ ctrlKey: false, metaKey: true });
+      testView.contentDOM.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(requestOpen).toHaveBeenCalledWith("search", "");
+    });
+
+    it("leaves bare Ctrl+F / Ctrl+H to the OS text-editing keys", () => {
+      const requestOpen = vi.fn();
+      const testView = createView({ config: { requestOpen } });
+
+      const ctrlF = findKeydown({ ctrlKey: true });
+      const ctrlH = replaceKeydown({ ctrlKey: true });
+      testView.contentDOM.dispatchEvent(ctrlF);
+      testView.contentDOM.dispatchEvent(ctrlH);
+
+      expect(ctrlF.defaultPrevented).toBe(false);
+      expect(ctrlH.defaultPrevented).toBe(false);
+      expect(requestOpen).not.toHaveBeenCalled();
+    });
+  });
+
+  it("Cmd+F / Cmd+H do not fire on win32 / linux", () => {
     const requestOpen = vi.fn();
     const testView = createView({ config: { requestOpen } });
 
-    const event = replaceKeydown({ ctrlKey: false, metaKey: true });
-    testView.contentDOM.dispatchEvent(event);
+    testView.contentDOM.dispatchEvent(
+      findKeydown({ ctrlKey: false, metaKey: true })
+    );
+    testView.contentDOM.dispatchEvent(
+      replaceKeydown({ ctrlKey: false, metaKey: true })
+    );
 
-    expect(event.defaultPrevented).toBe(true);
-    expect(requestOpen).toHaveBeenCalledWith("replace", "");
+    expect(requestOpen).not.toHaveBeenCalled();
   });
 
   it("calls requestOpen and preventDefaults Ctrl+F when a config is supplied", () => {
@@ -97,17 +169,6 @@ describe("createActiveFindKeymapExtension (#424)", () => {
     const testView = createView({ config: { requestOpen } });
 
     const event = findKeydown();
-    testView.contentDOM.dispatchEvent(event);
-
-    expect(event.defaultPrevented).toBe(true);
-    expect(requestOpen).toHaveBeenCalledTimes(1);
-  });
-
-  it("also handles Cmd+F (metaKey) for macOS", () => {
-    const requestOpen = vi.fn();
-    const testView = createView({ config: { requestOpen } });
-
-    const event = findKeydown({ ctrlKey: false, metaKey: true });
     testView.contentDOM.dispatchEvent(event);
 
     expect(event.defaultPrevented).toBe(true);

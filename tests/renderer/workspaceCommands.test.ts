@@ -25,6 +25,8 @@ describe("workspace commands", () => {
     focusDocumentMetricsDescription:
       "Show the Document Metrics panel in the left pane.",
     openApplicationSettings: "Open Application Settings",
+    openKeyboardShortcuts: "Open Keyboard Shortcuts",
+    openKeyboardShortcutsDescription: "Open Keyboard Shortcuts",
     openApplicationSettingsDescription: "Open application-wide settings.",
     showResumeHub: "Show Resume Hub",
     showResumeHubDescription: "Show Resume Hub"
@@ -38,6 +40,7 @@ describe("workspace commands", () => {
       {
         focusSidebarMode: () => undefined,
         openApplicationSettings: () => undefined,
+        openKeyboardShortcuts: () => undefined,
         showResumeHub: () => undefined,
         canShowResumeHub: () => true
       },
@@ -51,6 +54,7 @@ describe("workspace commands", () => {
       workspaceCommandIds.focusDocumentMap,
       workspaceCommandIds.focusDocumentMetrics,
       workspaceCommandIds.openApplicationSettings,
+      workspaceCommandIds.openKeyboardShortcuts,
       workspaceCommandIds.showResumeHub
     ]);
   });
@@ -66,6 +70,7 @@ describe("workspace commands", () => {
           focusedModes.push(mode);
         },
         openApplicationSettings: () => undefined,
+        openKeyboardShortcuts: () => undefined,
         showResumeHub: () => undefined,
         canShowResumeHub: () => true
       },
@@ -99,6 +104,7 @@ describe("workspace commands", () => {
       {
         focusSidebarMode: () => undefined,
         openApplicationSettings,
+        openKeyboardShortcuts: () => undefined,
         showResumeHub: () => undefined,
         canShowResumeHub: () => true
       },
@@ -123,6 +129,7 @@ describe("workspace commands", () => {
       {
         focusSidebarMode: () => undefined,
         openApplicationSettings: () => undefined,
+        openKeyboardShortcuts: () => undefined,
         showResumeHub,
         canShowResumeHub: () => true
       },
@@ -179,6 +186,10 @@ describe("workspace commands", () => {
         "translated:command.workspace.applicationSettings.open",
       openApplicationSettingsDescription:
         "translated:command.workspace.applicationSettings.open.description",
+      openKeyboardShortcuts:
+        "translated:command.workspace.keyboardShortcuts.open",
+      openKeyboardShortcutsDescription:
+        "translated:command.workspace.keyboardShortcuts.open.description",
       showResumeHub: "translated:command.workbench.showResumeHub",
       showResumeHubDescription:
         "translated:command.workbench.showResumeHub.description"

@@ -1,6 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { App } from "./App";
+import {
+  loadEffectiveKeybindingsFromMain,
+  subscribeToKeybindingsChangesFromMain
+} from "./keybindings/effectiveKeybindingStore";
 import "./styles.css";
 // #566: KaTeX's own stylesheet (math glyph layout + @font-face for its math
 // fonts). Loaded globally, matching styles.css, since KaTeX rendering itself
@@ -8,8 +12,15 @@ import "./styles.css";
 // bundle — see markdownPreviewRenderer.ts's KaTeX setup comment.
 import "katex/dist/katex.min.css";
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// #645: fetch the effective keybindings (defaults + keybindings.json) ONCE,
+// before anything builds an editor or registers a shortcut. A failure (or no
+// keybindings.json) simply leaves the shipped defaults in place.
+// #650: later edits of keybindings.json from outside arrive as a notification.
+subscribeToKeybindingsChangesFromMain();
+void loadEffectiveKeybindingsFromMain().finally(() => {
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+});

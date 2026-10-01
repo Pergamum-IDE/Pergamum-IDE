@@ -1,12 +1,22 @@
 // @vitest-environment happy-dom
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { stubRuntimePlatform } from "./helpers/runtimePlatform";
+import { handlerFires, keymapFor } from "./helpers/editorKeymapHarness";
+
+const isTabCaptureToggleShortcut = (
+  event: KeyboardEvent,
+  platform: "darwin" | "win32" | "linux"
+): boolean => handlerFires("editor.tabCapture.toggle", event, platform);
 import {
   createTabCaptureKeymapExtension,
+  createTabCaptureToggleKeybindingHandlers,
   isTabCaptureBypassActive,
+  publishTabCaptureToggle,
   resetTabCaptureBypass,
-  triggerTabCaptureBypass
+  triggerTabCaptureBypass,
+  unpublishTabCaptureToggle
 } from "../../src/renderer/tabCaptureKeymapExtension";
 import { createMarkdownEditorBaseSetup } from "../../src/renderer/markdownEditorCodeMirrorSetup";
 import { documentIsMarkdownFacet } from "../../src/renderer/plainTextIndentCommands";
@@ -30,6 +40,11 @@ function mountEditor(input: {
           fencedCodeIndentUnit: input.fencedCodeIndentUnit ?? "spaces4"
         }),
         createTabCaptureKeymapExtension(captureTabInEditor),
+        // #641: the toggle shortcut lives in the always-on editor keymap.
+        keymapFor({
+          handlers: createTabCaptureToggleKeybindingHandlers(),
+          commandIds: ["editor.tabCapture.toggle"]
+        }),
         ...(input.readOnly ? [EditorState.readOnly.of(true)] : []),
         ...(input.isMarkdownDocument !== undefined
           ? [documentIsMarkdownFacet.of(input.isMarkdownDocument)]
@@ -52,8 +67,17 @@ function keydownEvent(key: string, options: { shiftKey?: boolean; ctrlKey?: bool
 
 describe("tabCaptureKeymapExtension (#467)", () => {
   describe("default OFF (captureTabInEditor = false)", () => {
-    it("returns empty extension array when false", () => {
+    it("returns an empty extension and does not capture Tab when false", () => {
       expect(createTabCaptureKeymapExtension(false)).toEqual([]);
+      const view = mountEditor({ doc: "- item", captureTabInEditor: false });
+      try {
+        const tabEvent = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(tabEvent);
+        expect(tabEvent.defaultPrevented).toBe(false);
+        expect(view.state.doc.toString()).toBe("- item");
+      } finally {
+        view.destroy();
+      }
     });
 
     it("does NOT intercept Tab key, leaving default focus behavior", () => {
@@ -462,23 +486,168 @@ describe("tabCaptureKeymapExtension (#467)", () => {
       }
     });
 
-    it("Ctrl+M sets bypassNextTab flag, allowing next Tab to bypass editor capture", () => {
+    it("IME composition (#654): Tab is left to the IME and Escape does not arm the bypass", () => {
       resetTabCaptureBypass();
       const view = mountEditor({ doc: "- item", captureTabInEditor: true });
       try {
-        // Press Ctrl+M
-        const ctrlMEvent = keydownEvent("m", { ctrlKey: true });
-        view.contentDOM.dispatchEvent(ctrlMEvent);
-        expect(ctrlMEvent.defaultPrevented).toBe(true);
-        expect(isTabCaptureBypassActive()).toBe(true);
+        const composingEscape = new KeyboardEvent("keydown", {
+          key: "Escape",
+          code: "Escape",
+          isComposing: true,
+          bubbles: true,
+          cancelable: true
+        });
+        view.contentDOM.dispatchEvent(composingEscape);
+        expect(isTabCaptureBypassActive()).toBe(false);
 
-        // Next Tab bypasses capture
+        const composingTab = new KeyboardEvent("keydown", {
+          key: "Tab",
+          code: "Tab",
+          isComposing: true,
+          bubbles: true,
+          cancelable: true
+        });
+        view.contentDOM.dispatchEvent(composingTab);
+        expect(composingTab.defaultPrevented).toBe(false);
+        expect(view.state.doc.toString()).toBe("- item");
+
+        // Legacy engines: keyCode 229 with a stale isComposing=false.
+        const legacyTab = new KeyboardEvent("keydown", {
+          key: "Tab",
+          code: "Tab",
+          keyCode: 229,
+          bubbles: true,
+          cancelable: true
+        });
+        view.contentDOM.dispatchEvent(legacyTab);
+        expect(legacyTab.defaultPrevented).toBe(false);
+        expect(view.state.doc.toString()).toBe("- item");
+
+        // Outside composition the capture still works.
+        const plainTab = keydownEvent("Tab");
+        view.contentDOM.dispatchEvent(plainTab);
+        expect(plainTab.defaultPrevented).toBe(true);
+      } finally {
+        view.destroy();
+      }
+    });
+
+    it("Ctrl+M no longer arms the one-shot bypass (#636: it toggles the setting)", () => {
+      resetTabCaptureBypass();
+      const toggle = vi.fn();
+      publishTabCaptureToggle(toggle);
+      const view = mountEditor({ doc: "- item", captureTabInEditor: true });
+      try {
+        view.contentDOM.dispatchEvent(keydownEvent("m", { ctrlKey: true }));
+        expect(isTabCaptureBypassActive()).toBe(false);
+      } finally {
+        unpublishTabCaptureToggle(toggle);
+        view.destroy();
+      }
+    });
+  });
+
+  describe("editor.tabCapture.toggle (#636)", () => {
+    let restorePlatform: (() => void) | null = null;
+    afterEach(() => {
+      restorePlatform?.();
+      restorePlatform = null;
+    });
+
+    function keyM(init: KeyboardEventInit): KeyboardEvent {
+      return new KeyboardEvent("keydown", {
+        key: "m",
+        code: "KeyM",
+        bubbles: true,
+        cancelable: true,
+        ...init
+      });
+    }
+
+    it("recognizes Ctrl+M on win32 / linux and Shift+Option+M on darwin only", () => {
+      // A fresh event per call: a dispatched, handled event is not reusable.
+      const ctrlM = () => keyM({ ctrlKey: true });
+      const shiftAltM = () => keyM({ shiftKey: true, altKey: true });
+      const cmdM = () => keyM({ metaKey: true });
+      for (const platform of ["win32", "linux"] as const) {
+        expect(isTabCaptureToggleShortcut(ctrlM(), platform)).toBe(true);
+        expect(isTabCaptureToggleShortcut(shiftAltM(), platform)).toBe(false);
+        expect(isTabCaptureToggleShortcut(cmdM(), platform)).toBe(false);
+      }
+      expect(isTabCaptureToggleShortcut(shiftAltM(), "darwin")).toBe(true);
+      expect(isTabCaptureToggleShortcut(ctrlM(), "darwin")).toBe(false);
+      // Cmd+M minimizes the window on macOS: never a Pergamum shortcut.
+      expect(isTabCaptureToggleShortcut(cmdM(), "darwin")).toBe(false);
+    });
+
+    it.each([true, false])(
+      "Ctrl+M calls the published toggle on win32 (capture %s)",
+      (capture) => {
+        restorePlatform = stubRuntimePlatform("windows");
+        const toggle = vi.fn();
+        publishTabCaptureToggle(toggle);
+        const view = mountEditor({ doc: "- item", captureTabInEditor: capture });
+        try {
+          const event = keyM({ ctrlKey: true });
+          view.contentDOM.dispatchEvent(event);
+          expect(event.defaultPrevented).toBe(true);
+          expect(toggle).toHaveBeenCalledTimes(1);
+        } finally {
+          unpublishTabCaptureToggle(toggle);
+          view.destroy();
+        }
+      }
+    );
+
+    it("Shift+Option+M calls the published toggle on darwin; Ctrl+M / Cmd+M do not", () => {
+      restorePlatform = stubRuntimePlatform("macos");
+      const toggle = vi.fn();
+      publishTabCaptureToggle(toggle);
+      const view = mountEditor({ doc: "- item", captureTabInEditor: false });
+      try {
+        view.contentDOM.dispatchEvent(keyM({ ctrlKey: true }));
+        view.contentDOM.dispatchEvent(keyM({ metaKey: true }));
+        expect(toggle).not.toHaveBeenCalled();
+        const event = keyM({ shiftKey: true, altKey: true });
+        view.contentDOM.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+        expect(toggle).toHaveBeenCalledTimes(1);
+      } finally {
+        unpublishTabCaptureToggle(toggle);
+        view.destroy();
+      }
+    });
+
+    it("does nothing during IME composition or without a published toggle", () => {
+      restorePlatform = stubRuntimePlatform("windows");
+      const toggle = vi.fn();
+      const view = mountEditor({ doc: "- item", captureTabInEditor: true });
+      try {
+        view.contentDOM.dispatchEvent(keyM({ ctrlKey: true }));
+        publishTabCaptureToggle(toggle);
+        view.contentDOM.dispatchEvent(keyM({ ctrlKey: true, isComposing: true }));
+        expect(toggle).not.toHaveBeenCalled();
+      } finally {
+        unpublishTabCaptureToggle(toggle);
+        view.destroy();
+      }
+    });
+
+    it("Escape still arms the one-shot bypass without touching the toggle", () => {
+      resetTabCaptureBypass();
+      const toggle = vi.fn();
+      publishTabCaptureToggle(toggle);
+      const view = mountEditor({ doc: "- item", captureTabInEditor: true });
+      try {
+        view.contentDOM.dispatchEvent(keydownEvent("Escape"));
+        expect(isTabCaptureBypassActive()).toBe(true);
+        expect(toggle).not.toHaveBeenCalled();
         const tabEvent = keydownEvent("Tab");
         view.contentDOM.dispatchEvent(tabEvent);
         expect(tabEvent.defaultPrevented).toBe(false);
-        expect(view.state.doc.toString()).toBe("- item");
         expect(isTabCaptureBypassActive()).toBe(false);
       } finally {
+        unpublishTabCaptureToggle(toggle);
         view.destroy();
       }
     });

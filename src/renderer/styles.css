@@ -15300,3 +15300,488 @@ label.settingsItemHeader {
   text-align: end;
   font-variant-numeric: tabular-nums;
 }
+
+/* #646: Keyboard Shortcuts special tab (view only). Logical properties; theme
+   tokens only. */
+.keyboardShortcutsTab {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  /* #649: the page itself does not scroll; only .keyboardShortcutsListScroll does. */
+  overflow: hidden;
+  background: var(--pg-color-surface-background);
+  color: var(--pg-color-surface-foreground);
+  padding-block: 28px;
+  padding-inline: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.keyboardShortcutsHeader {
+  border-block-end: 1px solid var(--pg-color-panel-divider);
+  padding-block-end: 12px;
+}
+
+.keyboardShortcutsTitle {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--pg-color-text-strong);
+}
+
+.keyboardShortcutsDescription,
+.keyboardShortcutsRestartNote {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutsToolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-inline-size: 900px;
+}
+
+.keyboardShortcutsSearch {
+  flex: 1;
+  min-inline-size: 0;
+  padding-block: 6px;
+  padding-inline: 10px;
+  font-size: 13px;
+  color: var(--pg-color-surface-foreground);
+  background: var(--pg-color-input-background);
+  border: 1px solid var(--pg-color-input-border);
+  border-radius: 4px;
+}
+
+/* #649: display filters. */
+.keyboardShortcutsFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  max-inline-size: 900px;
+  font-size: 12px;
+}
+
+.keyboardShortcutsFilterField,
+.keyboardShortcutsFilterToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.keyboardShortcutsCategorySelect {
+  padding-block: 3px;
+  padding-inline: 6px;
+  font-size: 12px;
+  color: var(--pg-color-surface-foreground);
+  background: var(--pg-color-input-background);
+  border: 1px solid var(--pg-color-input-border);
+  border-radius: 4px;
+}
+
+.keyboardShortcutsViewGroup {
+  display: inline-flex;
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.keyboardShortcutsViewButton,
+.keyboardShortcutsClearFilters {
+  padding-block: 3px;
+  padding-inline: 10px;
+  font-size: 12px;
+  color: var(--pg-color-surface-foreground);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.keyboardShortcutsClearFilters {
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 4px;
+}
+
+.keyboardShortcutsViewButton[aria-pressed="true"] {
+  background: var(--pg-color-surface-hover);
+  font-weight: 600;
+}
+
+.keyboardShortcutsClearFilters:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.keyboardShortcutsOpenLocation {
+  flex-shrink: 0;
+  padding-block: 6px;
+  padding-inline: 12px;
+  font-size: 12px;
+  color: var(--pg-color-button-foreground);
+  background: var(--pg-color-button-background);
+  border: 1px solid var(--pg-color-button-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.keyboardShortcutsOpenLocation:hover {
+  background: var(--pg-color-button-hover-background);
+}
+
+/* #652: a whole-file operation, kept visually apart from the other controls. */
+.keyboardShortcutsResetAll {
+  flex-shrink: 0;
+  margin-inline-start: 12px;
+  padding-block: 6px;
+  padding-inline: 12px;
+  font-size: 12px;
+  color: var(--pg-color-status-error);
+  background: var(--pg-color-button-background);
+  border: 1px solid var(--pg-color-status-error);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.keyboardShortcutsResetAll:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.keyboardShortcutsResetAllDialog .appDialogMessageText {
+  white-space: pre-line;
+}
+
+.keyboardShortcutsResetAllConfirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.keyboardShortcutsResetAllConfirm:disabled {
+  cursor: default;
+}
+
+.keyboardShortcutsResetAllHourglass {
+  inline-size: 16px;
+  block-size: 16px;
+  flex-shrink: 0;
+}
+
+.keyboardShortcutsStatus {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutsError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pg-color-status-error);
+}
+
+.keyboardShortcutsDiagnostics {
+  max-inline-size: 900px;
+  padding-block: 10px;
+  padding-inline: 14px;
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 6px;
+  background: var(--pg-color-surface-subtle);
+}
+
+.keyboardShortcutsDiagnostics-error {
+  border-color: var(--pg-color-status-error);
+}
+
+.keyboardShortcutsDiagnostics-warning {
+  border-color: var(--pg-color-status-warning);
+}
+
+.keyboardShortcutsDiagnosticsSummary {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.keyboardShortcutsDiagnosticsList {
+  margin: 0;
+  padding-inline-start: 18px;
+  font-size: 12px;
+  max-block-size: 160px;
+  overflow-y: auto;
+}
+
+.keyboardShortcutsDiagnosticLocation {
+  margin-inline-start: 8px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutsDiagnosticSeverity {
+  font-weight: 700;
+}
+
+.keyboardShortcutsDiagnosticSeverity-error {
+  color: var(--pg-color-status-error);
+}
+
+.keyboardShortcutsDiagnosticSeverity-warning {
+  color: var(--pg-color-status-warning);
+}
+
+.keyboardShortcutsDiagnosticCommand,
+.keyboardShortcutsDiagnosticKey {
+  margin-inline-start: 8px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+}
+
+/* #649: the list is its own vertical scroll region below the fixed controls. */
+.keyboardShortcutsListScroll {
+  flex: 1;
+  min-block-size: 0;
+  max-inline-size: 900px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 6px;
+}
+
+.keyboardShortcutsListHeader {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 6px;
+  padding-inline: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pg-color-surface-muted);
+  background: var(--pg-color-panel-background);
+  border-block-end: 1px solid var(--pg-color-panel-border);
+}
+
+.keyboardShortcutsListHeaderAttributes {
+  margin-inline-start: auto;
+}
+
+.keyboardShortcutsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* #648: one group per command; its bindings are indented rows below. */
+.keyboardShortcutGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-block: 8px;
+  padding-inline: 14px;
+  border-block-end: 1px solid var(--pg-color-panel-divider);
+}
+
+.keyboardShortcutGroup:last-child {
+  border-block-end: none;
+}
+
+.keyboardShortcutGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.keyboardShortcutGroupTitleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.keyboardShortcutCommandDescription {
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutGroupMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  margin-inline-start: auto;
+  column-gap: 14px;
+  row-gap: 2px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutBindings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  padding-inline-start: 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.keyboardShortcutRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 4px;
+  padding-inline: 6px;
+  border-radius: 4px;
+}
+
+.keyboardShortcutRowKey {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.keyboardShortcutOrigin {
+  padding-block: 0;
+  padding-inline: 6px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 8px;
+}
+
+.keyboardShortcutRow:hover,
+.keyboardShortcutRow:focus-visible {
+  background: var(--pg-color-surface-hover);
+  outline: none;
+}
+
+.keyboardShortcutTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pg-color-text-strong);
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.keyboardShortcutKey {
+  padding-block: 1px;
+  padding-inline: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--pg-color-surface-foreground);
+  background: var(--pg-color-panel-background);
+  border: 1px solid var(--pg-color-panel-border);
+  border-radius: 4px;
+}
+
+.keyboardShortcutUnassigned {
+  font-size: 12px;
+  color: var(--pg-color-surface-muted);
+  font-style: italic;
+}
+
+.keyboardShortcutReadonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutReadonlyIcon {
+  display: inline-flex;
+  inline-size: 12px;
+  block-size: 12px;
+}
+
+.keyboardShortcutReadonlyIcon svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.keyboardShortcutCommandId {
+  font-size: 11px;
+}
+
+/* #647: Keyboard Shortcuts editing (row actions + capture dialog). */
+.keyboardShortcutActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.keyboardShortcutActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  color: var(--pg-color-button-foreground);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.keyboardShortcutActionButton:hover:not(:disabled),
+.keyboardShortcutActionButton:focus-visible {
+  background: var(--pg-color-button-hover-background);
+  border-color: var(--pg-color-button-border);
+  outline: none;
+}
+
+.keyboardShortcutActionButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.keyboardShortcutActionButton svg {
+  inline-size: 14px;
+  block-size: 14px;
+}
+
+.keyboardShortcutUnassignedDefault {
+  font-size: 12px;
+  color: var(--pg-color-surface-muted);
+  font-style: italic;
+}
+
+.keyboardShortcutCaptureBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.keyboardShortcutCapturePrompt {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.keyboardShortcutCaptureMeta,
+.keyboardShortcutCaptureHint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--pg-color-surface-muted);
+}
+
+.keyboardShortcutCaptureError {
+  margin: 0;
+  font-size: 13px;
+  color: var(--pg-color-status-error);
+}
+
+.keyboardShortcutNoticeDetails {
+  margin: 8px 0 0;
+  padding-inline-start: 18px;
+  font-size: 13px;
+}

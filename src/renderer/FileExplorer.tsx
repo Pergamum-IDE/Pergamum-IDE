@@ -138,6 +138,10 @@ import {
 } from "./fileExplorerSelectionState";
 import type { ExportOrigin } from "./exportCandidates";
 import { clampContextMenuPosition } from "./contextMenuPosition";
+import {
+  matchRendererShortcut,
+  rendererShortcutCommandIds
+} from "./keybindings/rendererShortcuts";
 
 /**
  * #311: an external request (from the Command Palette) to open the same
@@ -3327,7 +3331,10 @@ export function FileExplorer({
 
       // #351: DEL runs the SAME delete command as the context menu — it
       // always goes through the confirmation dialog, never a silent delete.
-      if (event.key === "Delete" && !event.ctrlKey && !event.metaKey) {
+      // #643: keys come from the catalog (workspace.files.*); `Delete` is
+      // strict, so Shift+Delete / Alt+Delete do not delete.
+      const nativeEvent = event.nativeEvent;
+      if (matchRendererShortcut(nativeEvent, rendererShortcutCommandIds.filesDelete)) {
         event.preventDefault();
         void beginDelete();
         return;
@@ -3337,36 +3344,25 @@ export function FileExplorer({
       // `openRenameDialog` re-checks single-selection / root / read-only /
       // protected / dirty and no-ops otherwise. (The IME / input / modal
       // guards above already apply.)
-      if (
-        event.key === "F2" &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey &&
-        !event.shiftKey
-      ) {
+      if (matchRendererShortcut(nativeEvent, rendererShortcutCommandIds.filesRename)) {
         event.preventDefault();
         openRenameDialog();
         return;
       }
 
-      const usesPrimaryModifier =
-        (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
-      if (!usesPrimaryModifier) {
-        return;
-      }
-
-      const key = event.key.toLowerCase();
-      if (key === "c") {
+      // Mod+C / Mod+X / Mod+V: Mod is Cmd on darwin, Ctrl elsewhere; on
+      // darwin a bare Ctrl+C / X / V is left alone.
+      if (matchRendererShortcut(nativeEvent, rendererShortcutCommandIds.filesCopy)) {
         event.preventDefault();
         performCopy();
         return;
       }
-      if (key === "x") {
+      if (matchRendererShortcut(nativeEvent, rendererShortcutCommandIds.filesCut)) {
         event.preventDefault();
         performCut();
         return;
       }
-      if (key === "v") {
+      if (matchRendererShortcut(nativeEvent, rendererShortcutCommandIds.filesPaste)) {
         event.preventDefault();
         explorerPasteRouterRef.current();
       }

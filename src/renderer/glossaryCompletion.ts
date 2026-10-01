@@ -13,6 +13,14 @@
  */
 
 import { representativeGlossaryAtom, type GlossaryEntry } from "../shared/glossary";
+import type { PergamumPlatform } from "../shared/keybindings";
+import { getRuntimePlatform } from "./platformModifier";
+import {
+  eventMatchesCatalogCommand,
+  type CatalogKeyEvent
+} from "./keybindings/catalogKeyMatch";
+
+export const GLOSSARY_COMPLETION_COMMAND_ID = "glossary.completion.open";
 
 /** Upper bound on rendered completion candidates - a large glossary must not
  *  flood the popup. Candidates are truncated from the front of the given
@@ -261,4 +269,18 @@ export function extractGlossaryCompletionPrefix(
   }
 
   return extractDelimitedGlossaryCompletionPrefix(textBeforeCaret);
+}
+
+/**
+ * Whether `event` is the glossary completion shortcut: the catalog key of
+ * `glossary.completion.open` (Ctrl-Space on win32/linux, Alt-` on darwin,
+ * where Ctrl+Space / Cmd+Space belong to input-source switching / Spotlight).
+ * Matched on the physical key, since Option+` composes a dead key (#636,
+ * #641).
+ */
+export function isGlossaryCompletionShortcutEvent(
+  event: CatalogKeyEvent,
+  platform: PergamumPlatform = getRuntimePlatform()
+): boolean {
+  return eventMatchesCatalogCommand(event, GLOSSARY_COMPLETION_COMMAND_ID, platform);
 }

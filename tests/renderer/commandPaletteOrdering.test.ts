@@ -170,6 +170,7 @@ function buildFullCommandRegistry(): CommandRegistry {
     {
       focusSidebarMode: () => undefined,
       openApplicationSettings: () => undefined,
+      openKeyboardShortcuts: () => undefined,
       showResumeHub: () => undefined,
       canShowResumeHub: () => true
     },
@@ -185,6 +186,8 @@ function buildFullCommandRegistry(): CommandRegistry {
       focusDocumentMetrics: "Focus Document Metrics",
       focusDocumentMetricsDescription: "",
       openApplicationSettings: "Open Application Settings",
+      openKeyboardShortcuts: "Open Keyboard Shortcuts",
+      openKeyboardShortcutsDescription: "Open Keyboard Shortcuts",
       openApplicationSettingsDescription: "",
       showResumeHub: "Show Resume Hub",
       showResumeHubDescription: ""
