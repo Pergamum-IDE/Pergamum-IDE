@@ -256,6 +256,17 @@ const pergamumApi: PergamumApi = {
       return () => {
         ipcRenderer.removeListener(KEYBINDINGS_CHANNELS.captureInput, handler);
       };
+    },
+    onKeybindingsChanged: (listener) => {
+      const handler = (_event: unknown, payload: unknown): void => {
+        if (typeof payload === "object" && payload !== null) {
+          listener(payload as Parameters<typeof listener>[0]);
+        }
+      };
+      ipcRenderer.on(KEYBINDINGS_CHANNELS.changed, handler);
+      return () => {
+        ipcRenderer.removeListener(KEYBINDINGS_CHANNELS.changed, handler);
+      };
     }
   },
   session: {

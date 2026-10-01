@@ -10,6 +10,7 @@
  */
 
 import { app } from "electron";
+import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
@@ -44,24 +45,68 @@ function nodeErrorCode(error: unknown): string | undefined {
     : undefined;
 }
 
-export async function readUserKeybindings(
+/**
+ * #650: identifies the content of keybindings.json that the main process has
+ * recognised, without keeping the content. A missing file and an unreadable
+ * file have fixed values; otherwise it is the SHA-256 of the text.
+ */
+export const MISSING_SOURCE_FINGERPRINT = "missing";
+export const UNREADABLE_SOURCE_FINGERPRINT = "unreadable";
+
+export function fingerprintKeybindingsSource(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+export interface ReadKeybindingsResult {
+  readonly parsed: ParsedUserKeybindings;
+  readonly sourceFingerprint: string;
+}
+
+export async function readUserKeybindingsWithFingerprint(
   directory?: string
-): Promise<ParsedUserKeybindings> {
+): Promise<ReadKeybindingsResult> {
   let source: string;
   try {
     source = await fs.readFile(getKeybindingsFilePath(directory), "utf8");
   } catch (error) {
     if (nodeErrorCode(error) === "ENOENT") {
-      return { entries: [], sourceIndices: [], diagnostics: [] };
+      return {
+        parsed: { entries: [], sourceIndices: [], diagnostics: [] },
+        sourceFingerprint: MISSING_SOURCE_FINGERPRINT
+      };
     }
     const diagnostic: KeybindingDiagnostic = {
       code: "fileReadError",
       severity: "error",
       message: "keybindings.json could not be read; defaults are used"
     };
-    return { entries: [], sourceIndices: [], diagnostics: [diagnostic] };
+    return {
+      parsed: { entries: [], sourceIndices: [], diagnostics: [diagnostic] },
+      sourceFingerprint: UNREADABLE_SOURCE_FINGERPRINT
+    };
   }
-  return parseUserKeybindingsJson(source);
+  return {
+    parsed: parseUserKeybindingsJson(source),
+    sourceFingerprint: fingerprintKeybindingsSource(source)
+  };
+}
+
+export async function readUserKeybindings(
+  directory?: string
+): Promise<ParsedUserKeybindings> {
+  return (await readUserKeybindingsWithFingerprint(directory)).parsed;
+}
+
+/** The diagnostics that mean the file as a whole could not be used. */
+export function fileLevelDiagnostics(
+  diagnostics: readonly KeybindingDiagnostic[]
+): KeybindingDiagnostic[] {
+  return diagnostics.filter(
+    (diagnostic) =>
+      diagnostic.code === "jsonParseError" ||
+      diagnostic.code === "rootMustBeArray" ||
+      diagnostic.code === "fileReadError"
+  );
 }
 
 /** Atomically writes the entries (creates the directory if missing). */
@@ -80,6 +125,12 @@ export interface LoadedKeybindings {
   readonly effective: EffectiveKeybindingResult;
   /** Parse diagnostics followed by overlay diagnostics. */
   readonly diagnostics: KeybindingDiagnostic[];
+  /**
+   * #650: the fingerprint of the keybindings.json content main currently
+   * recognises. THE source of truth for "has the file changed?": startup,
+   * Keyboard Shortcuts saves and external reloads all set it here.
+   */
+  readonly sourceFingerprint: string;
 }
 
 /** Reads the file and overlays it on the defaults for `platform`. */
@@ -87,7 +138,8 @@ export async function loadKeybindings(
   platform: PergamumPlatform,
   directory?: string
 ): Promise<LoadedKeybindings> {
-  const parsed = await readUserKeybindings(directory);
+  const { parsed, sourceFingerprint } =
+    await readUserKeybindingsWithFingerprint(directory);
   const effective = resolveEffectiveKeybindings({
     platform,
     userEntries: parsed.entries,
@@ -96,16 +148,19 @@ export async function loadKeybindings(
   return {
     userEntries: parsed.entries,
     effective,
-    diagnostics: [...parsed.diagnostics, ...effective.diagnostics]
+    diagnostics: [...parsed.diagnostics, ...effective.diagnostics],
+    sourceFingerprint
   };
 }
 
 let startupKeybindings: LoadedKeybindings | null = null;
 
 /**
- * The keybindings applied at startup (#646): the Keyboard Shortcuts screen
- * shows THESE, not a fresh read of the file, so it reflects what is really in
- * effect. Edits to keybindings.json apply after a restart.
+ * The keybindings CURRENTLY APPLIED (#646, #650): set at startup, replaced by
+ * a Keyboard Shortcuts save and by an external reload of keybindings.json.
+ * The Keyboard Shortcuts screen and `getEffectiveKeybindings` read THIS, never
+ * the file, so a half-edited (malformed) file cannot leak into the app. Its
+ * `sourceFingerprint` is the one record of which file content is recognised.
  */
 export function setStartupKeybindings(loaded: LoadedKeybindings | null): void {
   startupKeybindings = loaded;
@@ -154,6 +209,18 @@ export async function saveUserKeybindings(
   return { ok: true, diagnostics };
 }
 
+/**
+ * #650: Keyboard Shortcuts saves and external reloads read, write and replace
+ * the applied state one at a time.
+ */
+let keybindingsLock: Promise<unknown> = Promise.resolve();
+
+function withKeybindingsLock<T>(task: () => Promise<T>): Promise<T> {
+  const run = keybindingsLock.then(task, task);
+  keybindingsLock = run.catch(() => undefined);
+  return run;
+}
+
 export type ApplyKeybindingChangeOutcome =
   | {
       readonly ok: true;
@@ -177,18 +244,23 @@ export type ApplyKeybindingChangeOutcome =
  *    makes them the applied set. Any failure leaves the file and the applied
  *    set untouched.
  */
-export async function applyKeybindingChange(
+export function applyKeybindingChange(
+  request: KeybindingEditRequest,
+  platform: PergamumPlatform,
+  directory?: string
+): Promise<ApplyKeybindingChangeOutcome> {
+  return withKeybindingsLock(() =>
+    applyKeybindingChangeLocked(request, platform, directory)
+  );
+}
+
+async function applyKeybindingChangeLocked(
   request: KeybindingEditRequest,
   platform: PergamumPlatform,
   directory?: string
 ): Promise<ApplyKeybindingChangeOutcome> {
   const parsed = await readUserKeybindings(directory);
-  const fileProblems = parsed.diagnostics.filter(
-    (diagnostic) =>
-      diagnostic.code === "jsonParseError" ||
-      diagnostic.code === "rootMustBeArray" ||
-      diagnostic.code === "fileReadError"
-  );
+  const fileProblems = fileLevelDiagnostics(parsed.diagnostics);
   if (fileProblems.length > 0) {
     return { ok: false, reason: "fileInvalid", diagnostics: fileProblems };
   }
@@ -226,4 +298,84 @@ export async function applyKeybindingChange(
   const loaded = await loadKeybindings(platform, directory);
   setStartupKeybindings(loaded);
   return { ok: true, loaded };
+}
+
+export type ReloadKeybindingsOutcome =
+  /** Nothing to do: same file content, or the same effective result. */
+  | { readonly kind: "unchanged" }
+  /** The file is malformed: the applied keybindings stay, only diagnostics changed. */
+  | { readonly kind: "diagnosticsOnly"; readonly loaded: LoadedKeybindings }
+  /** New effective keybindings were applied. */
+  | { readonly kind: "applied"; readonly loaded: LoadedKeybindings };
+
+export interface ReloadKeybindingsOptions {
+  readonly directory?: string;
+  /** One retry after a failed read (a half-written / locked file). */
+  readonly readRetryDelayMs?: number;
+  readonly delay?: (ms: number) => Promise<void>;
+}
+
+/**
+ * #650: re-reads keybindings.json after an external change.
+ *
+ * - The disk fingerprint is compared with the applied state: the same content
+ *   is a no-op (this also absorbs the watcher event of our own save).
+ * - A malformed / unreadable file keeps the applied effective keybindings,
+ *   replaces only the diagnostics and records the file fingerprint (so the
+ *   same broken content is not reported again).
+ * - A valid file (or a deleted one: no user entries) is resolved with the
+ *   existing resolver and becomes the applied state.
+ */
+export function reloadKeybindingsFromDisk(
+  platform: PergamumPlatform,
+  options: ReloadKeybindingsOptions = {}
+): Promise<ReloadKeybindingsOutcome> {
+  return withKeybindingsLock(() => reloadLocked(platform, options));
+}
+
+async function reloadLocked(
+  platform: PergamumPlatform,
+  options: ReloadKeybindingsOptions
+): Promise<ReloadKeybindingsOutcome> {
+  const { directory } = options;
+  let loaded = await loadKeybindings(platform, directory);
+  if (loaded.sourceFingerprint === UNREADABLE_SOURCE_FINGERPRINT) {
+    const delay =
+      options.delay ??
+      ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    await delay(options.readRetryDelayMs ?? 100);
+    loaded = await loadKeybindings(platform, directory);
+  }
+
+  const current = getStartupKeybindings();
+  if (current !== null && current.sourceFingerprint === loaded.sourceFingerprint) {
+    return { kind: "unchanged" };
+  }
+
+  const fileProblems = fileLevelDiagnostics(loaded.diagnostics);
+  if (fileProblems.length > 0 && current !== null) {
+    const kept: LoadedKeybindings = {
+      userEntries: current.userEntries,
+      effective: current.effective,
+      diagnostics: fileProblems,
+      sourceFingerprint: loaded.sourceFingerprint
+    };
+    setStartupKeybindings(kept);
+    return { kind: "diagnosticsOnly", loaded: kept };
+  }
+
+  setStartupKeybindings(loaded);
+  if (
+    current !== null &&
+    sameJson(current.effective.keybindings, loaded.effective.keybindings) &&
+    sameJson(current.diagnostics, loaded.diagnostics)
+  ) {
+    // A formatting-only edit: nothing to re-apply or announce.
+    return { kind: "unchanged" };
+  }
+  return { kind: "applied", loaded };
+}
+
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }

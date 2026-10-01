@@ -196,6 +196,21 @@ export function KeyboardShortcutsScreen({
     };
   }, []);
 
+  // #650: keybindings.json was edited from outside and reloaded by main:
+  // refresh the list (and its diagnostics). Only the data is replaced, so the
+  // filters, display options and the list's scroll position stay as they are.
+  useEffect(() => {
+    const subscribe = window.pergamum?.keybindings?.onKeybindingsChanged;
+    if (subscribe === undefined) {
+      return undefined;
+    }
+    return window.pergamum.keybindings.onKeybindingsChanged(() => {
+      void loadItems();
+    });
+    // `loadItems` only uses state setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const sourceLabel = (source: KeyboardShortcutRow["source"]): string =>
     translate(`keyboardShortcuts.source.${source}`);
 

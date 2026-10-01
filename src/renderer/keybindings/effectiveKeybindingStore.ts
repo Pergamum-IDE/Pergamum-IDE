@@ -7,9 +7,9 @@
  * or there is no keybindings.json - every consumer reads the shipped defaults,
  * so behavior is identical to before #645.
  *
- * Replaced only at startup and after a save from the Keyboard Shortcuts screen
- * (#647): there is no file watcher and no live reload of outside edits.
- * Consumers key their caches on the returned rows array, so a replacement is
+ * Replaced at startup, after a save from the Keyboard Shortcuts screen (#647)
+ * and when main reports that keybindings.json was edited from outside (#650,
+ * see `subscribeToKeybindingsChangesFromMain`). Consumers key their caches on the returned rows array, so a replacement is
  * picked up without any invalidation hook; the editors rebuild their keymaps
  * from the revision counter. The reset API exists for tests.
  */
@@ -119,5 +119,29 @@ export async function loadEffectiveKeybindingsFromMain(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * #650: main reloads an externally edited keybindings.json and then sends
+ * `keybindings:changed`. This re-fetches the effective rows (what main has
+ * applied, never a half-edited file) into the store, which in turn rebuilds
+ * the editors' keymaps and the shortcut matchers. Returns the unsubscribe
+ * function (a no-op when there is no bridge).
+ */
+export function subscribeToKeybindingsChangesFromMain(): () => void {
+  try {
+    const subscribe =
+      typeof window === "undefined"
+        ? undefined
+        : window.pergamum?.keybindings?.onKeybindingsChanged;
+    if (subscribe === undefined) {
+      return () => undefined;
+    }
+    return window.pergamum.keybindings.onKeybindingsChanged(() => {
+      void loadEffectiveKeybindingsFromMain();
+    });
+  } catch {
+    return () => undefined;
   }
 }

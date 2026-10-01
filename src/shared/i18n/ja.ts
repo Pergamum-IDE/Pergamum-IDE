@@ -1560,7 +1560,7 @@ export const jaTranslations = {
   "keyboardShortcuts.header.attributes": "属性",
   "keyboardShortcuts.header.shortcut": "ショートカット",
   "keyboardShortcuts.filter.showConditions": "適用条件を表示する",
-  "keyboardShortcuts.restartNote": "keybindings.json を直接編集した場合は、再起動後に反映されます。",
+  "keyboardShortcuts.restartNote": "keybindings.json を外部で編集すると、自動的に再読み込みします。",
   "keyboardShortcuts.diagnostics.summary": "keybindings.json に {count} 件の問題があります。",
   "keyboardShortcuts.diagnostics.severity.error": "エラー",
   "keyboardShortcuts.diagnostics.severity.warning": "警告",
