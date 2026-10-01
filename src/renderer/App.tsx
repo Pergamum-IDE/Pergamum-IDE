@@ -105,6 +105,7 @@ import {
 } from "../shared/settingsExport";
 import { isPathEqualOrInsideDirectory } from "../shared/saveTargetPolicy";
 import { ActivityBar } from "./ActivityBar";
+import { ApplicationMenuBar } from "./ApplicationMenuBar";
 import {
   AboutDialog,
   aboutCreditsHeading,
@@ -12896,6 +12897,13 @@ export function App(): JSX.Element {
       onBlurCapture={handleAppBlurCapture}
       onContextMenuCapture={handleContextMenuCapture}
     >
+      {/* #663: Windows / Linux only (renders nothing on macOS). Command
+          execution (`onInvoke`), shortcut labels and enablement are wired in
+          #664. */}
+      <ApplicationMenuBar
+        platform={window.pergamum.platform}
+        translate={translate}
+      />
       <EditorToolbar
         canUseMarkdownToolbarCommands={canUseMarkdownToolbarCommands}
         canInsertTable={canUseMarkdownToolbarCommands}
