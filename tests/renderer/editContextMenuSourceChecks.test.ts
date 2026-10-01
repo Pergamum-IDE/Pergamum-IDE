@@ -269,13 +269,22 @@ describe("edit context menu source checks", () => {
   });
 
   it("does not bridge Application menu Edit roles into the new context/edit route", () => {
-    const source = sourceText("src/main/menu.ts");
+    // #662: the Edit roles are native-role items of the canonical menu model
+    // (the Electron adapter maps them to Electron roles).
+    const model = sourceText("src/shared/applicationMenuModel.ts");
 
-    expect(source).toContain('roleItem("cut"');
-    expect(source).toContain('roleItem("copy"');
-    expect(source).toContain('roleItem("paste"');
-    expect(source).toContain('roleItem("selectAll"');
-    expect(source).not.toContain("contextMenu.");
-    expect(source).not.toContain("edit.command.");
+    expect(model).toContain('nativeRole("cut"');
+    expect(model).toContain('nativeRole("copy"');
+    expect(model).toContain('nativeRole("paste"');
+    expect(model).toContain('nativeRole("selectAll"');
+    for (const path of [
+      "src/shared/applicationMenuModel.ts",
+      "src/main/applicationMenuAdapter.ts",
+      "src/main/menu.ts"
+    ]) {
+      const source = sourceText(path);
+      expect(source).not.toContain("contextMenu.");
+      expect(source).not.toContain("edit.command.");
+    }
   });
 });
