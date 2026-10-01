@@ -1565,7 +1565,7 @@ export const enTranslations = {
   "keyboardShortcuts.header.attributes": "Attributes",
   "keyboardShortcuts.header.shortcut": "Shortcut",
   "keyboardShortcuts.filter.showConditions": "Show conditions",
-  "keyboardShortcuts.restartNote": "Edits made directly to keybindings.json apply after a restart.",
+  "keyboardShortcuts.restartNote": "Editing keybindings.json outside Pergamum reloads it automatically.",
   "keyboardShortcuts.diagnostics.summary": "keybindings.json has {count} issue(s).",
   "keyboardShortcuts.diagnostics.severity.error": "Error",
   "keyboardShortcuts.diagnostics.severity.warning": "Warning",

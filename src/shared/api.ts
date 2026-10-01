@@ -403,8 +403,23 @@ export const KEYBINDINGS_CHANNELS = {
   applyKeybindingChange: "keybindings:applyKeybindingChange",
   setCaptureMode: "keybindings:setCaptureMode",
   /** main -> renderer: a key pressed while the capture mode is on. */
-  captureInput: "keybindings:captureInput"
+  captureInput: "keybindings:captureInput",
+  /** main -> renderer (#650): keybindings.json was changed from outside. */
+  changed: "keybindings:changed"
 } as const;
+
+/**
+ * #650: sent after an external edit of keybindings.json was reloaded. It only
+ * says THAT something changed (no path, no file content): the renderer
+ * re-fetches the effective keybindings and the shortcut list over the
+ * existing IPC.
+ */
+export interface KeybindingsChangedPayload {
+  /** Increases with every notification (this app run). */
+  readonly version: number;
+  /** How many diagnostics the applied keybindings now carry. */
+  readonly diagnosticsCount: number;
+}
 
 /**
  * #647: one key press forwarded by the main process while the Keyboard
@@ -1661,6 +1676,10 @@ export interface PergamumApi {
     /** Returns the unsubscribe function. */
     onCaptureInput: (
       listener: (input: KeybindingCaptureInput) => void
+    ) => () => void;
+    /** #650: an external edit of keybindings.json was reloaded. Returns the unsubscribe function. */
+    onKeybindingsChanged: (
+      listener: (payload: KeybindingsChangedPayload) => void
     ) => () => void;
   };
   /**

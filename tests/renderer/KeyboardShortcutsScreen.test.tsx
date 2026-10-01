@@ -290,7 +290,7 @@ describe("KeyboardShortcutsScreen rows (#646)", () => {
   it("states that keybindings.json edits apply after a restart", async () => {
     install(data());
     await render();
-    expect(container.textContent).toContain("再起動後に反映");
+    expect(container.textContent).toContain("自動的に再読み込みします");
   });
 });
 

@@ -47,10 +47,14 @@ afterEach(async () => {
 
 describe("keybindings IPC (#645)", () => {
   it("registers exactly the three keybindings channels", () => {
-    // (captureInput is main -> renderer: it has no handler.)
+    // (captureInput and changed are main -> renderer pushes: no handler.)
     expect([...electronMock.handlers.keys()].sort()).toEqual(
       Object.values(KEYBINDINGS_CHANNELS)
-        .filter((channel) => channel !== KEYBINDINGS_CHANNELS.captureInput)
+        .filter(
+          (channel) =>
+            channel !== KEYBINDINGS_CHANNELS.captureInput &&
+            channel !== KEYBINDINGS_CHANNELS.changed
+        )
         .sort()
     );
   });

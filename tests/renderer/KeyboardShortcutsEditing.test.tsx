@@ -41,6 +41,8 @@ function rowsFor(entries: Parameters<typeof resolveEffectiveKeybindings>[0]["use
 let container: HTMLDivElement;
 let root: Root;
 let captureListener: ((input: KeybindingCaptureInput) => void) | null = null;
+let changedListener: ((payload: { version: number; diagnosticsCount: number }) => void) | null =
+  null;
 const setCaptureMode = vi.fn();
 const applyKeybindingChange = vi.fn();
 const getKeyboardShortcutItems = vi.fn();
@@ -48,6 +50,7 @@ const unsubscribe = vi.fn();
 
 function installApi(initial = rowsFor([])): void {
   captureListener = null;
+  changedListener = null;
   setCaptureMode.mockReset().mockResolvedValue({ ok: true });
   unsubscribe.mockReset();
   applyKeybindingChange.mockReset();
@@ -66,6 +69,14 @@ function installApi(initial = rowsFor([])): void {
         return () => {
           captureListener = null;
           unsubscribe();
+        };
+      },
+      onKeybindingsChanged: (
+        listener: (payload: { version: number; diagnosticsCount: number }) => void
+      ) => {
+        changedListener = listener;
+        return () => {
+          changedListener = null;
         };
       },
       openKeybindingsJsonLocation: vi.fn().mockResolvedValue({ ok: true })
@@ -1848,5 +1859,145 @@ describe("list scroll region, sticky header and conditions (#649 dogfood 2)", ()
     expect(
       (document.activeElement as HTMLElement).closest("li.keyboardShortcutRow")?.textContent
     ).toContain("Ctrl+Alt+9");
+  });
+});
+
+describe("external keybindings.json changes (#650)", () => {
+  const toggle = (selector: string): HTMLInputElement =>
+    container.querySelector(selector) as HTMLInputElement;
+  const readonlyToggle = (): HTMLInputElement =>
+    toggle(".keyboardShortcutsFilterToggle:not(.keyboardShortcutsConditionsToggle) input");
+  const conditionsToggle = (): HTMLInputElement =>
+    toggle(".keyboardShortcutsConditionsToggle input");
+  const listScroll = (): HTMLElement =>
+    container.querySelector(".keyboardShortcutsListScroll") as HTMLElement;
+  const keysOf = (commandId: string): string[] =>
+    [...groupOf(commandId).querySelectorAll("li.keyboardShortcutRow kbd")].map(
+      (el) => el.textContent ?? ""
+    );
+
+  async function click(el: HTMLElement): Promise<void> {
+    await act(async () => {
+      el.click();
+      await Promise.resolve();
+    });
+  }
+
+  async function typeQuery(value: string): Promise<void> {
+    const search = container.querySelector<HTMLInputElement>("#keyboardShortcutsSearch")!;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(search, value);
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  async function externalChange(entries: Parameters<typeof rowsFor>[0], diagnostics: unknown[] = []) {
+    const next = rowsFor(entries);
+    getKeyboardShortcutItems.mockResolvedValue({
+      platform: "win32",
+      items: next.items,
+      diagnostics
+    });
+    await act(async () => {
+      changedListener?.({ version: 1, diagnosticsCount: diagnostics.length });
+      await Promise.resolve();
+    });
+    await flush();
+  }
+
+  it("subscribes to the change notification and unsubscribes on unmount", async () => {
+    installApi();
+    await render();
+    expect(changedListener).not.toBeNull();
+    act(() => root.unmount());
+    expect(changedListener).toBeNull();
+    root = createRoot(container);
+  });
+
+  it("refreshes the list (labels, origins) when the file changed outside", async () => {
+    installApi();
+    await render();
+    expect(keysOf("editor.markdown.bold")).toEqual(["Ctrl+B"]);
+    await externalChange([{ key: "Mod-Alt-9", command: "editor.markdown.bold" }]);
+    expect(keysOf("editor.markdown.bold")).toEqual(["Ctrl+B", "Ctrl+Alt+9"]);
+    const origins = [...groupOf("editor.markdown.bold").querySelectorAll(".keyboardShortcutOrigin")].map(
+      (el) => el.textContent
+    );
+    expect(origins).toEqual(["既定", "ユーザー"]);
+  });
+
+  it("shows the new diagnostics (e.g. a malformed file) at the top", async () => {
+    installApi();
+    await render();
+    expect(container.querySelector(".keyboardShortcutsDiagnostics")).toBeNull();
+    await externalChange([], [
+      { code: "jsonParseError", severity: "error", message: "keybindings.json is not valid JSON" }
+    ]);
+    const section = container.querySelector(".keyboardShortcutsDiagnostics") as HTMLElement;
+    expect(section.textContent).toContain("keybindings.json is not valid JSON");
+    // And they clear when the file is valid again.
+    await externalChange([]);
+    expect(container.querySelector(".keyboardShortcutsDiagnostics")).toBeNull();
+  });
+
+  it("keeps the search, category, view, Show ReadOnly, Show conditions and the list scroll", async () => {
+    installApi();
+    await render();
+    await click(readonlyToggle());
+    await click(conditionsToggle());
+    const select = container.querySelector(".keyboardShortcutsCategorySelect") as HTMLSelectElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+      setter.call(select, "Markdown");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await click(
+      container.querySelector('.keyboardShortcutsViewButton[data-view="all"]') as HTMLElement
+    );
+    await typeQuery("bold");
+    listScroll().scrollTop = 333;
+    await externalChange([{ key: "Mod-Alt-9", command: "editor.markdown.bold" }]);
+    expect((container.querySelector("#keyboardShortcutsSearch") as HTMLInputElement).value).toBe(
+      "bold"
+    );
+    expect(select.value).toBe("Markdown");
+    expect(readonlyToggle().checked).toBe(true);
+    expect(conditionsToggle().checked).toBe(true);
+    expect(
+      container.querySelector('.keyboardShortcutsViewButton[data-view="all"]')?.getAttribute("aria-pressed")
+    ).toBe("true");
+    expect(listScroll().scrollTop).toBe(333);
+    expect(keysOf("editor.markdown.bold")).toEqual(["Ctrl+B", "Ctrl+Alt+9"]);
+  });
+
+  it("keeps the Modified view while its content changes", async () => {
+    installApi();
+    await render();
+    await click(
+      container.querySelector('.keyboardShortcutsViewButton[data-view="modified"]') as HTMLElement
+    );
+    expect(container.querySelectorAll("li.keyboardShortcutGroup")).toHaveLength(0);
+    await externalChange([{ key: "Mod-Alt-9", command: "editor.markdown.bold" }]);
+    expect(
+      container.querySelector('.keyboardShortcutsViewButton[data-view="modified"]')?.getAttribute("aria-pressed")
+    ).toBe("true");
+    expect(
+      [...container.querySelectorAll(".keyboardShortcutGroup .keyboardShortcutCommandId")].map(
+        (el) => el.textContent
+      )
+    ).toEqual(["editor.markdown.bold"]);
+  });
+
+  it("a failed refresh keeps the current list", async () => {
+    installApi();
+    await render();
+    getKeyboardShortcutItems.mockRejectedValue(new Error("ipc"));
+    await act(async () => {
+      changedListener?.({ version: 1, diagnosticsCount: 0 });
+      await Promise.resolve();
+    });
+    await flush();
+    expect(keysOf("editor.markdown.bold")).toEqual(["Ctrl+B"]);
   });
 });

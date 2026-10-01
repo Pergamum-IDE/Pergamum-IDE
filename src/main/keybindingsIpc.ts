@@ -160,7 +160,9 @@ export function registerKeybindingsIpc(
   ipcMain.handle(
     KEYBINDINGS_CHANNELS.getEffectiveKeybindings,
     async (): Promise<GetEffectiveKeybindingsResult> => {
-      const loaded = await loadKeybindings(platform);
+      // #650: what is APPLIED now (so a half-edited file never leaks in), with
+      // a fresh read only when nothing was applied yet.
+      const loaded = getStartupKeybindings() ?? (await loadKeybindings(platform));
       return {
         platform,
         keybindings: loaded.effective.keybindings,
