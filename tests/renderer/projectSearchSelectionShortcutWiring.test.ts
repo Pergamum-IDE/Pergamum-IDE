@@ -101,19 +101,31 @@ describe("Ctrl+Shift+F/H wired via the Electron application-menu accelerator, no
     );
   });
 
-  it("the menu accelerators live in src/main/menu.ts's Edit menu, not a renderer keydown handler", () => {
+  it("the menu items live in the canonical menu model's Edit menu (accelerators from the catalog), not a renderer keydown handler", () => {
+    // #662: the Edit menu structure is the canonical model; the accelerators
+    // are applied by the Electron adapter.
+    const modelSource = readFileSync(
+      "src/shared/applicationMenuModel.ts",
+      "utf8"
+    );
+    const adapterSource = readFileSync(
+      "src/main/applicationMenuAdapter.ts",
+      "utf8"
+    );
     const menuSource = readFileSync("src/main/menu.ts", "utf8");
-    expect(menuSource).toContain(
+    expect(modelSource).toContain(
       "searchSelectionShortcutCommandIds.openProjectSearchFromSelection"
     );
-    expect(menuSource).toContain(
+    expect(modelSource).toContain(
       "searchSelectionShortcutCommandIds.openProjectReplaceFromSelection"
     );
     // #642: the accelerators are catalog-derived (src/main/menuAccelerators.ts),
-    // no longer literals in menu.ts.
-    expect(menuSource).toContain("accelerators.get(");
-    expect(menuSource).not.toContain('"CommandOrControl+Shift+F"');
-    expect(menuSource).not.toContain('"CommandOrControl+Shift+H"');
+    // never literals in the model / adapter / menu.
+    expect(adapterSource).toContain("accelerators.get(");
+    for (const source of [modelSource, adapterSource, menuSource]) {
+      expect(source).not.toContain('"CommandOrControl+Shift+F"');
+      expect(source).not.toContain('"CommandOrControl+Shift+H"');
+    }
     const lookup = createMenuAcceleratorLookup("win32");
     expect(
       lookup.get("search.project.openFromSelection")

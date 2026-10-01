@@ -38,10 +38,13 @@ describe("preload applicationMenu.setEnablement bridge (#252 follow-up)", () => 
 });
 
 describe("main-process menu command item ids and IPC registration (#252 follow-up)", () => {
-  it("gives every commandMenuItem a stable id and registers the setEnablement IPC handler", () => {
+  it("gives every command menu item a stable id and registers the setEnablement IPC handler", () => {
+    // #662: command items are built by the Electron adapter from the model.
+    const adapter = readFileSync("src/main/applicationMenuAdapter.ts", "utf8");
+    expect(adapter).toContain("id: item.commandId,");
+
     const source = readFileSync("src/main/menu.ts", "utf8");
 
-    expect(source).toContain("id: commandId,");
     expect(source).toContain(
       "ipcMain.on(APPLICATION_MENU_CHANNELS.setEnablement,"
     );
