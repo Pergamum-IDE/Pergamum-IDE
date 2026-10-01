@@ -98,6 +98,14 @@ export function createTabCaptureKeymapExtension(
   return Prec.highest(
     EditorView.domEventHandlers({
       keydown(event, view): boolean {
+        // #654: during IME composition Tab / Escape belong to the IME
+        // (candidate selection, cancelling the conversion): never indent, and
+        // never arm the one-shot bypass from the IME's Escape. keyCode 229
+        // covers engines that leave isComposing stale.
+        if (event.isComposing || view.composing || event.keyCode === 229) {
+          return false;
+        }
+
         // Escape key (catalog: editor.tabCapture.bypassOnce): sets bypass
         // flag, but lets event propagate/bubble
         if (

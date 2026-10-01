@@ -49,6 +49,13 @@ export const reservedKeybindings: readonly ReservedKeybinding[] = [
     "forbidden",
     "macOS screenshot"
   ),
+  // #654: the same screenshot keys as the shifted symbol the capture UI and a
+  // hand-written keybindings.json spell them with (Shift-3/4/5 -> # $ %).
+  ...reserved(
+    ["Mod-#", "Mod-$", "Mod-%"],
+    "forbidden",
+    "macOS screenshot (shifted-symbol spelling of Mod-Shift-3 / 4 / 5)"
+  ),
   ...reserved(["Mod-Tab", "Mod-`"], "forbidden", "macOS app/window switching"),
   ...reserved(["Mod-Alt-Escape"], "forbidden", "macOS Force Quit"),
   ...reserved(["Ctrl-Mod-q"], "forbidden", "macOS lock screen"),
