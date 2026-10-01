@@ -76,6 +76,36 @@ export function normalizeUserKeyNotation(key: string): string {
     : key;
 }
 
+/**
+ * Best effort: the position of a JSON syntax error, taken from the engine's
+ * message only as numbers (never its text, which can quote the file). Nothing
+ * is returned when the message has no recognizable position.
+ */
+function syntaxErrorPosition(
+  error: unknown,
+  source: string
+): { line?: number; column?: number } {
+  const text = error instanceof Error ? error.message : "";
+  const explicit = /line (\d+) column (\d+)/.exec(text);
+  if (explicit !== null) {
+    return { line: Number(explicit[1]), column: Number(explicit[2]) };
+  }
+  const offset = /position (\d+)/.exec(text);
+  if (offset === null) {
+    return {};
+  }
+  const position = Number(offset[1]);
+  if (!Number.isSafeInteger(position) || position > source.length) {
+    return {};
+  }
+  const before = source.slice(0, position);
+  const lastNewline = before.lastIndexOf("\n");
+  return {
+    line: before.split("\n").length,
+    column: position - lastNewline
+  };
+}
+
 export function parseUserKeybindingsJson(source: string): ParsedUserKeybindings {
   const result: ParsedUserKeybindings = {
     entries: [],
@@ -89,12 +119,14 @@ export function parseUserKeybindingsJson(source: string): ParsedUserKeybindings 
   let value: unknown;
   try {
     value = JSON.parse(source);
-  } catch {
-    // The parser's own message can quote file content; keep it out.
+  } catch (error) {
+    // The parser's own message can quote file content; keep it out. Only a
+    // numeric position is taken from it, when one can be found safely.
     result.diagnostics.push({
       code: "jsonParseError",
       severity: "error",
-      message: "keybindings.json is not valid JSON; no user keybindings applied"
+      message: "keybindings.json is not valid JSON; no user keybindings applied",
+      ...syntaxErrorPosition(error, source)
     });
     return result;
   }
@@ -126,41 +158,73 @@ export function parseUserKeybindingsJson(source: string): ParsedUserKeybindings 
           code: "unknownField",
           severity: "warning",
           message: `Entry ${index}: unknown field "${field}" is ignored`,
-          index
+          index,
+          field
         });
       }
     }
 
     const command = record.command;
     const key = record.key;
-    if (typeof command !== "string" || command.trim() === "") {
+    const when = record.when;
+    const commandText = typeof command === "string" ? command : undefined;
+    const keyText = typeof key === "string" ? key : undefined;
+    // Every problem of the entry is reported, not just the first.
+    const before = result.diagnostics.length;
+    if (command === undefined || (typeof command === "string" && command.trim() === "")) {
       result.diagnostics.push({
         code: "missingCommand",
         severity: "error",
         message: `Entry ${index} has no "command"`,
-        index
+        index,
+        field: "command",
+        ...(keyText === undefined ? {} : { key: keyText })
       });
-      return;
+    } else if (typeof command !== "string") {
+      result.diagnostics.push({
+        code: "invalidCommandType",
+        severity: "error",
+        message: `Entry ${index}: "command" must be a string`,
+        index,
+        field: "command"
+      });
     }
-    if (typeof key !== "string" || key.trim() === "") {
+    if (key === undefined || (typeof key === "string" && key.trim() === "")) {
       result.diagnostics.push({
         code: "missingKey",
         severity: "error",
-        message: `Entry ${index} (${command}) has no "key"`,
+        message: `Entry ${index} has no "key"`,
         index,
-        command
+        field: "key",
+        ...(commandText === undefined ? {} : { command: commandText })
       });
-      return;
+    } else if (typeof key !== "string") {
+      result.diagnostics.push({
+        code: "invalidKeyType",
+        severity: "error",
+        message: `Entry ${index}: "key" must be a string`,
+        index,
+        field: "key",
+        ...(commandText === undefined ? {} : { command: commandText })
+      });
     }
-    const when = record.when;
     if (when !== undefined && typeof when !== "string") {
       result.diagnostics.push({
-        code: "unsupportedWhen",
+        code: "invalidWhenType",
         severity: "error",
-        message: `Entry ${index} (${command}): "when" must be a string`,
+        message: `Entry ${index}: "when" must be a string`,
         index,
-        command
+        field: "when",
+        ...(commandText === undefined ? {} : { command: commandText }),
+        ...(keyText === undefined ? {} : { key: keyText })
       });
+    }
+    if (
+      result.diagnostics.length > before ||
+      typeof command !== "string" ||
+      typeof key !== "string" ||
+      (when !== undefined && typeof when !== "string")
+    ) {
       return;
     }
 
@@ -252,6 +316,44 @@ export function resolveEffectiveKeybindings(options: {
     index: options.entryIndices?.[position] ?? position
   }));
 
+  /**
+   * #651: `when` is metadata, never evaluated. It is known only when it
+   * equals (as a string) a `when` the catalog / defaults already give this
+   * command; anything else makes the entry invalid (never unconditional).
+   */
+  function checkWhen(
+    entry: UserKeybindingEntry,
+    command: KeybindingCommand,
+    index: number
+  ): boolean {
+    if (entry.when === undefined) {
+      return true;
+    }
+    const allowedWhen = new Set<string>(
+      rows
+        .filter((row) => row.binding.command === command.id)
+        .map((row) => row.binding.when)
+        .filter((when): when is string => when !== null)
+    );
+    if (command.when !== null) {
+      allowedWhen.add(command.when);
+    }
+    if (allowedWhen.has(entry.when)) {
+      return true;
+    }
+    diagnostics.push({
+      code: "unsupportedWhen",
+      severity: "error",
+      message: `Entry ${index}: "when" is not supported for ${command.id}`,
+      index,
+      field: "when",
+      command: command.id,
+      key: entry.key,
+      when: entry.when
+    });
+    return false;
+  }
+
   /** Shared per-entry checks. Returns the command, or null when rejected. */
   function checkTarget(
     entry: UserKeybindingEntry,
@@ -265,6 +367,7 @@ export function resolveEffectiveKeybindings(options: {
         severity: "error",
         message: `Entry ${index}: unknown command ${commandId}`,
         index,
+        field: "command",
         command: commandId
       });
       return null;
@@ -275,6 +378,7 @@ export function resolveEffectiveKeybindings(options: {
         severity: "error",
         message: `Entry ${index}: ${commandId} is a ${command.source} command and cannot be rebound`,
         index,
+        field: "command",
         command: commandId
       });
       return null;
@@ -285,6 +389,7 @@ export function resolveEffectiveKeybindings(options: {
         severity: "error",
         message: `Entry ${index}: invalid key notation "${entry.key}"`,
         index,
+        field: "key",
         command: commandId,
         key: entry.key
       });
@@ -301,7 +406,7 @@ export function resolveEffectiveKeybindings(options: {
     }
     const commandId = entry.command.slice(1);
     const command = checkTarget(entry, commandId, index);
-    if (command === null) {
+    if (command === null || !checkWhen(entry, command, index)) {
       continue;
     }
     const wanted = physicalKey(entry.key, platform);
@@ -350,26 +455,8 @@ export function resolveEffectiveKeybindings(options: {
     }
     const template = templateFor(command, rows);
 
-    if (entry.when !== undefined) {
-      const allowedWhen = new Set<string>(
-        rows
-          .filter((row) => row.binding.command === command.id)
-          .map((row) => row.binding.when)
-          .filter((when): when is string => when !== null)
-      );
-      if (command.when !== null) {
-        allowedWhen.add(command.when);
-      }
-      if (!allowedWhen.has(entry.when)) {
-        diagnostics.push({
-          code: "unsupportedWhen",
-          severity: "error",
-          message: `Entry ${index}: "when" is not supported for ${command.id}`,
-          index,
-          command: command.id
-        });
-        continue;
-      }
+    if (!checkWhen(entry, command, index)) {
+      continue;
     }
 
     const wanted = physicalKey(entry.key, platform);
@@ -406,6 +493,7 @@ export function resolveEffectiveKeybindings(options: {
         index,
         command: command.id,
         key: entry.key,
+        relatedCommand: conflict.binding.command,
         scope: command.scope
       });
       continue;

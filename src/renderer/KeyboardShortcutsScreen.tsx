@@ -30,6 +30,7 @@ import {
   type KeyboardShortcutView
 } from "./keyboardShortcutSearch";
 import { KeyboardShortcutCaptureDialog } from "./KeyboardShortcutCaptureDialog";
+import { keybindingDiagnosticMessage } from "./keybindings/keybindingDiagnosticMessage";
 import {
   KeyboardShortcutNoticeDialog,
   type KeyboardShortcutNotice
@@ -349,9 +350,24 @@ export function KeyboardShortcutsScreen({
   }
 
   const diagnostics = state.kind === "ready" ? state.data.diagnostics : [];
-  const hasDiagnosticError = diagnostics.some(
+  const errorCount = diagnostics.filter(
     (diagnostic) => diagnostic.severity === "error"
-  );
+  ).length;
+  const warningCount = diagnostics.length - errorCount;
+  const hasDiagnosticError = errorCount > 0;
+  const diagnosticsSummary =
+    errorCount > 0 && warningCount > 0
+      ? translate("keyboardShortcuts.diagnostics.summary.both", {
+          errors: errorCount,
+          warnings: warningCount
+        })
+      : errorCount > 0
+        ? translate("keyboardShortcuts.diagnostics.summary.errors", {
+            count: errorCount
+          })
+        : translate("keyboardShortcuts.diagnostics.summary.warnings", {
+            count: warningCount
+          });
 
   return (
     <section
@@ -483,9 +499,7 @@ export function KeyboardShortcutsScreen({
           role={hasDiagnosticError ? "alert" : "status"}
         >
           <p className="keyboardShortcutsDiagnosticsSummary">
-            {translate("keyboardShortcuts.diagnostics.summary", {
-              count: diagnostics.length
-            })}
+            {diagnosticsSummary}
           </p>
           <ul className="keyboardShortcutsDiagnosticsList">
             {diagnostics.map((diagnostic, position) => (
@@ -501,8 +515,23 @@ export function KeyboardShortcutsScreen({
                   )}
                 </span>{" "}
                 <span className="keyboardShortcutsDiagnosticMessage">
-                  {diagnostic.message}
+                  {keybindingDiagnosticMessage(diagnostic, translate, language)}
                 </span>
+                {diagnostic.index !== undefined ? (
+                  <span className="keyboardShortcutsDiagnosticLocation">
+                    {translate("keyboardShortcuts.diagnostics.entry", {
+                      number: diagnostic.index + 1
+                    })}
+                  </span>
+                ) : null}
+                {diagnostic.line !== undefined && diagnostic.column !== undefined ? (
+                  <span className="keyboardShortcutsDiagnosticLocation">
+                    {translate("keyboardShortcuts.diagnostics.position", {
+                      line: diagnostic.line,
+                      column: diagnostic.column
+                    })}
+                  </span>
+                ) : null}
                 {diagnostic.command !== undefined ? (
                   <code className="keyboardShortcutsDiagnosticCommand">
                     {diagnostic.command}
@@ -511,6 +540,11 @@ export function KeyboardShortcutsScreen({
                 {diagnostic.key !== undefined ? (
                   <code className="keyboardShortcutsDiagnosticKey">
                     {diagnostic.key}
+                  </code>
+                ) : null}
+                {diagnostic.relatedCommand !== undefined ? (
+                  <code className="keyboardShortcutsDiagnosticCommand">
+                    {diagnostic.relatedCommand}
                   </code>
                 ) : null}
               </li>

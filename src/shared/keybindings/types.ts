@@ -191,6 +191,9 @@ export type KeybindingDiagnosticCode =
   | "missingKey"
   | "missingCommand"
   | "unknownField"
+  | "invalidKeyType"
+  | "invalidCommandType"
+  | "invalidWhenType"
   | "readonlyCommand"
   | "conflictingKey"
   | "duplicateUserEntry"
@@ -203,13 +206,27 @@ export type KeybindingDiagnosticCode =
 export interface KeybindingDiagnostic {
   readonly code: KeybindingDiagnosticCode;
   readonly severity: "error" | "warning";
+  /**
+   * An English, developer-oriented detail (logs, tests, debugging). The UI
+   * must not show it: it builds a localized message from `code` and the
+   * fields below instead (#651).
+   */
   readonly message: string;
-  /** #645: the index of the offending entry in keybindings.json. */
+  /** #645: the 0-based index of the offending entry in keybindings.json. */
   readonly index?: number;
+  /** #651: the offending field; for `unknownField`, the unknown field's name. */
+  readonly field?: string;
   readonly command?: string;
   readonly key?: string;
+  /** #651: the entry's `when` string as written (metadata, never evaluated). */
+  readonly when?: string;
+  /** #651: the other command in a conflict. */
+  readonly relatedCommand?: string;
   readonly platform?: string;
   readonly scope?: KeybindingScope;
+  /** #651: best-effort position of a JSON syntax error (1-based). */
+  readonly line?: number;
+  readonly column?: number;
 }
 
 /** The data validated and resolved together. */

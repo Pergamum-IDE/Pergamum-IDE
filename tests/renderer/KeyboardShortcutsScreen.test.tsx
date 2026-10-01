@@ -101,9 +101,10 @@ function install(data: GetKeyboardShortcutItemsResult | Error): void {
   };
 }
 
-async function render(): Promise<void> {
+async function render(language: "ja" | "en" = "ja"): Promise<void> {
+  const tr: Translate = (key, values) => t(language, key, values);
   await act(async () => {
-    root.render(<KeyboardShortcutsScreen translate={translate} />);
+    root.render(<KeyboardShortcutsScreen translate={tr} language={language} />);
   });
   await act(async () => {
     await Promise.resolve();
@@ -387,8 +388,12 @@ describe("KeyboardShortcutsScreen diagnostics (#646)", () => {
     await render();
     await showReadonly();
     const section = container.querySelector(".keyboardShortcutsDiagnostics") as HTMLElement;
-    expect(section.textContent).toContain("keybindings.json に 2 件の問題があります。");
-    expect(section.textContent).toContain("Entry 0: Mod-i is already bound to editor.markdown.italic");
+    expect(section.textContent).toContain(
+      "keybindings.json に 1 件のエラーと 1 件の警告があります。"
+    );
+    // The localized message is shown, never the English developer message.
+    expect(section.textContent).toContain("このショートカットは既に使用されています。");
+    expect(section.textContent).not.toContain("is already bound");
     expect(section.querySelector(".keyboardShortcutsDiagnosticCommand")?.textContent).toBe(
       "editor.markdown.bold"
     );
@@ -419,6 +424,67 @@ describe("KeyboardShortcutsScreen diagnostics (#646)", () => {
     await render();
     const section = container.querySelector(".keyboardShortcutsDiagnostics") as HTMLElement;
     expect(section.getAttribute("role")).toBe("alert");
+  });
+});
+
+describe("KeyboardShortcutsScreen diagnostics polish (#651)", () => {
+  it("shows a 1-based entry number, the position of a syntax error and context chips", async () => {
+    install(
+      data(sampleRows, [
+        {
+          code: "unsupportedWhen",
+          severity: "error",
+          message: "Entry 0: when not supported",
+          index: 0,
+          command: "editor.markdown.bold",
+          key: "Mod-b",
+          when: "foo && bar"
+        },
+        { code: "jsonParseError", severity: "error", message: "bad", line: 3, column: 7 }
+      ])
+    );
+    await render();
+    const text = (container.querySelector(".keyboardShortcutsDiagnostics") as HTMLElement)
+      .textContent;
+    expect(text).toContain("エントリ 1");
+    expect(text).not.toContain("エントリ 0");
+    expect(text).toContain("3 行 7 列");
+    expect(text).toContain("foo && bar");
+    expect(text).toContain("このショートカット定義は適用されません。");
+    expect(text).not.toContain("when not supported");
+  });
+
+  it("an unknown code shows a generic localized message in ja, the developer message in en", async () => {
+    const unknown = {
+      code: "somethingNew",
+      severity: "error",
+      message: "Raw developer text"
+    } as unknown as GetKeyboardShortcutItemsResult["diagnostics"][number];
+    install(data(sampleRows, [unknown]));
+    await render("ja");
+    let text = container.querySelector(".keyboardShortcutsDiagnostics")?.textContent ?? "";
+    expect(text).toContain("キーバインド設定で問題が発生しました。（somethingNew）");
+    expect(text).not.toContain("Raw developer text");
+    await act(async () => {
+      root.unmount();
+    });
+    root = createRoot(container);
+    install(data(sampleRows, [unknown]));
+    await render("en");
+    text = container.querySelector(".keyboardShortcutsDiagnostics")?.textContent ?? "";
+    expect(text).toContain("Raw developer text");
+  });
+
+  it("renders English messages in the English UI", async () => {
+    install(
+      data(sampleRows, [
+        { code: "invalidKeyNotation", severity: "error", message: "x", key: "Ctrl+S", index: 1 }
+      ])
+    );
+    await render("en");
+    const text = container.querySelector(".keyboardShortcutsDiagnostics")?.textContent ?? "";
+    expect(text).toContain("`Ctrl+S` is not a supported key notation. Example: `Mod-s`");
+    expect(text).toContain("Entry 2");
   });
 });
 

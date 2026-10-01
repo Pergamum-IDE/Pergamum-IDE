@@ -15471,6 +15471,14 @@ label.settingsItemHeader {
   margin: 0;
   padding-inline-start: 18px;
   font-size: 12px;
+  max-block-size: 160px;
+  overflow-y: auto;
+}
+
+.keyboardShortcutsDiagnosticLocation {
+  margin-inline-start: 8px;
+  font-size: 11px;
+  color: var(--pg-color-surface-muted);
 }
 
 .keyboardShortcutsDiagnosticSeverity {
