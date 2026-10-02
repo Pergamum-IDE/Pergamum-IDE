@@ -104,6 +104,15 @@ export interface ApplicationMenuNativeRoleItem extends ApplicationMenuItemBase {
 export interface ApplicationMenuSubmenuItem extends ApplicationMenuItemBase {
   readonly type: "submenu";
   readonly label: ApplicationMenuLabel;
+  /**
+   * #668: the menu's access key (mnemonic) as ONE uppercase Latin letter. It
+   * is semantic identity, not presentation: translations never contain it
+   * (no `&File` / `ファイル(&F)`), and each surface decides how to show it
+   * (the Renderer menu appends `(F)` to labels that lack the letter). Alt-key
+   * activation (#665) reads it from here. Set on the top-level menus only; it
+   * is not a command shortcut (those come from the keybindings).
+   */
+  readonly mnemonic?: string;
   /** The submenu itself is a native role (the Help menu). */
   readonly role?: "help";
   readonly items: readonly ApplicationMenuItem[];
@@ -152,7 +161,10 @@ function nativeRole(
 function submenu(
   key: TranslationKey,
   items: readonly ApplicationMenuItem[],
-  extras: Pick<ApplicationMenuSubmenuItem, "role" | "platforms"> = {}
+  extras: Pick<
+    ApplicationMenuSubmenuItem,
+    "role" | "platforms" | "mnemonic"
+  > = {}
 ): ApplicationMenuSubmenuItem {
   return { type: "submenu", label: { key }, items, ...extras };
 }
@@ -236,7 +248,7 @@ const fileMenu: ApplicationMenuTopLevelItem = submenu("menu.file", [
   // so the two never claim the same one.
   nativeRole("close", "menu.close", { platforms: ["darwin"] }),
   quitItem(["win32", "linux"])
-]);
+], { mnemonic: "F" });
 
 const editMenu: ApplicationMenuTopLevelItem = submenu("menu.edit", [
   // The edit roles keep native behavior; their command ids only let the
@@ -265,7 +277,7 @@ const editMenu: ApplicationMenuTopLevelItem = submenu("menu.edit", [
     searchSelectionShortcutCommandIds.openProjectReplaceFromSelection,
     "menu.edit.replaceInProject"
   )
-]);
+], { mnemonic: "E" });
 
 const viewMenu: ApplicationMenuTopLevelItem = submenu("menu.view", [
   // #554: Mod+P is the primary Command Palette / launcher shortcut; F1 is its
@@ -282,7 +294,7 @@ const viewMenu: ApplicationMenuTopLevelItem = submenu("menu.view", [
   command(applicationCommandIds.resetZoom, "menu.actualSize"),
   separator,
   nativeRole("togglefullscreen", "menu.toggleFullScreen")
-]);
+], { mnemonic: "V" });
 
 const assistMenu: ApplicationMenuTopLevelItem = submenu("menu.assist", [
   command(
@@ -303,7 +315,7 @@ const assistMenu: ApplicationMenuTopLevelItem = submenu("menu.assist", [
     "menu.assist.manageGlossaryEntries"
   ),
   command(glossaryTabCommandIds.manageTags, "menu.assist.manageGlossaryTags")
-]);
+], { mnemonic: "A" });
 
 const macWindowMenu: ApplicationMenuTopLevelItem = submenu(
   "menu.window",
@@ -323,7 +335,7 @@ const helpMenu: ApplicationMenuTopLevelItem = submenu(
     separator,
     command(applicationCommandIds.openAbout, "menu.aboutPergamum")
   ],
-  { role: "help" }
+  { role: "help", mnemonic: "H" }
 );
 
 /** The platform-independent definition, platform overlays marked per item. */

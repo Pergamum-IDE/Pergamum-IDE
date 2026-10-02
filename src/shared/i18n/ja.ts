@@ -1372,7 +1372,7 @@ export const jaTranslations = {
   "link.dialog.insert": "挿入",
   "link.dialog.cancel": "キャンセル",
   "menu.aboutPergamum": "Pergamumについて",
-  "menu.assist": "支援",
+  "menu.assist": "アシスト",
   "menu.assist.showLineEndingDistribution": "改行コード分布...",
   "menu.assist.paragraphIndent.insert": "段落字下げ一括挿入",
   "menu.assist.paragraphIndent.remove": "段落字下げ一括削除",
