@@ -325,6 +325,10 @@ const assistMenu: ApplicationMenuTopLevelItem = submenu("menu.assist", [
     "menu.assist.showLineEndingDistribution"
   ),
   command(
+    assistCommandIds.openJapaneseMachineCheckDialog,
+    "menu.assist.japaneseMachineCheck"
+  ),
+  command(
     assistCommandIds.insertParagraphIndent,
     "menu.assist.paragraphIndent.insert"
   ),

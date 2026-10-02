@@ -197,9 +197,10 @@ describe("canonical application menu model (#662)", () => {
       ]);
     });
 
-    it("Assist groups line endings / indent, then glossary management", () => {
+    it("Assist groups line endings / Japanese style check / indent, then glossary management", () => {
       expect(outline(topLevel("win32", "menu.assist").items)).toEqual([
         `command:${assistCommandIds.showLineEndingDistribution}`,
+        `command:${assistCommandIds.openJapaneseMachineCheckDialog}`,
         `command:${assistCommandIds.insertParagraphIndent}`,
         `command:${assistCommandIds.removeParagraphIndent}`,
         "---",

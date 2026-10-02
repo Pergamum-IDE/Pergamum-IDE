@@ -4,7 +4,8 @@ import {
   estimateJapaneseMachineCheck,
   isJapaneseMachineCheckPath,
   japaneseMachineCheckFormatForPath,
-  parseJapaneseMachineCheckRequest
+  parseJapaneseMachineCheckRequest,
+  JAPANESE_MACHINE_CHECK_MAX_RELATIVE_PATH_LENGTH
 } from "../../src/shared/japaneseMachineCheck";
 
 describe("Japanese machine check shared helpers (#625 P2a)", () => {
@@ -32,24 +33,102 @@ describe("Japanese machine check shared helpers (#625 P2a)", () => {
     expect(estimateJapaneseMachineCheck(100_001)).toBe("long");
   });
 
-  it("validates the untrusted request", () => {
-    expect(parseJapaneseMachineCheckRequest({ relativePath: "a.md" })).toEqual({
-      relativePath: "a.md"
-    });
+  it("validates a projectFile target", () => {
     expect(
-      parseJapaneseMachineCheckRequest({ relativePath: "a.md", isDirty: true, x: 1 })
-    ).toEqual({ relativePath: "a.md", isDirty: true });
+      parseJapaneseMachineCheckRequest({ kind: "projectFile", relativePath: "chapter/01.md", isDirty: true })
+    ).toEqual({ kind: "projectFile", relativePath: "chapter/01.md", isDirty: true });
+    expect(
+      parseJapaneseMachineCheckRequest({ kind: "projectFile", relativePath: "a.md", x: 1 })
+    ).toEqual({ kind: "projectFile", relativePath: "a.md" });
+    // A wrongly typed isDirty is dropped, not trusted.
+    expect(
+      parseJapaneseMachineCheckRequest({ kind: "projectFile", relativePath: "a.md", isDirty: "yes" })
+    ).toEqual({ kind: "projectFile", relativePath: "a.md" });
     for (const bad of [
       null,
       "a.md",
       {},
-      { relativePath: "" },
-      { relativePath: 3 },
-      { relativePath: "a\0.md" },
-      { relativePath: "a".repeat(5000) }
+      { relativePath: "a.md" },
+      { kind: "projectFile" },
+      { kind: "projectFile", relativePath: "" },
+      { kind: "projectFile", relativePath: 3 },
+      { kind: "projectFile", relativePath: "a\0.md" },
+      { kind: "projectFile", relativePath: "a".repeat(JAPANESE_MACHINE_CHECK_MAX_RELATIVE_PATH_LENGTH + 1) },
+      { kind: "unknown", relativePath: "a.md" }
     ]) {
       expect(parseJapaneseMachineCheckRequest(bad)).toBeNull();
     }
+    expect(
+      parseJapaneseMachineCheckRequest({
+        kind: "projectFile",
+        relativePath: "a".repeat(JAPANESE_MACHINE_CHECK_MAX_RELATIVE_PATH_LENGTH)
+      })
+    ).not.toBeNull();
+  });
+
+  it("validates a glossaryDescription target", () => {
+    expect(
+      parseJapaneseMachineCheckRequest({
+        kind: "glossaryDescription",
+        text: "説明本文",
+        displayName: "アリス / Description",
+        extra: 1
+      })
+    ).toEqual({
+      kind: "glossaryDescription",
+      text: "説明本文",
+      displayName: "アリス / Description"
+    });
+    // An empty body is a valid snapshot (Slice 2 decides what to do with it).
+    expect(
+      parseJapaneseMachineCheckRequest({ kind: "glossaryDescription", text: "", displayName: "A" })
+    ).not.toBeNull();
+    for (const bad of [
+      { kind: "glossaryDescriptions", text: "x", displayName: "A" },
+      { kind: "glossaryDescription", text: 1, displayName: "A" },
+      { kind: "glossaryDescription", displayName: "A" },
+      { kind: "glossaryDescription", text: "x", displayName: 1 },
+      { kind: "glossaryDescription", text: "x" },
+      { kind: "glossaryDescription", text: "x", displayName: "" },
+      { kind: "glossaryDescription", text: "x", displayName: "a\0b" },
+      { kind: "glossaryDescription", text: "x", displayName: "   " },
+      { kind: "glossaryDescription", text: "x", displayName: "\t\n" }
+    ]) {
+      expect(parseJapaneseMachineCheckRequest(bad)).toBeNull();
+    }
+  });
+
+  it("keeps a glossary displayName whole, however long (no length limit)", () => {
+    for (const displayName of [
+      "あ".repeat(257),
+      "a".repeat(5000),
+      "𠮷".repeat(400)
+    ]) {
+      expect(
+        parseJapaneseMachineCheckRequest({
+          kind: "glossaryDescription",
+          text: "x",
+          displayName
+        })
+      ).toEqual({ kind: "glossaryDescription", text: "x", displayName });
+    }
+  });
+
+  it("limits metadata only: the body text has no size limit and no fake path field", () => {
+    const huge = "あ".repeat(2_000_000);
+    const parsed = parseJapaneseMachineCheckRequest({
+      kind: "glossaryDescription",
+      text: huge,
+      displayName: "A"
+    });
+
+    expect(parsed).toEqual({
+      kind: "glossaryDescription",
+      text: huge,
+      displayName: "A"
+    });
+    expect(parsed).not.toHaveProperty("relativePath");
+    expect(parsed).not.toHaveProperty("path");
   });
 });
 
@@ -88,6 +167,21 @@ describe("Japanese machine check wiring (#625 P2a)", () => {
     expect(app).toContain("<JapaneseMachineCheckDialog");
   });
 
+  it("App holds one frozen target (a project file or a glossary Description) and the dialog passes it unchanged to prepare and run (#688)", () => {
+    const app = read("src/renderer/App.tsx");
+    const dialog = read("src/renderer/dialog/JapaneseMachineCheckDialog.tsx");
+
+    expect(app).toContain("useState<JapaneseMachineCheckTarget | null>(null)");
+    // The File Explorer entry still builds a projectFile target itself.
+    expect(app.match(/kind: "projectFile"/g)?.length).toBeGreaterThanOrEqual(1);
+    expect(app).toContain("target={japaneseMachineCheckTarget}");
+    // One source of truth: no separate relativePath / isDirty props.
+    expect(dialog).not.toContain("readonly isDirty: boolean;");
+    expect(dialog).not.toContain("relativePath={");
+    expect(dialog).toContain(".prepare(target)");
+    expect(dialog).toContain(".run({ ...target, runId })");
+  });
+
   it("the user-facing name is 日本語表現チェック / Japanese Style Check", () => {
     for (const [lang, file] of [["ja", "src/shared/i18n/ja.ts"], ["en", "src/shared/i18n/en.ts"]]) {
       const source = read(file);
@@ -114,7 +208,7 @@ describe("Japanese machine check wiring (#625 P2a)", () => {
     expect(dialog).toContain(".saveReport({ resultId })");
     // Main: dialog, default name, atomic write.
     expect(ipc).toContain("buildJapaneseStyleCheckReport");
-    expect(ipc).toContain("`${run.fileName}.lint.md`");
+    expect(ipc).toContain("`${run.displayName}.lint.md`");
     expect(ipc).toContain("path.dirname(run.absolutePath)");
     expect(ipc).toContain("dialog.showSaveDialog");
     expect(ipc).toContain("writeFileAtomic");

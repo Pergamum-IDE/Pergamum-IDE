@@ -15,6 +15,7 @@ import type {
   JapaneseMachineCheckFailureReason,
   JapaneseMachineCheckPrepareResult,
   JapaneseMachineCheckProgressStage,
+  JapaneseMachineCheckTarget,
   JapaneseMachineCheckSummary
 } from "../../shared/japaneseMachineCheck";
 import type { AppPlatform } from "../../shared/platform";
@@ -31,10 +32,13 @@ import { InfoDialog } from "./InfoDialog";
 export type JapaneseMachineCheckBridge = PergamumApi["japaneseMachineCheck"];
 
 export interface JapaneseMachineCheckDialogProps {
-  /** Project-relative path of the File Explorer file. */
-  readonly relativePath: string;
-  /** The file has unsaved changes in an editor (the check ignores them). */
-  readonly isDirty: boolean;
+  /**
+   * What to check, frozen by the opener. The same object goes to `prepare`
+   * and `run`, so the estimate and the run cannot see different snapshots.
+   * A project file (`isDirty`: it has unsaved changes in an editor, which the
+   * check ignores) or a glossary Description (its draft text and name).
+   */
+  readonly target: JapaneseMachineCheckTarget;
   readonly translate: Translate;
   readonly uiLanguage?: Language;
   readonly platform?: AppPlatform;
@@ -100,8 +104,7 @@ function baseName(relativePath: string): string {
 }
 
 export function JapaneseMachineCheckDialog({
-  relativePath,
-  isDirty,
+  target,
   translate,
   uiLanguage,
   platform,
@@ -128,7 +131,13 @@ export function JapaneseMachineCheckDialog({
     "idle" | "saving" | "saved" | "canceled" | "failed"
   >("idle");
   const resultIdRef = useRef<string | null>(null);
-  const fileName = baseName(relativePath);
+  const isGlossaryDescription = target.kind === "glossaryDescription";
+  // Shown while preparing and running: a file's name, or the target's name as
+  // given (a glossary Description has no file name).
+  const targetName =
+    target.kind === "projectFile"
+      ? baseName(target.relativePath)
+      : target.displayName;
   const format = (value: number): string =>
     formatLocalizedNumber(value, uiLanguage);
 
@@ -138,7 +147,7 @@ export function JapaneseMachineCheckDialog({
     let alive = true;
 
     void api
-      .prepare({ relativePath, isDirty })
+      .prepare(target)
       .then((prepared) => {
         if (!alive) {
           return;
@@ -229,7 +238,7 @@ export function JapaneseMachineCheckDialog({
     runIdRef.current = runId;
     setScreen({ kind: "running", stage: "starting", canceling: false });
     void api
-      .run({ relativePath, runId })
+      .run({ ...target, runId })
       .then((result) => {
         if (token !== runTokenRef.current || !mountedRef.current) {
           return;
@@ -250,7 +259,7 @@ export function JapaneseMachineCheckDialog({
           setScreen({ kind: "error", reason: "worker-failed" });
         }
       });
-  }, [api, onClose, relativePath]);
+  }, [api, onClose, target]);
 
   const cancelRun = useCallback(() => {
     if (screenRef.current.kind !== "running") {
@@ -366,17 +375,30 @@ export function JapaneseMachineCheckDialog({
     body = (
       <div className="japaneseMachineCheckBody">
         <dl className="japaneseMachineCheckFacts">
-          <dt>{translate("japaneseMachineCheck.estimate.file")}</dt>
-          <dd>{prepared.fileName}</dd>
-          <dt>{translate("japaneseMachineCheck.estimate.type")}</dt>
-          <dd>
-            {translate(
-              prepared.format === "markdown"
-                ? "japaneseMachineCheck.type.markdown"
-                : "japaneseMachineCheck.type.text"
-            )}{" "}
-            ({prepared.ext})
-          </dd>
+          {prepared.targetKind === "glossaryDescription" ? (
+            <>
+              <dt>{translate("japaneseMachineCheck.estimate.target")}</dt>
+              <dd>{prepared.displayName}</dd>
+              <dt>{translate("japaneseMachineCheck.estimate.targetType")}</dt>
+              <dd>{translate("japaneseMachineCheck.type.glossaryDescription")}</dd>
+              <dt>{translate("japaneseMachineCheck.estimate.format")}</dt>
+              <dd>{translate("japaneseMachineCheck.type.markdown")}</dd>
+            </>
+          ) : (
+            <>
+              <dt>{translate("japaneseMachineCheck.estimate.file")}</dt>
+              <dd>{prepared.displayName}</dd>
+              <dt>{translate("japaneseMachineCheck.estimate.type")}</dt>
+              <dd>
+                {translate(
+                  prepared.format === "markdown"
+                    ? "japaneseMachineCheck.type.markdown"
+                    : "japaneseMachineCheck.type.text"
+                )}{" "}
+                ({prepared.ext})
+              </dd>
+            </>
+          )}
           <dt>{translate("japaneseMachineCheck.estimate.chars")}</dt>
           <dd>{format(prepared.sourceChars)}</dd>
           <dt>{translate("japaneseMachineCheck.estimate.lines")}</dt>
@@ -404,7 +426,7 @@ export function JapaneseMachineCheckDialog({
             {translate("japaneseMachineCheck.estimate.noRules")}
           </p>
         ) : null}
-        {prepared.isDirty ? (
+        {prepared.targetKind === "projectFile" && prepared.isDirty ? (
           <p
             className="japaneseMachineCheckNotice"
             role="note"
@@ -432,10 +454,7 @@ export function JapaneseMachineCheckDialog({
   } else if (screen.kind === "running") {
     body = (
       <div className="japaneseMachineCheckBody">
-        <p className="japaneseMachineCheckFile">{fileName}</p>
-        <p className="japaneseMachineCheckRunningTitle">
-          {translate("japaneseMachineCheck.running.title")}
-        </p>
+        <p className="japaneseMachineCheckFile">{targetName}</p>
         <p
           className="japaneseMachineCheckElapsed"
           data-japanese-machine-check="elapsed"
@@ -488,8 +507,19 @@ export function JapaneseMachineCheckDialog({
     body = (
       <div className="japaneseMachineCheckBody">
         <dl className="japaneseMachineCheckFacts">
-          <dt>{translate("japaneseMachineCheck.estimate.file")}</dt>
-          <dd>{summary.fileName}</dd>
+          {summary.targetKind === "glossaryDescription" ? (
+            <>
+              <dt>{translate("japaneseMachineCheck.estimate.target")}</dt>
+              <dd>{summary.displayName}</dd>
+              <dt>{translate("japaneseMachineCheck.estimate.targetType")}</dt>
+              <dd>{translate("japaneseMachineCheck.type.glossaryDescription")}</dd>
+            </>
+          ) : (
+            <>
+              <dt>{translate("japaneseMachineCheck.estimate.file")}</dt>
+              <dd>{summary.displayName}</dd>
+            </>
+          )}
           <dt>{translate("japaneseMachineCheck.summary.total")}</dt>
           <dd data-japanese-machine-check="total">
             {format(summary.totalMessages)}
@@ -597,7 +627,13 @@ export function JapaneseMachineCheckDialog({
   } else {
     body = (
       <div className="japaneseMachineCheckBody">
-        <p role="status">{translate("japaneseMachineCheck.loading")}</p>
+        <p role="status">
+          {translate(
+            isGlossaryDescription
+              ? "japaneseMachineCheck.loading.target"
+              : "japaneseMachineCheck.loading"
+          )}
+        </p>
       </div>
     );
     footer = arrange(null, cancelButton);

@@ -20,8 +20,16 @@ import {
 /** Characters kept on each side of a finding. */
 export const REPORT_SNIPPET_RADIUS = 15;
 
+/** What the report is about. No path: a glossary Description has none. */
+export interface JapaneseStyleCheckReportTarget {
+  readonly kind: "projectFile" | "glossaryDescription";
+  /** A file name, or a glossary Description's entry name - shown as is. */
+  readonly displayName: string;
+  readonly format: "markdown" | "text";
+}
+
 export interface JapaneseStyleCheckReportInput {
-  readonly fileName: string;
+  readonly target: JapaneseStyleCheckReportTarget;
   readonly executedAt: Date;
   readonly totalMessages: number;
   readonly returnedMessages: number;
@@ -93,6 +101,24 @@ export function formatReportDateTime(date: Date): string {
   )} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
+function targetRows(
+  target: JapaneseStyleCheckReportTarget,
+  translate: Translate
+): string[] {
+  const name = escapeMarkdownText(target.displayName);
+
+  // A project file keeps the long-standing single "ファイル" row.
+  if (target.kind === "projectFile") {
+    return [`| ${translate("japaneseStyleReport.file")} | ${name} |`];
+  }
+
+  return [
+    `| ${translate("japaneseStyleReport.targetName")} | ${name} |`,
+    `| ${translate("japaneseStyleReport.type")} | ${translate("japaneseStyleReport.type.glossaryDescription")} |`,
+    `| ${translate("japaneseStyleReport.format")} | ${target.format === "markdown" ? "Markdown" : "Text"} |`
+  ];
+}
+
 export function buildJapaneseStyleCheckReport(
   input: JapaneseStyleCheckReportInput
 ): string {
@@ -131,7 +157,7 @@ export function buildJapaneseStyleCheckReport(
   lines.push(
     `| ${translate("japaneseStyleReport.table.item")} | ${translate("japaneseStyleReport.table.content")} |`,
     "|---|---|",
-    `| ${translate("japaneseStyleReport.file")} | ${escapeMarkdownText(input.fileName)} |`,
+    ...targetRows(input.target, translate),
     `| ${translate("japaneseStyleReport.executedAt")} | ${formatReportDateTime(input.executedAt)} |`,
     `| ${translate("japaneseStyleReport.total")} | ${formatNumber(input.totalMessages)} |`,
     `| ${translate("japaneseStyleReport.returned")} | ${formatNumber(input.returnedMessages)} |`,

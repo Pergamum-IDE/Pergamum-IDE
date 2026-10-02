@@ -274,7 +274,8 @@ import {
   type OccurrenceCountValue
 } from "./dialog/GlossaryExportWizardDialog";
 import { JapaneseMachineCheckDialog } from "./dialog/JapaneseMachineCheckDialog";
-import { isJapaneseMachineCheckPath } from "../shared/japaneseMachineCheck";
+import type { JapaneseMachineCheckTarget } from "../shared/japaneseMachineCheck";
+import { resolveJapaneseMachineCheckTarget } from "./japaneseMachineCheckTarget";
 import type { GlossaryExportPlan } from "./glossaryExport/glossaryExportModel";
 import { renderGlossaryDescriptionForExport } from "./glossaryExport/glossaryExportHtml";
 import { countGlossaryEntryOccurrences } from "./glossaryExport/glossaryExportOccurrences";
@@ -1610,11 +1611,16 @@ export function App(): JSX.Element {
   // #581 Slice 1: the Glossary Export Wizard Dialog open state & occurrences map
   const [isGlossaryExportWizardOpen, setIsGlossaryExportWizardOpen] = useState(false);
   // #625 P2a: the Japanese machine check wizard, opened from a File Explorer
-  // file's context menu. `isDirty` is captured when it opens.
-  const [japaneseMachineCheckTarget, setJapaneseMachineCheckTarget] = useState<{
-    readonly relativePath: string;
-    readonly isDirty: boolean;
-  } | null>(null);
+  // file's context menu. The target (incl. `isDirty`) is frozen when it opens
+  // and is handed unchanged to the dialog's prepare and run (#688).
+  const [japaneseMachineCheckTarget, setJapaneseMachineCheckTarget] =
+    useState<JapaneseMachineCheckTarget | null>(null);
+  // #688: what the command would check right now (a project file or the active
+  // glossary Description's draft). Re-pointed every render so the registered
+  // command never reads a stale editor; enablement and invocation share it.
+  const resolveJapaneseMachineCheckTargetRef = useRef<
+    () => JapaneseMachineCheckTarget | null
+  >(() => null);
   const [
     glossaryExportWizardOccurrenceCounts,
     setGlossaryExportWizardOccurrenceCounts
@@ -4192,18 +4198,15 @@ export function App(): JSX.Element {
           void handleFileExplorerExport({ kind: "projectRoot" });
         },
         openJapaneseMachineCheckDialog: () => {
-          const activePath = activeProjectDocumentRelativePath(openDocumentsState);
-          if (activePath !== null && isJapaneseMachineCheckPath(activePath)) {
-            setJapaneseMachineCheckTarget({
-              relativePath: activePath,
-              isDirty: fileExplorerDirtyProjectDocumentPaths.includes(activePath)
-            });
+          // The snapshot is taken here, once; the dialog keeps this object.
+          const target = resolveJapaneseMachineCheckTargetRef.current();
+
+          if (target !== null) {
+            setJapaneseMachineCheckTarget(target);
           }
         },
-        canRunJapaneseMachineCheck: () => {
-          const activePath = activeProjectDocumentRelativePath(openDocumentsState);
-          return activePath !== null && isJapaneseMachineCheckPath(activePath);
-        }
+        canRunJapaneseMachineCheck: () =>
+          resolveJapaneseMachineCheckTargetRef.current() !== null
       },
       createAssistCommandTitles(translate)
     );
@@ -10032,6 +10035,15 @@ export function App(): JSX.Element {
   insertBlockquoteCommandRef.current = () => {
     handleInsertBlockquote();
   };
+  resolveJapaneseMachineCheckTargetRef.current = () =>
+    resolveJapaneseMachineCheckTarget({
+      currentEditor,
+      isSpecialTabActive: isEditorAreaSpecialTabActive,
+      activeProjectDocumentRelativePath:
+        activeProjectDocumentRelativePath(openDocumentsState),
+      isProjectDocumentDirty: (relativePath) =>
+        fileExplorerDirtyProjectDocumentPaths.includes(relativePath)
+    });
   canToggleSyntaxCheckerCommandRef.current = () => canUseMarkdownSyntaxChecker;
   toggleSyntaxCheckerCommandRef.current = () => {
     handleToggleMarkdownSyntaxChecker();
@@ -13268,6 +13280,7 @@ export function App(): JSX.Element {
                       }}
                       onFileExplorerJapaneseMachineCheck={(relativePath) => {
                         setJapaneseMachineCheckTarget({
+                          kind: "projectFile",
                           relativePath,
                           isDirty:
                             fileExplorerDirtyProjectDocumentPaths.includes(
@@ -13803,9 +13816,12 @@ export function App(): JSX.Element {
 
       {japaneseMachineCheckTarget ? (
         <JapaneseMachineCheckDialog
-          key={japaneseMachineCheckTarget.relativePath}
-          relativePath={japaneseMachineCheckTarget.relativePath}
-          isDirty={japaneseMachineCheckTarget.isDirty}
+          key={
+            japaneseMachineCheckTarget.kind === "projectFile"
+              ? `file:${japaneseMachineCheckTarget.relativePath}`
+              : `glossary:${japaneseMachineCheckTarget.displayName}`
+          }
+          target={japaneseMachineCheckTarget}
           translate={translate}
           uiLanguage={displayLanguage}
           platform={window.pergamum.platform}

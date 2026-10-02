@@ -251,6 +251,10 @@ exports[`application menu accelerators come from the catalog (#642) > darwin: me
         "label": "Line Ending Distribution...",
       },
       {
+        "id": "assist.japaneseMachineCheck.openDialog",
+        "label": "Japanese Style Check...",
+      },
+      {
         "id": "assist.paragraphIndent.insert",
         "label": "Insert Paragraph Indents",
       },
@@ -523,6 +527,10 @@ exports[`application menu accelerators come from the catalog (#642) > linux: men
         "label": "Line Ending Distribution...",
       },
       {
+        "id": "assist.japaneseMachineCheck.openDialog",
+        "label": "Japanese Style Check...",
+      },
+      {
         "id": "assist.paragraphIndent.insert",
         "label": "Insert Paragraph Indents",
       },
@@ -773,6 +781,10 @@ exports[`application menu accelerators come from the catalog (#642) > win32: men
       {
         "id": "assist.lineEndingDistribution.show",
         "label": "Line Ending Distribution...",
+      },
+      {
+        "id": "assist.japaneseMachineCheck.openDialog",
+        "label": "Japanese Style Check...",
       },
       {
         "id": "assist.paragraphIndent.insert",
