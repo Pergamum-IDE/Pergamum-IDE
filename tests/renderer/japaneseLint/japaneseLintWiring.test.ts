@@ -42,12 +42,16 @@ describe("Japanese lint wiring (#625 Slice 2)", () => {
     expect(toolbar).toContain('translate("toolbar.japaneseLint")');
   });
 
-  it("only lints the body editor: source is null for special tabs and glossary description", () => {
-    expect(app).toContain(
-      'if (isEditorAreaSpecialTabActive || currentEditor?.kind !== "markdown") {'
+  it("lints the body editor and the glossary Description (#687) through one source: special tabs stay null", () => {
+    const resolver = source(
+      "src/renderer/japaneseLint/japaneseLintEditorSource.ts"
     );
-    expect(app).toContain("japaneseLintSourceForPath(");
-    // The Glossary Description editor is never handed a lint source.
+
+    expect(app).toContain("resolveJapaneseLintEditorSource(");
+    expect(resolver).toContain("if (input.isSpecialTabActive || currentEditor === null)");
+    expect(resolver).toContain('currentEditor.kind === "glossaryDescription"');
+    expect(resolver).toContain("japaneseLintSourceForPath(");
+    // The editor surface receives the source regardless of the tab kind.
     const glossaryEditorUses = editor.match(/japaneseLintSource/g) ?? [];
     expect(glossaryEditorUses.length).toBeGreaterThan(0);
   });

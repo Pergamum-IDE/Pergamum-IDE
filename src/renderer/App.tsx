@@ -148,10 +148,7 @@ import {
 } from "./workbenchFontFamily";
 import { applyColorThemeById } from "./colorTheme";
 import { notifyStartupVisualReady } from "./startupVisualReady";
-import {
-  decideJapaneseLintToggle,
-  japaneseLintSourceForPath
-} from "../shared/japaneseLint";
+import { decideJapaneseLintToggle } from "../shared/japaneseLint";
 import {
   resolveJapaneseLintDebounceMs,
   resolveJapaneseLintSettings
@@ -402,6 +399,7 @@ import {
   type NativeEditCommandContext
 } from "./editContextMenuBridge";
 import { EditContextMenu } from "./EditContextMenu";
+import { resolveJapaneseLintEditorSource } from "./japaneseLint/japaneseLintEditorSource";
 import {
   editContextMenuShortcutCommandIds,
   useContextMenuShortcutResolver
@@ -3249,24 +3247,18 @@ export function App(): JSX.Element {
   /** #606: Markdown syntax checker enable gate (active Markdown document only, excluding .txt / glossary description / special tabs) */
   const canUseMarkdownSyntaxChecker = activeEditorIsMarkdown;
   // #625: the Japanese linter supports the body editor of Markdown (.md /
-  // .markdown) and plain text (.txt) documents only - not special tabs, the
-  // Glossary Description editor, or other file types.
-  const japaneseLintDocumentSource = useMemo(() => {
-    if (isEditorAreaSpecialTabActive || currentEditor?.kind !== "markdown") {
-      return null;
-    }
-
-    const document = currentEditor.document;
-
-    if (document.kind === "untitled") {
-      return { format: "markdown", ext: ".md" } as const;
-    }
-
-    return japaneseLintSourceForPath(
-      document.kind === "file" ? document.path : document.relativePath,
-      isMarkdownPath
-    );
-  }, [isEditorAreaSpecialTabActive, currentEditor]);
+  // .markdown) and plain text (.txt) documents - not special tabs or other
+  // file types. #687: and the glossary Description editor (linted as
+  // Markdown, from its live editor text). One source for the lint driver and
+  // for the toolbar / Command Registry enablement below.
+  const japaneseLintDocumentSource = useMemo(
+    () =>
+      resolveJapaneseLintEditorSource(
+        { isSpecialTabActive: isEditorAreaSpecialTabActive, currentEditor },
+        isMarkdownPath
+      ),
+    [isEditorAreaSpecialTabActive, currentEditor]
+  );
   const canUseJapaneseLint = japaneseLintDocumentSource !== null;
   // #625: the instant check runs in the Worker process, so a document of any
   // length may be turned ON.
