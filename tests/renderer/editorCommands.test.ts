@@ -194,6 +194,7 @@ describe("editor commands", () => {
       "editor.image.insert",
       "editor.markdown.insertBlockquote",
       "editor.markdown.toggleSyntaxChecker",
+      "editor.japaneseLint.toggleInstant",
       "editor.markdown.bold",
       "editor.markdown.italic",
       "editor.markdown.strikethrough",
@@ -548,6 +549,10 @@ describe("editor commands", () => {
         "translated:command.editor.markdown.toggleSyntaxChecker",
       toggleSyntaxCheckerDescription:
         "translated:command.editor.markdown.toggleSyntaxChecker.description",
+      toggleInstantJapaneseLint:
+        "translated:command.editor.japaneseLint.toggleInstant",
+      toggleInstantJapaneseLintDescription:
+        "translated:command.editor.japaneseLint.toggleInstant.description",
       bold: "translated:command.editor.markdown.bold",
       boldDescription: "translated:command.editor.markdown.bold.description",
       italic: "translated:command.editor.markdown.italic",

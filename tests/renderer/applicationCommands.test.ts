@@ -178,7 +178,7 @@ describe("application commands", () => {
       listCommandPaletteEntries(registry).some(
         (entry) => entry.id === applicationCommandIds.openBulkTextImportDialog
       )
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("creates localized command titles from command i18n keys", () => {

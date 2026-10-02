@@ -221,7 +221,9 @@ function buildFullCommandRegistry(): CommandRegistry {
     {
       showLineEndingDistribution: () => undefined,
       insertParagraphIndent: () => undefined,
-      removeParagraphIndent: () => undefined
+      removeParagraphIndent: () => undefined,
+      openExportDialog: () => undefined,
+      openJapaneseMachineCheckDialog: () => undefined
     },
     {
       showLineEndingDistribution: "Show Line Ending Distribution",
@@ -229,7 +231,11 @@ function buildFullCommandRegistry(): CommandRegistry {
       insertParagraphIndent: "Insert Paragraph Indents",
       insertParagraphIndentDescription: "",
       removeParagraphIndent: "Remove Paragraph Indents",
-      removeParagraphIndentDescription: ""
+      removeParagraphIndentDescription: "",
+      openExportDialog: "Export Project",
+      openExportDialogDescription: "",
+      openJapaneseMachineCheckDialog: "Japanese Style Check",
+      openJapaneseMachineCheckDialogDescription: ""
     }
   );
 
@@ -312,7 +318,7 @@ describe("Command Palette ordering (#617)", () => {
     const entries = listCommandPaletteEntries(registry);
     const ids = entries.map((e) => String(e.id));
 
-    expect(ids).not.toContain("import.text.bulk.openDialog");
+    expect(ids).toContain("import.text.bulk.openDialog");
     expect(ids).not.toContain("glossary.entry.open");
     expect(ids).not.toContain("glossary.openCreateEntryPane");
     expect(ids).not.toContain("glossary.openEditEntryPane");

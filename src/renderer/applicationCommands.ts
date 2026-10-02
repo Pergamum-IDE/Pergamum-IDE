@@ -124,7 +124,9 @@ export function createApplicationCommands(
       id: applicationCommandIds.openBulkTextImportDialog,
       title: titles.openBulkTextImportDialog,
       description: titles.openBulkTextImportDialogDescription,
-      palette: { visible: false },
+      when: { key: "project.isOpen" },
+      category: "file",
+      paletteOrder: 40,
       execute: () => controller.openBulkTextImportDialog()
     },
     {

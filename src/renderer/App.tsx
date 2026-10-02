@@ -277,6 +277,7 @@ import {
   type OccurrenceCountValue
 } from "./dialog/GlossaryExportWizardDialog";
 import { JapaneseMachineCheckDialog } from "./dialog/JapaneseMachineCheckDialog";
+import { isJapaneseMachineCheckPath } from "../shared/japaneseMachineCheck";
 import type { GlossaryExportPlan } from "./glossaryExport/glossaryExportModel";
 import { renderGlossaryDescriptionForExport } from "./glossaryExport/glossaryExportHtml";
 import { countGlossaryEntryOccurrences } from "./glossaryExport/glossaryExportOccurrences";
@@ -4106,6 +4107,8 @@ export function App(): JSX.Element {
         canOutdent: () => canOutdentCommandRef.current(),
         togglePreview: () => togglePreviewCommandRef.current(),
         canTogglePreview: () => canTogglePreviewCommandRef.current(),
+        toggleInstantJapaneseLint: () => handleToggleJapaneseLint(),
+        canToggleInstantJapaneseLint: () => canUseJapaneseLint,
         delegateNativeEditCommand: (commandId) =>
           delegateNativeEditCommand(commandId),
         canDelegateNativeEditCommand: (commandId) =>
@@ -4126,7 +4129,23 @@ export function App(): JSX.Element {
         showLineEndingDistribution: () =>
           showLineEndingDistributionCommandRef.current(),
         insertParagraphIndent: () => insertParagraphIndentCommandRef.current(),
-        removeParagraphIndent: () => removeParagraphIndentCommandRef.current()
+        removeParagraphIndent: () => removeParagraphIndentCommandRef.current(),
+        openExportDialog: () => {
+          void handleFileExplorerExport({ kind: "projectRoot" });
+        },
+        openJapaneseMachineCheckDialog: () => {
+          const activePath = activeProjectDocumentRelativePath(openDocumentsState);
+          if (activePath !== null && isJapaneseMachineCheckPath(activePath)) {
+            setJapaneseMachineCheckTarget({
+              relativePath: activePath,
+              isDirty: fileExplorerDirtyProjectDocumentPaths.includes(activePath)
+            });
+          }
+        },
+        canRunJapaneseMachineCheck: () => {
+          const activePath = activeProjectDocumentRelativePath(openDocumentsState);
+          return activePath !== null && isJapaneseMachineCheckPath(activePath);
+        }
       },
       createAssistCommandTitles(translate)
     );

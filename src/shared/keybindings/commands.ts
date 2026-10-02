@@ -613,6 +613,109 @@ export const keybindingCommands: readonly KeybindingCommand[] = [
     handlerStatus: callbackDirect,
     when: "workbenchFocus && !modalOpen && !textInputFocus"
   }),
+  pergamum({
+    id: "import.text.bulk.openDialog",
+    title: "Import Text Files",
+    category: "View",
+    description: "Opens the bulk text import dialog.",
+    handlerStatus: registered,
+    when: "project.isOpen"
+  }),
+  pergamum({
+    id: "project.settings.open",
+    title: "Open Project Settings",
+    category: "View",
+    description: "Opens the Project Settings tab.",
+    handlerStatus: registered,
+    when: "project.isOpen"
+  }),
+
+  // Assist (#670)
+  pergamum({
+    id: "assist.lineEndingDistribution.show",
+    title: "Line Ending Distribution",
+    category: "Assist",
+    description: "Shows line ending distribution in the document.",
+    handlerStatus: registered,
+    when: "editor.kind.markdown"
+  }),
+  pergamum({
+    id: "assist.paragraphIndent.insert",
+    title: "Insert Paragraph Indents",
+    category: "Assist",
+    description: "Inserts full-width space indents at paragraph starts.",
+    handlerStatus: registered,
+    when: "editor.hasDocument && editor.kind.markdown && !readOnly"
+  }),
+  pergamum({
+    id: "assist.paragraphIndent.remove",
+    title: "Remove Paragraph Indents",
+    category: "Assist",
+    description: "Removes leading spaces from paragraph starts.",
+    handlerStatus: registered,
+    when: "editor.hasDocument && editor.kind.markdown && !readOnly"
+  }),
+  pergamum({
+    id: "glossary.entry.manage",
+    title: "Manage Glossary Entries",
+    category: "Assist",
+    description: "Opens the Glossary Entry Manager tab.",
+    handlerStatus: registered,
+    when: "project.isOpen"
+  }),
+  pergamum({
+    id: "glossary.tag.manage",
+    title: "Manage Glossary Tags",
+    category: "Assist",
+    description: "Opens the Glossary Tag Manager tab.",
+    handlerStatus: registered,
+    when: "project.isOpen"
+  }),
+  pergamum({
+    id: "assist.export.openDialog",
+    title: "Export Project",
+    category: "Assist",
+    description: "Opens the manuscript export confirmation dialog for the project.",
+    handlerStatus: registered,
+    when: "project.isOpen"
+  }),
+  pergamum({
+    id: "assist.japaneseMachineCheck.openDialog",
+    title: "Japanese Style Check",
+    category: "Assist",
+    description: "Opens the Japanese style check wizard for the active document.",
+    handlerStatus: registered,
+    when: "activeJapaneseMachineCheckDocument"
+  }),
+
+  // Editor (#670 additions)
+  pergamum({
+    id: "editor.japaneseLint.toggleInstant",
+    title: "Toggle Instant Japanese Style Check",
+    category: "Editor",
+    description: "Toggles live Japanese style check in the editor.",
+    handlerStatus: registered,
+    when: "canUseJapaneseLint",
+    scope: "editor"
+  }),
+
+  // Help (#670)
+  pergamum({
+    id: "workbench.showResumeHub",
+    title: "Show Resume Hub",
+    category: "Help",
+    description: "Opens the Resume Hub tab.",
+    handlerStatus: registered,
+    when: "project.isOpen"
+  }),
+  pergamum({
+    id: "app.about.open",
+    title: "About Pergamum",
+    category: "Help",
+    description: "Opens the About Pergamum dialog.",
+    handlerStatus: registered,
+    when: whenWorkbench
+  }),
 
   // Window / App
   nativeRole(

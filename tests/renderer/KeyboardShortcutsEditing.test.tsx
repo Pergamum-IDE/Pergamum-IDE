@@ -1319,6 +1319,7 @@ describe("Show ReadOnly toggle and category labels (#649 dogfood)", () => {
 describe("category display labels (#649 final)", () => {
   const JA: Record<string, string> = {
     Application: "アプリケーション",
+    Assist: "アシスト",
     "Command Palette": "コマンドパレット",
     Developer: "開発者向け",
     Edit: "基本編集",
@@ -1326,6 +1327,7 @@ describe("category display labels (#649 final)", () => {
     File: "ファイル",
     "File Explorer": "ファイルエクスプローラー",
     Glossary: "語彙集",
+    Help: "ヘルプ",
     Markdown: "マークダウン",
     Search: "検索",
     View: "表示",
