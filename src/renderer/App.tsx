@@ -3244,8 +3244,8 @@ export function App(): JSX.Element {
     activeEditorIsMarkdown || isGlossaryDescriptionEditorActive;
   const canUseMarkdownToolbarCommands =
     activeEditorIsMarkdownEditingTarget && !isReadOnlyProjectOwnedEditor;
-  /** #606: Markdown syntax checker enable gate (active Markdown document only, excluding .txt / glossary description / special tabs) */
-  const canUseMarkdownSyntaxChecker = activeEditorIsMarkdown;
+  /** #606 / #690: Markdown syntax checker enable gate - the active Markdown editing target (a Markdown document or a glossary Description), excluding .txt and every special tab. Same gate as the Markdown toolbar commands, minus their read-only condition (the checker only diagnoses). */
+  const canUseMarkdownSyntaxChecker = activeEditorIsMarkdownEditingTarget;
   // #625: the Japanese linter supports the body editor of Markdown (.md /
   // .markdown) and plain text (.txt) documents - not special tabs or other
   // file types. #687: and the glossary Description editor (linted as
