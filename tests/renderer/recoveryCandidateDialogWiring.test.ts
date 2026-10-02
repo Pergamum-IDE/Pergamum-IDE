@@ -211,6 +211,9 @@ describe("Recovery candidate dialog wiring (#287)", () => {
       "assets/icons/ionicons/dialog/hourglass-outline.svg?url"
     );
     expect(dialogFile).toContain(
+      "assets/icons/codicons/dialog/trash.svg?url"
+    );
+    expect(dialogFile).not.toContain(
       "assets/icons/ionicons/dialog/trash-bin-outline.svg?url"
     );
     expect(dialogFile).not.toContain("reload-outline.svg?url");
