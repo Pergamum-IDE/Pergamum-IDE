@@ -397,8 +397,16 @@ import {
   executeContextMenuEditCommand,
   handleEditContextMenuEvent,
   hasSelectionInDocument,
+  restoreContextMenuFocus,
+  type EditContextMenuOpenRequest,
   type NativeEditCommandContext
 } from "./editContextMenuBridge";
+import { EditContextMenu } from "./EditContextMenu";
+import {
+  editContextMenuShortcutCommandIds,
+  useContextMenuShortcutResolver
+} from "./contextMenuShortcuts";
+import { editContextMenuItems } from "../shared/editContextMenu";
 import {
   createEditorCommandTitles,
   editorCommandIds,
@@ -2294,6 +2302,9 @@ export function App(): JSX.Element {
     []
   );
   const saveInFlightGuard = useMemo(() => createSaveInFlightGuard(), []);
+  const resolveContextMenuShortcut = useContextMenuShortcutResolver();
+  const [editContextMenu, setEditContextMenu] =
+    useState<EditContextMenuOpenRequest | null>(null);
   const nextContextMenuInteractionId = useMemo(
     () => createContextMenuInteractionIdFactory(),
     []
@@ -4442,43 +4453,70 @@ export function App(): JSX.Element {
     executeMenuCommand: (commandId) =>
       receiveApplicationMenuCommandRef.current(commandId)
   });
-  useEffect(
-    () =>
-      window.pergamum.contextMenu.onCommandSelected((selection) => {
-        void executeContextMenuEditCommand(selection, {
-          commandRegistry,
-          editorIdKind: debugEditorIdKind(activeDocument?.id),
-          delegatedSurface: delegatedContextSurfaceFromDocument(),
-          hasSelection: hasSelectionInDocument(),
-          log: logRendererDebugEvent,
-          setNativeEditCommandContext: (context) => {
-            nativeEditCommandContextRef.current = context;
-          },
-          clearNativeEditCommandContext: (context) => {
-            if (nativeEditCommandContextRef.current === context) {
-              nativeEditCommandContextRef.current = null;
-            }
-          }
-        }).catch((error) => {
-          logRendererDebugEvent({
-            level: "error",
-            event: "command.failed",
-            details: {
-              commandId: selection.commandId,
-              operation: "unknown",
-              result: "failed",
-              statusKey: "status.commandFailed",
-              error: rendererDebugErrorInfo(error)
-            }
-          });
-          setStatus({
-            key: "status.commandFailed",
-            values: { message: errorMessage(error, translate) }
-          });
-        });
-      }),
-    [activeDocument?.id, commandRegistry, translate]
-  );
+  // #685: the edit context menu is renderer-drawn and holds focus while open.
+  // Close it, hand focus back to the right-click target, then run the command
+  // through the Command Registry (which still delegates the actual cut / copy /
+  // paste / select-all to the native edit operation).
+  function closeEditContextMenu(options?: { restoreFocus: boolean }): void {
+    const openMenu = editContextMenu;
+    setEditContextMenu(null);
+    if (options?.restoreFocus !== false && openMenu) {
+      restoreContextMenuFocus(openMenu.focusTarget);
+    }
+  }
+
+  function handleEditContextMenuSelect(commandId: EditCommandId): void {
+    const openMenu = editContextMenu;
+    if (!openMenu) {
+      return;
+    }
+    const selection = {
+      interactionId: openMenu.request.interactionId,
+      commandId,
+      requestedSurface: openMenu.request.requestedSurface
+    };
+    closeEditContextMenu();
+    logRendererDebugEvent({
+      level: "debug",
+      event: "contextMenu.command.selected",
+      details: {
+        interactionId: selection.interactionId,
+        commandId,
+        requestedSurface: selection.requestedSurface
+      }
+    });
+    void executeContextMenuEditCommand(selection, {
+      commandRegistry,
+      editorIdKind: openMenu.editorIdKind,
+      delegatedSurface: delegatedContextSurfaceFromDocument(),
+      hasSelection: openMenu.hasSelection,
+      log: logRendererDebugEvent,
+      setNativeEditCommandContext: (context) => {
+        nativeEditCommandContextRef.current = context;
+      },
+      clearNativeEditCommandContext: (context) => {
+        if (nativeEditCommandContextRef.current === context) {
+          nativeEditCommandContextRef.current = null;
+        }
+      }
+    }).catch((error) => {
+      logRendererDebugEvent({
+        level: "error",
+        event: "command.failed",
+        details: {
+          commandId,
+          operation: "unknown",
+          result: "failed",
+          statusKey: "status.commandFailed",
+          error: rendererDebugErrorInfo(error)
+        }
+      });
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    });
+  }
   // #262: Welcome shows on zero open tabs of any kind, regardless of project.
   // Blocker (#311 dogfood): but only the no-open case swaps the whole
   // workbench (sidebar included) for it — with an open Project the sidebar /
@@ -7055,7 +7093,7 @@ export function App(): JSX.Element {
       editorIdKind: debugEditorIdKind(activeDocument?.id),
       hasSelection: () => hasSelectionInDocument(),
       log: logRendererDebugEvent,
-      popupEditMenu: window.pergamum.contextMenu.popupEditMenu
+      openEditMenu: setEditContextMenu
     });
   }
 
@@ -13006,6 +13044,26 @@ export function App(): JSX.Element {
       onBlurCapture={handleAppBlurCapture}
       onContextMenuCapture={handleContextMenuCapture}
     >
+      {editContextMenu !== null ? (
+        <EditContextMenu
+          x={editContextMenu.x}
+          y={editContextMenu.y}
+          ariaLabel={translate("editContextMenu.label")}
+          items={editContextMenuItems.map((item) => ({
+            commandId: item.commandId,
+            label: translate(item.labelKey),
+            shortcut: resolveContextMenuShortcut(
+              editContextMenuShortcutCommandIds[item.commandId]
+            ),
+            enabled:
+              editContextMenu.request.items.find(
+                (state) => state.commandId === item.commandId
+              )?.enabled ?? false
+          }))}
+          onSelect={handleEditContextMenuSelect}
+          onClose={() => closeEditContextMenu()}
+        />
+      ) : null}
       {/* #663: Windows / Linux only (renders nothing on macOS). #664: the
           click / shortcut label / disabled state come from the existing
           command, keybinding and enablement infrastructure. */}

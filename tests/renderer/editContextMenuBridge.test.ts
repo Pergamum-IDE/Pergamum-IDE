@@ -7,7 +7,8 @@ import {
   delegatedContextSurfaceFromDocument,
   editableContextSurfaceFromTarget,
   executeContextMenuEditCommand,
-  handleEditContextMenuEvent
+  handleEditContextMenuEvent,
+  restoreContextMenuFocus
 } from "../../src/renderer/editContextMenuBridge";
 
 interface FakeElement {
@@ -70,14 +71,16 @@ describe("edit context menu renderer bridge", () => {
     ).toBeNull();
   });
 
-  it("suppresses unsupported context menu events without opening a popup", () => {
+  it("suppresses unsupported context menu events without opening the menu", () => {
     const preventDefault = vi.fn();
     const log = vi.fn();
-    const popupEditMenu = vi.fn();
+    const openEditMenu = vi.fn();
 
     const opened = handleEditContextMenuEvent(
       {
         target: fakeElement(),
+        clientX: 10,
+        clientY: 20,
         preventDefault
       },
       {
@@ -86,13 +89,13 @@ describe("edit context menu renderer bridge", () => {
         editorIdKind: "projectDocument",
         hasSelection: () => false,
         log,
-        popupEditMenu
+        openEditMenu
       }
     );
 
     expect(opened).toBe(false);
     expect(preventDefault).toHaveBeenCalledTimes(1);
-    expect(popupEditMenu).not.toHaveBeenCalled();
+    expect(openEditMenu).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith({
       level: "debug",
       event: "contextMenu.suppressed",
@@ -106,18 +109,21 @@ describe("edit context menu renderer bridge", () => {
     });
   });
 
-  it("evaluates Edit command enablement once immediately before popup", () => {
+  it("evaluates Edit command enablement once and hands the snapshot to the renderer menu", () => {
     const preventDefault = vi.fn();
     const log = vi.fn();
-    const popupEditMenu = vi.fn(() => Promise.resolve(true));
+    const openEditMenu = vi.fn();
     const enabledChecks: string[] = [];
     const surface = fakeElement({
       [pergamumContextSurfaceAttribute]: "glossaryDescription"
     });
+    const focusTarget = { ...surface, focus: vi.fn() };
 
     const opened = handleEditContextMenuEvent(
       {
         target: surface,
+        clientX: 10,
+        clientY: 20,
         preventDefault
       },
       {
@@ -129,21 +135,29 @@ describe("edit context menu renderer bridge", () => {
         editorIdKind: "glossaryEntry",
         hasSelection: () => true,
         log,
-        popupEditMenu
+        openEditMenu,
+        documentLike: { activeElement: focusTarget as never }
       }
     );
 
     expect(opened).toBe(true);
     expect(enabledChecks).toEqual([...editCommandIds]);
-    expect(popupEditMenu).toHaveBeenCalledWith({
-      interactionId: "contextMenu.7",
-      requestedSurface: "glossaryDescription",
-      items: [
-        { commandId: editorCommandIds.cutSelection, enabled: true },
-        { commandId: editorCommandIds.copySelection, enabled: true },
-        { commandId: editorCommandIds.pasteSelection, enabled: false },
-        { commandId: editorCommandIds.selectAllSelection, enabled: true }
-      ]
+    expect(openEditMenu).toHaveBeenCalledWith({
+      request: {
+        interactionId: "contextMenu.7",
+        requestedSurface: "glossaryDescription",
+        items: [
+          { commandId: editorCommandIds.cutSelection, enabled: true },
+          { commandId: editorCommandIds.copySelection, enabled: true },
+          { commandId: editorCommandIds.pasteSelection, enabled: false },
+          { commandId: editorCommandIds.selectAllSelection, enabled: true }
+        ]
+      },
+      x: 10,
+      y: 20,
+      editorIdKind: "glossaryEntry",
+      hasSelection: true,
+      focusTarget
     });
     expect(log).toHaveBeenCalledWith({
       level: "debug",
@@ -157,14 +171,19 @@ describe("edit context menu renderer bridge", () => {
     });
   });
 
-  it("logs suppressed with the same interaction ID when popup IPC fails", async () => {
+  it("snapshots the focused editable element as the focus target and logs opened", () => {
     const log = vi.fn();
+    const openEditMenu = vi.fn();
+    const surface = fakeElement({
+      [pergamumContextSurfaceAttribute]: "markdownEditor"
+    });
+    const focusTarget = { ...surface, focus: vi.fn() };
 
     handleEditContextMenuEvent(
       {
-        target: fakeElement({
-          [pergamumContextSurfaceAttribute]: "markdownEditor"
-        }),
+        target: surface,
+        clientX: 5,
+        clientY: 6,
         preventDefault: vi.fn()
       },
       {
@@ -173,34 +192,29 @@ describe("edit context menu renderer bridge", () => {
         editorIdKind: "projectDocument",
         hasSelection: () => false,
         log,
-        popupEditMenu: () => Promise.reject(new Error("unavailable"))
+        openEditMenu,
+        documentLike: { activeElement: focusTarget as never }
       }
     );
 
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(log).toHaveBeenCalledWith({
-      level: "debug",
-      event: "contextMenu.suppressed",
-      details: {
-        interactionId: "contextMenu.8",
-        requestedSurface: "markdownEditor",
-        editorIdKind: "projectDocument",
-        result: "ignored",
-        reason: "window_unavailable"
-      }
-    });
+    expect(openEditMenu).toHaveBeenCalledTimes(1);
+    expect(openEditMenu.mock.calls[0][0].focusTarget).toBe(focusTarget);
+    expect(log.mock.calls.map((call) => call[0].event)).toEqual([
+      "contextMenu.requested",
+      "contextMenu.opened"
+    ]);
   });
 
-  it("leaves diagnosed popup false results to main without duplicate renderer logs", async () => {
-    const log = vi.fn();
+  it("has no focus target when focus is outside a supported editable surface", () => {
+    const openEditMenu = vi.fn();
 
     handleEditContextMenuEvent(
       {
         target: fakeElement({
           [pergamumContextSurfaceAttribute]: "markdownEditor"
         }),
+        clientX: 5,
+        clientY: 6,
         preventDefault: vi.fn()
       },
       {
@@ -208,17 +222,23 @@ describe("edit context menu renderer bridge", () => {
         nextInteractionId: () => "contextMenu.9",
         editorIdKind: "projectDocument",
         hasSelection: () => false,
-        log,
-        popupEditMenu: () => Promise.resolve(false)
+        log: vi.fn(),
+        openEditMenu,
+        documentLike: { activeElement: { ...fakeElement(), focus: vi.fn() } as never }
       }
     );
 
-    await Promise.resolve();
-    await Promise.resolve();
+    expect(openEditMenu.mock.calls[0][0].focusTarget).toBeNull();
+  });
 
-    expect(log.mock.calls.map((call) => call[0].event)).toEqual([
-      "contextMenu.requested"
-    ]);
+  it("restores focus to the right-click target when it is still connected", () => {
+    const focus = vi.fn();
+
+    expect(restoreContextMenuFocus({ isConnected: true, focus })).toBe(true);
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(restoreContextMenuFocus({ isConnected: false, focus })).toBe(false);
+    expect(restoreContextMenuFocus(null)).toBe(false);
+    expect(focus).toHaveBeenCalledTimes(1);
   });
 
   it("creates session-local monotonic interaction IDs", () => {
@@ -497,6 +517,8 @@ describe("edit context menu renderer bridge", () => {
     handleEditContextMenuEvent(
       {
         target: markdownSurface,
+        clientX: 10,
+        clientY: 20,
         preventDefault: vi.fn()
       },
       {
@@ -505,7 +527,7 @@ describe("edit context menu renderer bridge", () => {
         editorIdKind: "projectDocument",
         hasSelection: () => false,
         log: vi.fn(),
-        popupEditMenu: () => Promise.resolve(true)
+        openEditMenu: vi.fn()
       }
     );
     await executeContextMenuEditCommand(
@@ -643,3 +665,46 @@ function deferred<T>(): {
 
   return { promise, resolve };
 }
+
+describe("edit context menu focus-divergence guard (#685)", () => {
+  it("does not delegate when focus did not return to the requested surface", async () => {
+    const registry = new CommandRegistry();
+    const execute = vi.fn();
+    const log = vi.fn();
+    const setNativeEditCommandContext = vi.fn();
+
+    registry.register({
+      id: editorCommandIds.cutSelection,
+      title: "Cut",
+      execute,
+      isEnabled: () => true
+    });
+
+    const executed = await executeContextMenuEditCommand(
+      {
+        interactionId: "contextMenu.guard",
+        commandId: editorCommandIds.cutSelection,
+        requestedSurface: "markdownEditor"
+      },
+      {
+        commandRegistry: registry,
+        editorIdKind: "projectDocument",
+        delegatedSurface: "unknownEditable",
+        hasSelection: true,
+        log,
+        setNativeEditCommandContext,
+        clearNativeEditCommandContext: vi.fn()
+      }
+    );
+
+    expect(executed).toBe(false);
+    expect(execute).not.toHaveBeenCalled();
+    expect(setNativeEditCommandContext).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "edit.command.ignored",
+        details: expect.objectContaining({ reason: "active_editor_changed" })
+      })
+    );
+  });
+});

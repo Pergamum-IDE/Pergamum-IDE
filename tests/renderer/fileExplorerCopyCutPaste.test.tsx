@@ -264,7 +264,7 @@ describe("File Explorer Copy / Cut / Paste entry points (#356)", () => {
       expect(copyIdx).toBeGreaterThanOrEqual(0);
       expect(copyIdx).toBeLessThan(cutIdx);
       expect(cutIdx).toBeLessThan(pasteIdx);
-      expect(menuItem("copy")?.textContent).toBe(
+      expect(menuItem("copy")?.querySelector(".contextMenuItemLabel")?.textContent).toBe(
         t("en", "explorer.contextMenu.copy")
       );
     });
@@ -546,5 +546,66 @@ describe("File Explorer Copy / Cut / Paste entry points (#356)", () => {
       await flush();
       expect(osClipboardWrite).not.toHaveBeenCalled();
     });
+  });
+});
+
+// #683/#685: shortcut column of the File Explorer context menu.
+describe("File Explorer context menu shortcut column", () => {
+  function shortcutOf(command: string): string | null {
+    return (
+      menuItem(command)?.querySelector(".contextMenuItemShortcut")
+        ?.textContent ?? null
+    );
+  }
+
+  it("shows shortcuts for Copy / Cut / Paste / Rename / Delete only", async () => {
+    await mount();
+    clickEntry("a.md");
+    openMenu("a.md");
+
+    for (const command of ["copy", "cut", "paste", "rename", "delete"]) {
+      expect(shortcutOf(command)).toBeTruthy();
+    }
+    for (const command of ["export", "move"]) {
+      expect(menuItem(command)).not.toBeNull();
+      expect(shortcutOf(command)).toBeNull();
+    }
+  });
+
+  it("keeps a shortcut on a disabled item and follows effective-keybinding updates while open", async () => {
+    const store = await import(
+      "../../src/renderer/keybindings/effectiveKeybindingStore"
+    );
+    const { resolveDefaultKeybindings } = await import(
+      "../../src/shared/keybindings/resolve"
+    );
+    const { formatKeybindingLabel } = await import(
+      "../../src/shared/keybindings"
+    );
+    await mount();
+    clickEntry("a.md");
+    openMenu("a.md");
+
+    expect(menuItem("paste")?.disabled).toBe(true);
+    expect(shortcutOf("paste")).toBeTruthy();
+
+    const platform = "linux" as const;
+    const rows = resolveDefaultKeybindings(platform).map((row) =>
+      row.command === "workspace.files.copy"
+        ? { ...row, key: "Mod-Shift-9" }
+        : row.command === "workspace.files.delete"
+          ? { ...row, key: null }
+          : row
+    );
+    act(() => store.setEffectiveKeybindings(platform, rows));
+
+    try {
+      expect(shortcutOf("copy")).toBe(
+        formatKeybindingLabel("Mod-Shift-9", platform)
+      );
+      expect(shortcutOf("delete")).toBeNull();
+    } finally {
+      store.resetEffectiveKeybindings();
+    }
   });
 });

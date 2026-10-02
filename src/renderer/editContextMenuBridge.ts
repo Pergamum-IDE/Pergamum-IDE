@@ -19,13 +19,36 @@ import {
 
 export interface ContextMenuEventLike {
   readonly target: unknown;
+  readonly clientX: number;
+  readonly clientY: number;
   preventDefault(): void;
+}
+
+/**
+ * Everything captured at right-click time for the renderer-drawn edit menu.
+ * The menu itself takes focus while open, so `focusTarget` is what lets the
+ * owner hand focus back to the intended editable element before a command runs.
+ */
+export interface EditContextMenuOpenRequest {
+  readonly request: EditContextMenuPopupRequest;
+  readonly x: number;
+  readonly y: number;
+  readonly editorIdKind: DebugLogEditorIdKind;
+  readonly hasSelection: boolean;
+  readonly focusTarget: FocusableLike | null;
+}
+
+export interface FocusableLike {
+  readonly isConnected?: boolean;
+  focus(options?: FocusOptions): void;
 }
 
 export interface RendererEditContextMenuLogInput {
   readonly level: DebugLogLevel;
   readonly event:
     | "contextMenu.requested"
+    | "contextMenu.opened"
+    | "contextMenu.command.selected"
     | "contextMenu.suppressed"
     | "edit.command.requested"
     | "edit.command.ignored"
@@ -99,35 +122,24 @@ export function delegatedContextSurfaceFromTarget(
  * Observes the focus target at element granularity (`document.activeElement`)
  * immediately before native edit delegation.
  *
- * This exists to detect the case where focus is not restored to the intended
- * editable element after the native context menu closes — custom MenuItem click
- * handlers fire after dismissal, so delegation can land somewhere else. When that
- * happens, this returns `unknownEditable` and diverges from `requestedSurface`.
- *
- * A window-granularity counterpart (`delegatedFocusPresent`, from
- * `webContents.isFocused()`) was implemented and removed. Moving window focus away
- * dismisses the native menu before any item can be clicked, so by the time
- * `edit.command.delegated` fires, window focus is always present and the field
- * could never be `false`. Measured 2026-08-16: 6 of 9 interactions ended without
- * `contextMenu.command.selected` while attempting to trigger it.
+ * The renderer-drawn edit menu (#685) takes focus while open, so the owner
+ * restores focus to the right-click target before running a command. This is
+ * the safety check that the restore worked: if the focus is somewhere else, it
+ * returns `unknownEditable`, diverges from `requestedSurface`, and the command
+ * is not delegated (`webContents.cut()` etc. act on whatever has focus).
  *
  * Element granularity is required. Do not replace this with a window- or
- * frame-level focus check.
+ * frame-level focus check (a window-granularity `isFocused()` variant was tried
+ * against the old native menu and could never be false).
  *
  * ネイティブ編集委譲の直前に、要素粒度（`document.activeElement`）でフォーカス
  * 対象を観測する。
  *
- * 目的は、ネイティブコンテキストメニューが閉じた後にフォーカスが意図した編集要素
- * へ戻らないケースの検出。カスタム MenuItem の click handler はメニュー閉鎖後に
- * 発火するため、委譲先がずれうる。その場合ここは `unknownEditable` を返し、
- * `requestedSurface` と乖離する。
- *
- * ウィンドウ粒度の対応物（`webContents.isFocused()` による
- * `delegatedFocusPresent`）は実装後に削除した。ウィンドウフォーカスが外れると
- * 項目をクリックする前にネイティブメニューが閉じるため、
- * `edit.command.delegated` に到達した時点でウィンドウフォーカスは必ず存在し、
- * false になれない。2026-08-16 実測：発生を試みた9回のうち6回が
- * `contextMenu.command.selected` に到達せず終了した。
+ * renderer 描画の編集メニュー（#685）は開いている間フォーカスを持つため、
+ * 呼び出し側はコマンド実行前にフォーカスを右クリック対象へ戻す。ここはその復元が
+ * 成功したかの安全確認で、別の要素にフォーカスがあれば `unknownEditable` を返して
+ * `requestedSurface` と乖離し、コマンドは委譲されない
+ * （`webContents.cut()` 等はフォーカス中の要素に作用するため）。
  *
  * 要素粒度であることが要件。ウィンドウ／フレーム粒度のフォーカス判定に
  * 置き換えないこと。
@@ -237,7 +249,8 @@ export function handleEditContextMenuEvent(
     editorIdKind: DebugLogEditorIdKind;
     hasSelection: () => boolean;
     log: RendererEditContextMenuLogger;
-    popupEditMenu: (request: EditContextMenuPopupRequest) => Promise<boolean>;
+    openEditMenu: (menu: EditContextMenuOpenRequest) => void;
+    documentLike?: Pick<Document, "activeElement">;
   }
 ): boolean {
   event.preventDefault();
@@ -266,6 +279,8 @@ export function handleEditContextMenuEvent(
     requestedSurface
   });
 
+  const hasSelection = input.hasSelection();
+
   input.log({
     level: "debug",
     event: "contextMenu.requested",
@@ -273,23 +288,57 @@ export function handleEditContextMenuEvent(
       interactionId,
       requestedSurface,
       editorIdKind: input.editorIdKind,
-      hasSelection: input.hasSelection()
+      hasSelection
     }
   });
 
-  void input.popupEditMenu(request).catch(() => {
-    input.log({
-      level: "debug",
-      event: "contextMenu.suppressed",
-      details: {
-        interactionId,
-        requestedSurface,
-        editorIdKind: input.editorIdKind,
-        result: "ignored",
-        reason: "window_unavailable"
-      }
-    });
+  input.openEditMenu({
+    request,
+    x: event.clientX,
+    y: event.clientY,
+    editorIdKind: input.editorIdKind,
+    hasSelection,
+    focusTarget: focusTargetForSurface(input.documentLike)
   });
+  input.log({
+    level: "debug",
+    event: "contextMenu.opened",
+    details: { interactionId, requestedSurface }
+  });
+  return true;
+}
+
+/**
+ * The element that holds focus when the menu is requested, provided it is
+ * inside a supported editable surface. Right-clicking focuses the editable
+ * element first, so this is the element commands must act on.
+ */
+function focusTargetForSurface(
+  documentLike?: Pick<Document, "activeElement">
+): FocusableLike | null {
+  const activeElement =
+    documentLike?.activeElement ??
+    (typeof document === "undefined" ? null : document.activeElement);
+
+  return editableContextSurfaceFromTarget(activeElement) !== null &&
+    activeElement !== null &&
+    typeof (activeElement as { focus?: unknown }).focus === "function"
+    ? (activeElement as unknown as FocusableLike)
+    : null;
+}
+
+/**
+ * Hands focus back to the right-click target (the menu item that was clicked
+ * holds focus until now). Returns whether the target could be refocused.
+ */
+export function restoreContextMenuFocus(
+  focusTarget: FocusableLike | null
+): boolean {
+  if (!focusTarget || focusTarget.isConnected === false) {
+    return false;
+  }
+
+  focusTarget.focus({ preventScroll: true });
   return true;
 }
 
@@ -330,6 +379,21 @@ export async function executeContextMenuEditCommand<TCommandId extends EditComma
         ...context,
         result: "ignored",
         reason: "disabled_command"
+      }
+    });
+    return false;
+  }
+
+  // Native delegation acts on whatever has focus. If focus did not return to
+  // the surface the menu was opened on, do not delegate to the wrong element.
+  if (input.delegatedSurface !== selection.requestedSurface) {
+    input.log({
+      level: "debug",
+      event: "edit.command.ignored",
+      details: {
+        ...context,
+        result: "ignored",
+        reason: "active_editor_changed"
       }
     });
     return false;

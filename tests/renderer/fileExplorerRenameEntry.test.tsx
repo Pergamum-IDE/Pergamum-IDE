@@ -218,7 +218,7 @@ describe("File Explorer Rename entry points (#362)", () => {
       expect(commands.indexOf("rename")).toBeLessThan(
         commands.indexOf("delete")
       );
-      expect(menuItem("rename")?.textContent).toBe(
+      expect(menuItem("rename")?.querySelector(".contextMenuItemLabel")?.textContent).toBe(
         t("en", "explorer.contextMenu.rename")
       );
 

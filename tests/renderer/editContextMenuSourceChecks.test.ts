@@ -164,6 +164,11 @@ function allSourceText(): string {
  * and ignores every other key; keyboard navigation is #665, and shortcuts stay
  * with the native menu backend. Unrelated to the native-edit-command
  * delegation.
+ *
+ * EditContextMenu.tsx (#685) is the same category: a menu-scoped onKeyDown that
+ * only moves focus between its items and closes on Escape / Tab. It binds no
+ * shortcut and runs no command itself; the command still goes through the
+ * Command Registry and the native-edit delegation.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -193,6 +198,7 @@ const onKeyDownExemptFileNames = new Set([
   "reloadKeyFallback.ts",
   "KeyboardShortcutCaptureDialog.tsx",
   "ApplicationMenuBar.tsx",
+  "EditContextMenu.tsx",
   "App.tsx",
   "EditorSurface.tsx"
 ]);

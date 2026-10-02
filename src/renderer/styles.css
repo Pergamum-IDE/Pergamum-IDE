@@ -6625,29 +6625,28 @@ label.settingsItemHeader {
   cursor: no-drop;
 }
 
-/* #327/#328: File Explorer item context menu (Move… / Cut / Paste). */
-.fileExplorerContextMenuBackdrop {
+/* #683/#685: renderer-drawn context menus (File Explorer / Document Tab /
+   editable surfaces) share one semantic-token look so they follow the current
+   color theme. Only `--pg-color-*` tokens are used here; no per-theme colors. */
+.fileExplorerContextMenu,
+.documentTabContextMenu,
+.editContextMenu {
   position: fixed;
-  inset: 0;
-  z-index: 40;
-}
-
-.fileExplorerContextMenu {
-  position: fixed;
-  top: var(--file-explorer-context-menu-y, 0);
-  left: var(--file-explorer-context-menu-x, 0);
-  min-width: 160px;
-  max-height: calc(100vh - 16px);
-  overflow-y: auto;
   padding: 4px;
-  border: 1px solid var(--workspace-sidebar-border, rgba(127, 127, 127, 0.3));
+  border: 1px solid var(--pg-color-panel-border);
   border-radius: 6px;
-  background: var(--app-surface, #fff);
+  background: var(--pg-color-surface-background);
+  color: var(--pg-color-surface-foreground);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
-.fileExplorerContextMenuItem {
-  display: block;
+.fileExplorerContextMenuItem,
+.documentTabContextMenuItem,
+.editContextMenuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
   inline-size: 100%;
   padding: 6px 10px;
   border: none;
@@ -6660,17 +6659,62 @@ label.settingsItemHeader {
 }
 
 .fileExplorerContextMenuItem:hover:not(:disabled),
-.fileExplorerContextMenuItem:focus-visible {
-  background: var(--workspace-sidebar-hover);
+.documentTabContextMenuItem:hover:not(:disabled),
+.editContextMenuItem:hover:not(:disabled) {
+  background: var(--pg-color-surface-hover);
 }
 
-.fileExplorerContextMenuItem:disabled {
-  opacity: 0.5;
+.fileExplorerContextMenuItem:focus-visible,
+.documentTabContextMenuItem:focus-visible,
+.editContextMenuItem:focus-visible {
+  background: var(--pg-color-surface-active);
+  outline: 2px solid var(--pg-color-focus-ring);
+  outline-offset: -2px;
+}
+
+.fileExplorerContextMenuItem:disabled,
+.documentTabContextMenuItem:disabled,
+.editContextMenuItem:disabled {
+  color: var(--pg-color-surface-muted);
+  opacity: 0.6;
   cursor: default;
 }
 
+/* Two-column item: label, then the effective shortcut at the end. */
+.contextMenuItemLabel {
+  min-inline-size: 0;
+}
+
+.contextMenuItemShortcut {
+  margin-inline-start: auto;
+  color: var(--pg-color-surface-muted);
+  white-space: nowrap;
+}
+
+.documentTabContextMenuSeparator {
+  block-size: 1px;
+  margin-block: 4px;
+  margin-inline: 6px;
+  background: var(--pg-color-panel-divider);
+}
+
+/* #327/#328: File Explorer item context menu (Move… / Cut / Paste). */
+.fileExplorerContextMenuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.fileExplorerContextMenu {
+  top: var(--file-explorer-context-menu-y, 0);
+  left: var(--file-explorer-context-menu-x, 0);
+  min-width: 160px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+
 /* #354 — the editor tab context menu (Close batch / Select in File Explorer /
-   Rename / Save As / Copy path). Mirrors the File Explorer context menu. */
+   Rename / Save As / Copy path). */
 .documentTabContextMenuBackdrop {
   position: fixed;
   inset: 0;
@@ -6678,45 +6722,22 @@ label.settingsItemHeader {
 }
 
 .documentTabContextMenu {
-  position: fixed;
   top: var(--document-tab-context-menu-y, 0);
   left: var(--document-tab-context-menu-x, 0);
   min-width: 200px;
-  padding: 4px;
-  border: 1px solid var(--workspace-sidebar-border, rgba(127, 127, 127, 0.3));
-  border-radius: 6px;
-  background: var(--app-surface, #fff);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
-.documentTabContextMenuItem {
-  display: block;
-  inline-size: 100%;
-  padding: 6px 10px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
+/* #685: editable-surface context menu (Cut / Copy / Paste / Select All). */
+.editContextMenuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
 }
 
-.documentTabContextMenuItem:hover:not(:disabled),
-.documentTabContextMenuItem:focus-visible {
-  background: var(--workspace-sidebar-hover);
-}
-
-.documentTabContextMenuItem:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.documentTabContextMenuSeparator {
-  block-size: 1px;
-  margin-block: 4px;
-  margin-inline: 6px;
-  background: var(--workspace-sidebar-border, rgba(127, 127, 127, 0.3));
+.editContextMenu {
+  top: var(--edit-context-menu-y, 0);
+  left: var(--edit-context-menu-x, 0);
+  min-width: 160px;
 }
 
 /* #354 — horizontal tab reorder drag affordances. */

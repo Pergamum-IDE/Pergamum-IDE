@@ -2157,6 +2157,7 @@ export const enTranslations = {
   "status.withDetail": "{status}; {detail}",
   "tabs.closeTab": "Close tab",
   "tabs.contextMenu.label": "Tab actions",
+  "editContextMenu.label": "Edit actions",
   "tabs.contextMenu.close": "Close Tab",
   "tabs.contextMenu.closeOthers": "Close Other Tabs",
   "tabs.contextMenu.closeToLeft": "Close Tabs to the Left",

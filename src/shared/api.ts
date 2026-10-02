@@ -58,11 +58,7 @@ import type {
   PreviewTextImportFilesResult,
   TextImportDryRunResult
 } from "./textImport";
-import type {
-  EditContextMenuCommandSelection,
-  EditContextMenuPopupRequest,
-  NativeEditDelegationRequest
-} from "./editContextMenu";
+import type { NativeEditDelegationRequest } from "./editContextMenu";
 import type {
   CloseCurrentProjectRequest,
   CloseCurrentProjectResult,
@@ -685,11 +681,6 @@ export const WINDOW_CHANNELS = {
  * a command that never declares a `when` is simply always sent as `true`.
  */
 export type ApplicationMenuEnablementMap = Record<string, boolean>;
-
-export const CONTEXT_MENU_CHANNELS = {
-  popupEditMenu: "contextMenu:popupEditMenu",
-  commandSelected: "contextMenu:commandSelected"
-} as const;
 
 export const EDIT_CHANNELS = {
   delegateNativeEdit: "edit:delegateNativeEdit"
@@ -1845,12 +1836,6 @@ export interface PergamumApi {
     quitApplication: (
       request: QuitApplicationRequest
     ) => Promise<QuitApplicationResult>;
-  };
-  contextMenu: {
-    popupEditMenu: (request: EditContextMenuPopupRequest) => Promise<boolean>;
-    onCommandSelected: (
-      callback: (selection: EditContextMenuCommandSelection) => void
-    ) => () => void;
   };
   edit: {
     delegateNativeEdit: (

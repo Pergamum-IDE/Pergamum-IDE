@@ -137,7 +137,12 @@ import {
   type FileExplorerSelectionState
 } from "./fileExplorerSelectionState";
 import type { ExportOrigin } from "./exportCandidates";
+import { ContextMenuItemContent } from "./ContextMenuItemContent";
 import { clampContextMenuPosition } from "./contextMenuPosition";
+import {
+  fileExplorerContextMenuShortcutCommandIds,
+  useContextMenuShortcutResolver
+} from "./contextMenuShortcuts";
 import {
   matchRendererShortcut,
   rendererShortcutCommandIds
@@ -1023,6 +1028,7 @@ export function FileExplorer({
   // #355: it also carries the create target — a right-click on the project
   // root row or the empty list area targets the project root; a right-click
   // on a folder row targets that folder; a file row shows no create items.
+  const resolveContextMenuShortcut = useContextMenuShortcutResolver();
   const [contextMenu, setContextMenu] = useState<{
     readonly x: number;
     readonly y: number;
@@ -4011,11 +4017,13 @@ export function FileExplorer({
                       }
                     }}
                   >
-                    {translate(
-                      createKind === "file"
-                        ? "explorer.contextMenu.newFile"
-                        : "explorer.contextMenu.newFolder"
-                    )}
+                    <ContextMenuItemContent
+                      label={translate(
+                        createKind === "file"
+                          ? "explorer.contextMenu.newFile"
+                          : "explorer.contextMenu.newFolder"
+                      )}
+                    />
                   </button>
                 );
               })
@@ -4033,7 +4041,9 @@ export function FileExplorer({
               onExportFromFileExplorer?.(origin);
             }}
           >
-            {translate("explorer.contextMenu.export")}
+            <ContextMenuItemContent
+              label={translate("explorer.contextMenu.export")}
+            />
           </button>
           {contextMenu.exportOrigin.kind === "file" &&
           onJapaneseMachineCheck &&
@@ -4052,7 +4062,9 @@ export function FileExplorer({
                 }
               }}
             >
-              {translate("explorer.contextMenu.japaneseMachineCheck")}
+              <ContextMenuItemContent
+              label={translate("explorer.contextMenu.japaneseMachineCheck")}
+            />
             </button>
           ) : null}
           <button
@@ -4079,7 +4091,9 @@ export function FileExplorer({
               }
             }}
           >
-            {translate("explorer.contextMenu.move")}
+            <ContextMenuItemContent
+              label={translate("explorer.contextMenu.move")}
+            />
           </button>
           <button
             type="button"
@@ -4109,7 +4123,12 @@ export function FileExplorer({
               }
             }}
           >
-            {translate("explorer.contextMenu.copy")}
+            <ContextMenuItemContent
+              label={translate("explorer.contextMenu.copy")}
+              shortcut={resolveContextMenuShortcut(
+                fileExplorerContextMenuShortcutCommandIds.copy
+              )}
+            />
           </button>
           <button
             type="button"
@@ -4135,7 +4154,12 @@ export function FileExplorer({
               }
             }}
           >
-            {translate("explorer.contextMenu.cut")}
+            <ContextMenuItemContent
+              label={translate("explorer.contextMenu.cut")}
+              shortcut={resolveContextMenuShortcut(
+                fileExplorerContextMenuShortcutCommandIds.cut
+              )}
+            />
           </button>
           <button
             type="button"
@@ -4161,7 +4185,12 @@ export function FileExplorer({
               }
             }}
           >
-            {translate("explorer.contextMenu.paste")}
+            <ContextMenuItemContent
+              label={translate("explorer.contextMenu.paste")}
+              shortcut={resolveContextMenuShortcut(
+                fileExplorerContextMenuShortcutCommandIds.paste
+              )}
+            />
           </button>
           <button
             type="button"
@@ -4177,7 +4206,12 @@ export function FileExplorer({
               }
             }}
           >
-            {translate("explorer.contextMenu.rename")}
+            <ContextMenuItemContent
+              label={translate("explorer.contextMenu.rename")}
+              shortcut={resolveContextMenuShortcut(
+                fileExplorerContextMenuShortcutCommandIds.rename
+              )}
+            />
           </button>
           <button
             type="button"
@@ -4201,7 +4235,12 @@ export function FileExplorer({
               }
             }}
           >
-            {translate("explorer.contextMenu.delete")}
+            <ContextMenuItemContent
+              label={translate("explorer.contextMenu.delete")}
+              shortcut={resolveContextMenuShortcut(
+                fileExplorerContextMenuShortcutCommandIds.delete
+              )}
+            />
           </button>
         </FileExplorerContextMenuPopup>
       ) : null}
