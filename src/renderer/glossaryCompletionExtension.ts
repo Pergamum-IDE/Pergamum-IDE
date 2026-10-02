@@ -44,6 +44,31 @@ export interface MarkdownEditorGlossaryCompletionConfig {
   readonly normalizeUnicodeToNfc?: boolean;
 }
 
+let currentGlossaryCompletionConfig: MarkdownEditorGlossaryCompletionConfig | null =
+  null;
+
+/** Make `config` THE current glossary completion target. */
+export function publishCurrentGlossaryCompletionConfig(
+  config: MarkdownEditorGlossaryCompletionConfig
+): void {
+  currentGlossaryCompletionConfig = config;
+}
+
+/** Clear the current target, but only if it is still `config` — so a later
+ *  mount's publish is never wiped by an earlier mount's (async) teardown. */
+export function unpublishCurrentGlossaryCompletionConfig(
+  config: MarkdownEditorGlossaryCompletionConfig
+): void {
+  if (currentGlossaryCompletionConfig === config) {
+    currentGlossaryCompletionConfig = null;
+  }
+}
+
+/** The current glossary completion config, or `null` when no editor has published one. */
+export function getCurrentGlossaryCompletionConfig(): MarkdownEditorGlossaryCompletionConfig | null {
+  return currentGlossaryCompletionConfig;
+}
+
 // Generous relative to GLOSSARY_COMPLETION_SUFFIX_LOOKBACK: the delimiter
 // fallback (extractDelimitedGlossaryCompletionPrefix) may need to scan
 // further back than the suffix strategy's own window, but a single Markdown
@@ -52,6 +77,7 @@ const GLOSSARY_COMPLETION_MAX_TEXT_LOOKBACK = Math.max(
   GLOSSARY_COMPLETION_SUFFIX_LOOKBACK,
   500
 );
+
 
 function glossaryCompletionSource(
   getConfig: () => MarkdownEditorGlossaryCompletionConfig | null

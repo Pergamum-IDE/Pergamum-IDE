@@ -57,8 +57,10 @@ import {
 import type { LineEndingBreak, LineEndingKind } from "./lineEndingTracking";
 import {
   createGlossaryCompletionExtension,
+  getCurrentGlossaryCompletionConfig,
   type MarkdownEditorGlossaryCompletionConfig
 } from "./glossaryCompletionExtension";
+
 import { GLOSSARY_SELECTION_COMMAND_ID } from "./glossarySelectionShortcutExtension";
 import { editorCommandIds } from "../shared/commandIds";
 import { MARKDOWN_TOOLBAR_KEYBINDING_COMMAND_IDS } from "./editorMarkdownToolbarShortcuts";
@@ -275,6 +277,15 @@ export type EditorKeymapExtensionOptions = Pick<
   | "markdownToolbarShortcutEnabled"
 >;
 
+function getLiveGlossaryCompletionConfig(
+  ref: LiveRef<MarkdownEditorGlossaryCompletionConfig | null>
+): MarkdownEditorGlossaryCompletionConfig | null {
+  if (ref.current === null) {
+    return null;
+  }
+  return getCurrentGlossaryCompletionConfig() ?? ref.current;
+}
+
 /**
  * #641 / #647: the catalog-derived editor keymap. Always-on commands run on
  * every editor (each handler is inert without its published config); the
@@ -288,7 +299,7 @@ export function createEditorKeymapExtension(
   return createPergamumEditorKeymapExtension({
     handlers: createDefaultEditorKeybindingHandlers({
       glossaryCompletion: {
-        getConfig: () => options.glossaryCompletionRef.current,
+        getConfig: () => getLiveGlossaryCompletionConfig(options.glossaryCompletionRef),
         isReadOnly: () => options.readOnlyRef.current
       },
       activeFindDiagnostics: options.activeFindDiagnostics
@@ -383,9 +394,10 @@ export function createMarkdownEditorDocumentState(
         )
       ),
       createGlossaryCompletionExtension({
-        getConfig: () => options.glossaryCompletionRef.current,
+        getConfig: () => getLiveGlossaryCompletionConfig(options.glossaryCompletionRef),
         isReadOnly: () => options.readOnlyRef.current
       }),
+
       // #436 Slice 12 remediation: Ctrl+G — see glossarySelectionShortcutExtension.ts
       // and this options interface's `glossarySelectionShortcutEnabled` doc
       // comment. Included ONLY for the one editor instance the shortcut
