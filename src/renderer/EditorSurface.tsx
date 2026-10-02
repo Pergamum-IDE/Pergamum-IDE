@@ -1306,6 +1306,13 @@ function MarkdownEditorSurface({
   useEffect(() => {
     editorAdapterRef.current = editorAdapter;
   }, [editorAdapter]);
+  // #677: read at event-time rather than closed over by the listeners below,
+  // so vertical wheel events and editor->preview scroll sync always observe
+  // the live active previewRenderer without re-binding pane listeners.
+  const previewRendererRef = useRef<PreviewRendererId | undefined>(previewRenderer);
+  useEffect(() => {
+    previewRendererRef.current = previewRenderer;
+  }, [previewRenderer]);
   const [previewContainer, setPreviewContainer] = useState<HTMLElement | null>(null);
   const scrollSyncGuard = useMemo(() => createScrollSyncGuard(), []);
   const previewScrollAxis: PreviewScrollAxis = "vertical";
@@ -1443,7 +1450,7 @@ function MarkdownEditorSurface({
       const editorCurrent = getScrollOffset(editorScroller, previewScrollAxis);
       const isEditorAtEnd = editorMax > 0 && editorCurrent >= editorMax - 1;
 
-      if (isVerticalPreviewRenderer(previewRenderer)) {
+      if (isVerticalPreviewRenderer(previewRendererRef.current)) {
         const syncResult = computeVerticalScrollLeftForLine({
           topSourceLine,
           blocks: result.blocks,
@@ -1574,7 +1581,7 @@ function MarkdownEditorSurface({
           return;
         }
 
-        if (isVerticalPreviewRenderer(previewRenderer)) {
+        if (isVerticalPreviewRenderer(previewRendererRef.current)) {
           const topSourceLine = editorAdapter?.getTopSourceLine() ?? undefined;
           if (typeof topSourceLine !== "number") {
             return;
@@ -2033,7 +2040,7 @@ function MarkdownEditorSurface({
     };
 
     const handlePreviewVerticalWheel = (event: WheelEvent) => {
-      if (!isVerticalPreviewRenderer(previewRenderer)) {
+      if (!isVerticalPreviewRenderer(previewRendererRef.current)) {
         return;
       }
 
@@ -2352,7 +2359,7 @@ function MarkdownEditorSurface({
           return;
         }
 
-        if (isVerticalPreviewRenderer(previewRenderer)) {
+        if (isVerticalPreviewRenderer(previewRendererRef.current)) {
           let blocks = previewBlockRefsRef.current;
           if (blocks.length === 0 && previewContainer) {
             const result = collectPreviewBlockRefs(previewContainer, "initialRender");
