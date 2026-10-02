@@ -87,6 +87,13 @@ export interface ApplicationMenuCommandItem extends ApplicationMenuItemBase {
   readonly label: ApplicationMenuLabel;
   readonly keybinding?: ApplicationMenuKeybinding;
   /**
+   * #664: display only. The keybinding catalog row (a readonly native-role
+   * row, e.g. `app.quit`) whose key the Renderer menu shows although this
+   * item binds no customizable key (`keybinding: "none"`): the native menu
+   * backend binds it itself. It is an id, never a shortcut string.
+   */
+  readonly shortcutDisplayId?: string;
+  /**
    * The command's second and later catalog keys (F1, F12, `Mod-+`, ...) are
    * also active, without a second visible entry (#642).
    */
@@ -99,6 +106,11 @@ export interface ApplicationMenuNativeRoleItem extends ApplicationMenuItemBase {
   readonly label: ApplicationMenuLabel;
   /** Set when the renderer reports enablement for this item's command. */
   readonly commandId?: ApplicationMenuCommandId;
+  /**
+   * #664: display only. The keybinding catalog row documenting this role's
+   * shortcut when it is not `commandId` (e.g. `developer.toggleDevTools`).
+   */
+  readonly shortcutDisplayId?: string;
 }
 
 export interface ApplicationMenuSubmenuItem extends ApplicationMenuItemBase {
@@ -136,7 +148,10 @@ const separator: ApplicationMenuSeparatorItem = { type: "separator" };
 function command(
   commandId: ApplicationMenuCommandId,
   key: TranslationKey,
-  extras: Pick<ApplicationMenuCommandItem, "keybinding" | "keyAlias" | "platforms"> = {}
+  extras: Pick<
+    ApplicationMenuCommandItem,
+    "keybinding" | "keyAlias" | "platforms" | "shortcutDisplayId"
+  > = {}
 ): ApplicationMenuCommandItem {
   return { type: "command", commandId, label: { key }, ...extras };
 }
@@ -146,7 +161,7 @@ function nativeRole(
   key: TranslationKey,
   extras: Pick<
     ApplicationMenuNativeRoleItem,
-    "commandId" | "platforms"
+    "commandId" | "platforms" | "shortcutDisplayId"
   > & { values?: Readonly<Record<string, string | number>> } = {}
 ): ApplicationMenuNativeRoleItem {
   const { values, ...rest } = extras;
@@ -182,6 +197,9 @@ function quitItem(
     commandId: applicationCommandIds.quitApplication,
     label: { key: "menu.quit", values: { appName: APPLICATION_MENU_APP_NAME } },
     keybinding: "none",
+    // The native backend binds Quit's fixed accelerator; the catalog row
+    // documents it (readonly native role), so the Renderer menu can show it.
+    shortcutDisplayId: "app.quit",
     platforms
   };
 }
@@ -286,14 +304,18 @@ const viewMenu: ApplicationMenuTopLevelItem = submenu("menu.view", [
     keyAlias: true
   }),
   separator,
-  nativeRole("toggleDevTools", "menu.toggleDevTools"),
+  nativeRole("toggleDevTools", "menu.toggleDevTools", {
+    shortcutDisplayId: "developer.toggleDevTools"
+  }),
   separator,
   // `Mod-+` is Zoom In's alias.
   command(applicationCommandIds.zoomIn, "menu.zoomIn", { keyAlias: true }),
   command(applicationCommandIds.zoomOut, "menu.zoomOut"),
   command(applicationCommandIds.resetZoom, "menu.actualSize"),
   separator,
-  nativeRole("togglefullscreen", "menu.toggleFullScreen")
+  nativeRole("togglefullscreen", "menu.toggleFullScreen", {
+    shortcutDisplayId: "window.toggleFullscreen"
+  })
 ], { mnemonic: "V" });
 
 const assistMenu: ApplicationMenuTopLevelItem = submenu("menu.assist", [

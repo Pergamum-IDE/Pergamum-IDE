@@ -48,11 +48,25 @@ export type RendererMenuEntry =
       readonly items: readonly RendererMenuEntry[];
     };
 
+/**
+ * Which keybinding row an item's shortcut label comes from (#664).
+ *   - `customizable`: an app-scope Pergamum command; its effective primary
+ *     key, exactly the one the native accelerator backend binds
+ *   - `nativeRole`: a readonly native-role row (Electron role / quit
+ *     lifecycle) that documents the shortcut the native backend binds
+ */
+export interface RendererMenuShortcutRequest {
+  readonly id: string;
+  readonly kind: "customizable" | "nativeRole";
+}
+
 export interface RendererMenuProjectionOptions {
   readonly translate: Translate;
-  /** Display text of a command's shortcut (e.g. "Ctrl+S"); #664 supplies it. */
-  readonly getShortcutLabel?: (commandId: string) => string | undefined;
-  /** Whether a command is currently disabled; #664 supplies it. */
+  /** Display text of a shortcut (e.g. "Ctrl+S"); from the effective keybindings. */
+  readonly getShortcutLabel?: (
+    request: RendererMenuShortcutRequest
+  ) => string | undefined;
+  /** Whether a command is currently disabled (CommandRegistry enablement). */
   readonly isDisabled?: (commandId: string) => boolean;
 }
 
@@ -66,6 +80,35 @@ export function shouldShowRendererMenuBar(platform: AppPlatform): boolean {
 
 function resolveLabel(label: ApplicationMenuLabel, translate: Translate): string {
   return "literal" in label ? label.literal : translate(label.key, label.values);
+}
+
+/**
+ * #664: the keybinding row an item shows, decided by the model's metadata:
+ * an explicit `shortcutDisplayId` wins (display-only native rows); otherwise a
+ * command item follows its `keybinding` policy (`primaryUnlabeled` and
+ * `none` show nothing) and a native role with a commandId shows that
+ * command's native row.
+ */
+function shortcutRequestFor(
+  item: ApplicationMenuItem
+): RendererMenuShortcutRequest | undefined {
+  if (item.type === "command") {
+    if (item.shortcutDisplayId !== undefined) {
+      return { id: item.shortcutDisplayId, kind: "nativeRole" };
+    }
+
+    return (item.keybinding ?? "primary") === "primary"
+      ? { id: item.commandId, kind: "customizable" }
+      : undefined;
+  }
+
+  if (item.type === "nativeRole") {
+    const id = item.shortcutDisplayId ?? item.commandId;
+
+    return id === undefined ? undefined : { id, kind: "nativeRole" };
+  }
+
+  return undefined;
 }
 
 /**
@@ -112,10 +155,11 @@ function projectItems(
       case "command":
       case "nativeRole": {
         const commandId = item.commandId;
+        const shortcutRequest = shortcutRequestFor(item);
         const shortcutLabel =
-          commandId === undefined
+          shortcutRequest === undefined
             ? undefined
-            : options.getShortcutLabel?.(commandId);
+            : options.getShortcutLabel?.(shortcutRequest);
 
         return {
           kind: "item",

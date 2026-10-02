@@ -391,7 +391,9 @@ const pergamumApi: PergamumApi = {
     },
     setEnablement: (enablement) => {
       ipcRenderer.send(APPLICATION_MENU_CHANNELS.setEnablement, enablement);
-    }
+    },
+    invokeNativeRole: (role) =>
+      ipcRenderer.invoke(APPLICATION_MENU_CHANNELS.invokeNativeRole, role)
   },
   lifecycle: {
     onWindowCloseRequest: (callback) => {

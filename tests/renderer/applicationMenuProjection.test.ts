@@ -198,8 +198,8 @@ describe("renderer menu projection (#663)", () => {
     const injected = flatten(
       projectApplicationMenu("windows", {
         translate: translateFor("en"),
-        getShortcutLabel: (id) =>
-          id === editorCommandIds.saveDocument ? "Ctrl+S" : undefined,
+        getShortcutLabel: (request) =>
+          request.id === editorCommandIds.saveDocument ? "Ctrl+S" : undefined,
         isDisabled: (id) => id === editorCommandIds.saveAll
       })
     );

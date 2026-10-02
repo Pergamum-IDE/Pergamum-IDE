@@ -28,6 +28,7 @@ import { registerPergamumAssetProtocol } from "./pergamumAssetProtocol";
 import { PERGAMUM_ASSET_SCHEME } from "../shared/pergamumAssetUrl";
 import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
 import { hideNativeMenuBar } from "./nativeMenuBarVisibility";
+import { registerApplicationMenuNativeRoleIpc } from "./applicationMenuNativeRole";
 import { installReloadShortcutGuard } from "./reloadGuard";
 import { registerKeybindingsIpc } from "./keybindingsIpc";
 import {
@@ -433,6 +434,8 @@ app.whenReady().then(async () => {
     applicationMenuOptions(loadedKeybindings.effective.keybindings)
   );
   registerApplicationMenuIpc();
+  // #664: allowlisted native roles for the Renderer menu (Windows / Linux).
+  registerApplicationMenuNativeRoleIpc();
   registerDebugLogIpc(debugLogger);
   registerContextMenuIpc(debugLogger);
   registerFileIpc(debugLogger);

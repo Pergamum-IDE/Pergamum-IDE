@@ -3,26 +3,44 @@ import { describe, expect, it } from "vitest";
 
 describe("Application Menu enablement push (#252 follow-up)", () => {
   it("pushes isEnabledForContext for every application-menu command whenever the registry or live command context changes", () => {
-    const source = readFileSync("src/renderer/App.tsx", "utf8");
-    const effectIndex = source.indexOf(
+    // #664: the calculation lives in one helper that the Renderer menu's
+    // disabled state shares; App only pushes its result.
+    const integration = readFileSync(
+      "src/renderer/applicationMenuIntegration.ts",
+      "utf8"
+    );
+    const loopIndex = integration.indexOf(
       "for (const commandId of applicationMenuCommandIds)"
     );
 
-    expect(effectIndex).toBeGreaterThan(-1);
+    expect(loopIndex).toBeGreaterThan(-1);
+    expect(integration.slice(loopIndex, loopIndex + 200)).toContain(
+      "registry.isEnabledForContext(commandId, context)"
+    );
 
-    const effectBlock = source.slice(effectIndex, effectIndex + 400);
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const pushIndex = source.indexOf(
+      "window.pergamum.applicationMenu.setEnablement("
+    );
 
-    expect(effectBlock).toContain("commandRegistry.isEnabledForContext(");
-    expect(effectBlock).toContain(
-      "window.pergamum.applicationMenu.setEnablement(enablement)"
+    expect(pushIndex).toBeGreaterThan(-1);
+    expect(source.slice(pushIndex, pushIndex + 200)).toContain(
+      "computeApplicationMenuEnablement(commandRegistry, commandContext)"
     );
     expect(source).toContain("}, [commandRegistry, commandContext]);");
   });
 
   it("imports the value (not just the type) of applicationMenuCommandIds", () => {
-    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const source = readFileSync(
+      "src/renderer/applicationMenuIntegration.ts",
+      "utf8"
+    );
 
-    expect(source).toContain("applicationMenuCommandIds,");
+    // The value (not just the type) is imported, since it is iterated.
+    expect(source).toContain(
+      'import { applicationMenuCommandIds } from "../shared/commandIds"'
+    );
+    expect(source).toContain("for (const commandId of applicationMenuCommandIds)");
   });
 });
 
