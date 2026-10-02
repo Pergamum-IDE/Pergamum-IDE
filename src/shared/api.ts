@@ -679,9 +679,9 @@ export const WINDOW_CHANNELS = {
  * #252 follow-up: renderer -> main push of live command enablement (from
  * `CommandRegistry.isEnabledForContext`, the same evaluation the Command
  * Palette already uses), keyed by `ApplicationMenuCommandId`, so the
- * native Electron menu — built once at startup and otherwise never
- * touched — can reflect `when` (e.g. `editor.kind.markdown`) as a real
- * disabled state. Commands not present in the map are left as they are;
+ * native Electron menu — rebuilt only at startup and for keybinding
+ * changes, never for enablement — can reflect `when` (e.g.
+ * `editor.kind.markdown`) as a real disabled state. Commands not present in the map are left as they are;
  * a command that never declares a `when` is simply always sent as `true`.
  */
 export type ApplicationMenuEnablementMap = Record<string, boolean>;

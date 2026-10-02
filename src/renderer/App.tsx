@@ -4345,10 +4345,11 @@ export function App(): JSX.Element {
     sidebarMode,
     translate
   ]);
-  // #252 follow-up: the native Electron application menu is built once at
-  // startup and otherwise never touched, so it does not automatically
-  // reflect `when`-based enablement (e.g. `editor.kind.markdown` going
-  // false while Application Settings is the active tab). Push the same
+  // #252 follow-up: the native Electron application menu is only rebuilt for
+  // a startup install and keybinding changes (#647 / #650), so it does not
+  // automatically reflect `when`-based enablement (e.g.
+  // `editor.kind.markdown` going false while Application Settings is the
+  // active tab). Push the same
   // enablement the Command Palette already uses
   // (`CommandRegistry.isEnabledForContext`) to main whenever it changes,
   // so `assist.lineEndingDistribution.show` (and any other menu command
