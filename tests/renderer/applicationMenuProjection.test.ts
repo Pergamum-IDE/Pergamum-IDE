@@ -10,6 +10,7 @@ import {
   editorCommandIds
 } from "../../src/shared/commandIds";
 import {
+  presentMnemonicLabel,
   projectApplicationMenu,
   shouldShowRendererMenuBar,
   type RendererMenuEntry
@@ -122,18 +123,64 @@ describe("renderer menu projection (#663)", () => {
     });
   });
 
-  it("resolves labels through translation keys for the current language", () => {
+  it("resolves labels through translation keys for the current language (#668: ja shows the mnemonic)", () => {
     const ja = projectApplicationMenu("windows", {
       translate: translateFor("ja")
     });
 
+    // Assist is "アシスト" in Japanese (PO decision, #668).
     expect(ja.map((menu) => menu.label)).toEqual([
-      "ファイル",
-      "編集",
-      "表示",
-      "支援",
-      "ヘルプ"
+      "ファイル(F)",
+      "編集(E)",
+      "表示(V)",
+      "アシスト(A)",
+      "ヘルプ(H)"
     ]);
+  });
+
+  it("#668: English labels already contain their mnemonic and stay plain", () => {
+    const en = projectApplicationMenu("windows", {
+      translate: translateFor("en")
+    });
+
+    expect(en.map((menu) => menu.label)).toEqual([
+      "File",
+      "Edit",
+      "View",
+      "Assist",
+      "Help"
+    ]);
+  });
+
+  it("#668: passes the canonical mnemonic through for #665, in every language", () => {
+    for (const language of ["ja", "en"] as const) {
+      const menus = projectApplicationMenu("linux", {
+        translate: translateFor(language)
+      });
+
+      expect(menus.map((menu) => menu.mnemonic)).toEqual([
+        "F",
+        "E",
+        "V",
+        "A",
+        "H"
+      ]);
+    }
+  });
+
+  it("#668: nested menus and items carry no mnemonic", () => {
+    const [file] = projectApplicationMenu("windows", {
+      translate: translateFor("ja")
+    });
+    const nested = flatten(file.items).filter(
+      (entry) => entry.kind === "submenu"
+    );
+
+    expect(nested.length).toBeGreaterThan(0);
+    for (const entry of nested) {
+      expect(entry).not.toHaveProperty("mnemonic");
+      expect(entry.label).not.toMatch(/\([A-Z]\)$/);
+    }
   });
 
   it("attaches shortcut label / disabled only from the injected view state", () => {
@@ -165,6 +212,24 @@ describe("renderer menu projection (#663)", () => {
 
     expect(save).toMatchObject({ shortcutLabel: "Ctrl+S", disabled: false });
     expect(saveAll).toMatchObject({ disabled: true });
+  });
+
+  it("#668 presentMnemonicLabel: suffix only when the label lacks the letter", () => {
+    expect(presentMnemonicLabel("ファイル", "F")).toBe("ファイル(F)");
+    expect(presentMnemonicLabel("File", "F")).toBe("File");
+    expect(presentMnemonicLabel("help", "H")).toBe("help");
+    expect(presentMnemonicLabel("ファイル", undefined)).toBe("ファイル");
+  });
+
+  it("#668: never guesses the mnemonic from the label or keeps its own table", () => {
+    const source = readFileSync(
+      "src/renderer/applicationMenuProjection.ts",
+      "utf8"
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
+
+    expect(source).not.toMatch(/\[0\]|charAt\(|\.at\(0\)|slice\(0,\s*1\)/);
+    expect(source).not.toMatch(/"[A-Z]"\s*[:,\]]/);
+    expect(source).toContain("menu.mnemonic");
   });
 
   it("is a projection, not a second menu definition", () => {

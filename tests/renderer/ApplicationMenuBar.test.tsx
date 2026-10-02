@@ -118,16 +118,45 @@ describe("ApplicationMenuBar structure (#663)", () => {
     expect(popups()).toHaveLength(0);
   });
 
-  it("renders translated labels for ja", () => {
+  it("renders translated labels with the mnemonic for ja (#668)", () => {
     mount({ language: "ja" });
 
     expect(triggers().map((button) => button.textContent)).toEqual([
-      "ファイル",
-      "編集",
-      "表示",
-      "支援",
-      "ヘルプ"
+      "ファイル(F)",
+      "編集(E)",
+      "表示(V)",
+      "アシスト(A)",
+      "ヘルプ(H)"
     ]);
+  });
+
+  it("renders plain English labels, with no mnemonic suffix (#668)", () => {
+    mount({ language: "en" });
+
+    for (const button of triggers()) {
+      expect(button.textContent).not.toMatch(/\([A-Z]\)/);
+    }
+  });
+
+  it("draws the mnemonic as text only: no underline element or style (#668)", () => {
+    mount({ language: "ja" });
+
+    for (const button of triggers()) {
+      expect(button.querySelector("u, ins, [style*='underline']")).toBeNull();
+      expect(button.innerHTML).toBe(button.textContent);
+    }
+  });
+
+  it("keeps mouse interaction working with the longer ja labels (#668)", () => {
+    const onInvoke = vi.fn();
+    mount({ language: "ja", onInvoke });
+
+    click(trigger("ファイル(F)"));
+    expect(popups()).toHaveLength(1);
+    hover(trigger("表示(V)"));
+    expect(trigger("表示(V)").getAttribute("aria-expanded")).toBe("true");
+    pressEscape();
+    expect(popups()).toHaveLength(0);
   });
 
   it("renders menu items, separators and a submenu chevron from the model", () => {

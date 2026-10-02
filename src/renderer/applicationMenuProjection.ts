@@ -41,7 +41,10 @@ export type RendererMenuEntry =
   | {
       readonly kind: "submenu";
       readonly key: string;
+      /** What is drawn; for a top-level menu this may carry "(F)" (#668). */
       readonly label: string;
+      /** The canonical access key (#668); Alt activation is #665. */
+      readonly mnemonic?: string;
       readonly items: readonly RendererMenuEntry[];
     };
 
@@ -63,6 +66,29 @@ export function shouldShowRendererMenuBar(platform: AppPlatform): boolean {
 
 function resolveLabel(label: ApplicationMenuLabel, translate: Translate): string {
   return "literal" in label ? label.literal : translate(label.key, label.values);
+}
+
+/**
+ * #668: how a menu's canonical mnemonic is shown in the Renderer menu.
+ *
+ * The letter itself comes from the model (never guessed from the label). Only
+ * the presentation is decided here: when the translated label already contains
+ * the letter (English "File" for F) it is shown as is; a label without it
+ * (Japanese "ファイル") gets an explicit "(F)" suffix so the access key is
+ * visible. No underline is drawn, and translations carry no mnemonic syntax.
+ */
+export function presentMnemonicLabel(
+  label: string,
+  mnemonic: string | undefined
+): string {
+  if (
+    mnemonic === undefined ||
+    label.toLocaleUpperCase("en-US").includes(mnemonic.toLocaleUpperCase("en-US"))
+  ) {
+    return label;
+  }
+
+  return `${label}(${mnemonic})`;
 }
 
 function projectItems(
@@ -123,7 +149,11 @@ export function projectApplicationMenu(
     (menu, index) => ({
       kind: "submenu" as const,
       key: String(index),
-      label: resolveLabel(menu.label, options.translate),
+      label: presentMnemonicLabel(
+        resolveLabel(menu.label, options.translate),
+        menu.mnemonic
+      ),
+      ...(menu.mnemonic === undefined ? {} : { mnemonic: menu.mnemonic }),
       items: projectItems(menu.items, options, String(index))
     })
   );
