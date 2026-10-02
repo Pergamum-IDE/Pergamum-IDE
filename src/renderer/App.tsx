@@ -2529,6 +2529,24 @@ export function App(): JSX.Element {
     isBulkTextImportDialogOpen ||
     isRecoveryCandidateDialogPendingOrOpenRef.current ||
     recoveryCandidateDialogData !== null;
+  // #665: any surface that owns the keyboard. Built on the app-wide modal
+  // state above plus the dialogs it does not track (Ruby / Emphasis / Link,
+  // image prompts, export dialogs, ...), so the Renderer menu never reacts to
+  // Alt behind them and closes (without taking focus back) when one opens.
+  const isApplicationMenuKeyboardBlocked =
+    isAppModalSurfacePendingOrOpen ||
+    isGlossaryExportWizardOpen ||
+    documentMapPngExportSnapshot !== null ||
+    exportConfirmationState !== null ||
+    japaneseMachineCheckTarget !== null ||
+    imageAttachmentPastePromptState !== null ||
+    imageInsertionSettingsPromptState !== null ||
+    imageInsertionOverwriteState !== null ||
+    markdownMoveImageLinkUpdateDialogState !== null ||
+    imageReferenceMoveUpdateDialogState !== null ||
+    emphasisMarkDialogState !== null ||
+    rubyDialogState !== null ||
+    linkInsertDialogState !== null;
   const isFocusClaimingSurfacePendingOrOpenAfterCommandPaletteClose =
     pendingDialogRequest !== null ||
     isAboutDialogPendingOrOpenRef.current ||
@@ -12920,6 +12938,8 @@ export function App(): JSX.Element {
         onInvoke={applicationMenuIntegration.onInvoke}
         getShortcutLabel={applicationMenuIntegration.getShortcutLabel}
         isDisabled={applicationMenuIntegration.isDisabled}
+        isKeyboardBlocked={isApplicationMenuKeyboardBlocked}
+        isImeComposing={imeCompositionSaveGuard.isComposing}
       />
       <EditorToolbar
         canUseMarkdownToolbarCommands={canUseMarkdownToolbarCommands}
