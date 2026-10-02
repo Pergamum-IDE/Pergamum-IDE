@@ -693,3 +693,55 @@ describe("DocumentTabBar active tab rename triggers (#478)", () => {
   });
 });
 
+
+// #683/#685: shortcut column — only where the key does the same thing to the
+// same (active) tab.
+describe("Document Tab context menu shortcut column", () => {
+  function shortcutOf(command: string): string | null {
+    return (
+      menuItem(command)?.querySelector(".contextMenuItemShortcut")
+        ?.textContent ?? null
+    );
+  }
+
+  it("shows Close / Save As / Rename shortcuts on the active tab, none on others", () => {
+    render();
+    const [active, inactive] = documentTabEls();
+
+    rightClick(active);
+    expect(shortcutOf("close")).toBeTruthy();
+    expect(shortcutOf("save-as")).toBeTruthy();
+    expect(shortcutOf("rename-file")).toBeTruthy();
+    for (const unmapped of [
+      "close-others",
+      "close-left",
+      "close-right",
+      "select-in-file-explorer",
+      "copy-absolute-path",
+      "copy-relative-path",
+      "copy-file-name"
+    ]) {
+      expect(shortcutOf(unmapped)).toBeNull();
+    }
+
+    act(() => backdrop().click());
+    rightClick(inactive);
+    for (const command of menuCommands()) {
+      expect(shortcutOf(command)).toBeNull();
+    }
+  });
+
+  it("keeps item order and the button's accessible name free of the shortcut", () => {
+    render();
+    rightClick(documentTabEls()[0]);
+
+    const close = menuItem("close")!;
+    expect(
+      close.querySelector(".contextMenuItemShortcut")?.getAttribute("aria-hidden")
+    ).toBe("true");
+    expect(close.querySelector(".contextMenuItemLabel")?.textContent).toBe(
+      t("ja", "tabs.contextMenu.close")
+    );
+    expect(menuCommands()[0]).toBe("close");
+  });
+});

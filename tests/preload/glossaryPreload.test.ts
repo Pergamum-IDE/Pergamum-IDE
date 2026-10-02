@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   APPLICATION_MENU_CHANNELS,
   APP_INFO_CHANNELS,
-  CONTEXT_MENU_CHANNELS,
   DEBUG_LOG_CHANNELS,
   EDIT_CHANNELS,
   FILE_CHANNELS,
@@ -508,83 +507,29 @@ describe("glossary preload API", () => {
     expect(typeof api.appInfo.openThirdPartyNotices).toBe("function");
   });
 
-  it("exposes context menu popup, command selection, and native edit delegation APIs", async () => {
+  it("exposes native edit delegation but no context menu display API (#685)", async () => {
     electronMock.invoke.mockClear();
-    electronMock.on.mockClear();
-    electronMock.off.mockClear();
     const api = electronMock.exposedApi;
 
     if (!api) {
       throw new Error("Pergamum API was not exposed.");
     }
 
-    const popupRequest = {
-      interactionId: "contextMenu.1",
-      requestedSurface: "markdownEditor" as const,
-      items: [
-        {
-          commandId: editorCommandIds.cutSelection,
-          enabled: true
-        }
-      ]
-    };
     const nativeEditRequest = {
       interactionId: "contextMenu.1",
       commandId: editorCommandIds.cutSelection,
       requestedSurface: "markdownEditor" as const,
       delegatedSurface: "markdownEditor" as const
     };
-    const receivedSelections: unknown[] = [];
-    const unsubscribe = api.contextMenu.onCommandSelected((selection) => {
-      receivedSelections.push(selection);
-    });
-    const listener = electronMock.on.mock.calls[0][1] as (
-      event: unknown,
-      selection: unknown
-    ) => void;
 
-    await api.contextMenu.popupEditMenu(popupRequest);
     await api.edit.delegateNativeEdit(nativeEditRequest);
-    listener(
-      {},
-      {
-        interactionId: "contextMenu.1",
-        commandId: editorCommandIds.cutSelection,
-        requestedSurface: "markdownEditor"
-      }
-    );
-    listener(
-      {},
-      {
-        interactionId: "contextMenu.2",
-        commandId: editorCommandIds.cutSelection,
-        requestedSurface: "unknownEditable"
-      }
-    );
-    unsubscribe();
 
-    expect(electronMock.invoke).toHaveBeenCalledWith(
-      CONTEXT_MENU_CHANNELS.popupEditMenu,
-      popupRequest
+    expect(api as unknown as Record<string, unknown>).not.toHaveProperty(
+      "contextMenu"
     );
     expect(electronMock.invoke).toHaveBeenCalledWith(
       EDIT_CHANNELS.delegateNativeEdit,
       nativeEditRequest
-    );
-    expect(electronMock.on).toHaveBeenCalledWith(
-      CONTEXT_MENU_CHANNELS.commandSelected,
-      expect.any(Function)
-    );
-    expect(receivedSelections).toEqual([
-      {
-        interactionId: "contextMenu.1",
-        commandId: editorCommandIds.cutSelection,
-        requestedSurface: "markdownEditor"
-      }
-    ]);
-    expect(electronMock.off).toHaveBeenCalledWith(
-      CONTEXT_MENU_CHANNELS.commandSelected,
-      listener
     );
   });
 });

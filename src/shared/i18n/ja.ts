@@ -2156,6 +2156,7 @@ export const jaTranslations = {
   "status.withDetail": "{status}（{detail}）",
   "tabs.closeTab": "タブを閉じる",
   "tabs.contextMenu.label": "タブ操作",
+  "editContextMenu.label": "編集操作",
   "tabs.contextMenu.close": "タブを閉じる",
   "tabs.contextMenu.closeOthers": "このタブ以外を閉じる",
   "tabs.contextMenu.closeToLeft": "左側のタブを閉じる",

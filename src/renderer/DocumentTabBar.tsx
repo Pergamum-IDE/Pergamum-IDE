@@ -21,6 +21,11 @@ import {
   handleDocumentTabCloseButtonClick,
   handleDocumentTabMiddleClick
 } from "./documentTabHandlers";
+import { ContextMenuItemContent } from "./ContextMenuItemContent";
+import {
+  documentTabContextMenuShortcutCommandId,
+  useContextMenuShortcutResolver
+} from "./contextMenuShortcuts";
 import {
   documentWorkspaceTabId,
   orderedWorkspaceTabs,
@@ -143,6 +148,7 @@ export function DocumentTabBar({
   // "documents, then specials" order when `order` is empty/omitted).
   const orderedTabs = orderedWorkspaceTabs(tabs, specialTabs, order);
 
+  const resolveContextMenuShortcut = useContextMenuShortcutResolver();
   const [tabContextMenu, setTabContextMenu] = useState<{
     tab: DocumentTab;
     x: number;
@@ -625,7 +631,16 @@ export function DocumentTabBar({
                       }
                     }}
                   >
-                    {translate(item.labelKey)}
+                    <ContextMenuItemContent
+                      label={translate(item.labelKey)}
+                      shortcut={resolveContextMenuShortcut(
+                        documentTabContextMenuShortcutCommandId(item.id, {
+                          isActive: isWorkspaceTabActive(documentWorkspaceTabId(menuTab.id)),
+                          isProjectDocument:
+                            menuTab.id.kind === "projectDocument"
+                        })
+                      )}
+                    />
                   </button>
                 </Fragment>
               );

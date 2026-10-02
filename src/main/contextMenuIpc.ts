@@ -1,44 +1,20 @@
-import {
-  BrowserWindow,
-  ipcMain,
-  Menu,
-  type IpcMainInvokeEvent,
-  type MenuItemConstructorOptions
-} from "electron";
-import {
-  CONTEXT_MENU_CHANNELS,
-  EDIT_CHANNELS
-} from "../shared/api";
+import { ipcMain, type IpcMainInvokeEvent } from "electron";
+import { EDIT_CHANNELS } from "../shared/api";
 import { editorCommandIds, type EditCommandId } from "../shared/commandIds";
 import {
-  editContextMenuItems,
   isContextMenuSurface,
   isEditContextMenuCommandId,
   isEditableContextSurface,
-  type EditContextMenuPopupRequest,
-  type EditableContextSurface,
-  type ContextMenuSurface,
   type NativeEditDelegationRequest
 } from "../shared/editContextMenu";
-import { t, type Language } from "../shared/i18n";
 import type { DebugLogger } from "./debugLogger";
-import { loadSettings } from "./settingsStore";
 
-type ContextMenuWebContents = Pick<
+type NativeEditWebContents = Pick<
   Electron.WebContents,
-  "isDestroyed" | "send"
+  "isDestroyed" | "cut" | "copy" | "paste" | "selectAll"
 >;
 
-type NativeEditWebContents = ContextMenuWebContents &
-  Pick<Electron.WebContents, "cut" | "copy" | "paste" | "selectAll">;
-
 const safeInteractionIdPattern = /^[A-Za-z0-9_.-]{1,80}$/;
-
-type ContextMenuSuppressionReason =
-  | "invalid_command"
-  | "unsupported_surface"
-  | "window_unavailable"
-  | "web_contents_destroyed";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -60,44 +36,6 @@ function partialInteractionIdDetails(
   const interactionId = sanitizeInteractionId(rawRequest.interactionId);
 
   return interactionId ? { interactionId } : {};
-}
-
-function safeContextMenuSurface(value: unknown): ContextMenuSurface {
-  return isContextMenuSurface(value) ? value : "unknownEditable";
-}
-
-function popupRequestFromRaw(
-  rawRequest: unknown
-): EditContextMenuPopupRequest | null {
-  if (!isRecord(rawRequest)) {
-    return null;
-  }
-
-  const interactionId = sanitizeInteractionId(rawRequest.interactionId);
-  const requestedSurface = rawRequest.requestedSurface;
-
-  if (!interactionId || !isEditableContextSurface(requestedSurface)) {
-    return null;
-  }
-
-  const rawItems = Array.isArray(rawRequest.items) ? rawRequest.items : [];
-  const items = editContextMenuItems.map((definition) => {
-    const rawItem = rawItems.find(
-      (candidate) =>
-        isRecord(candidate) && candidate.commandId === definition.commandId
-    );
-
-    return {
-      commandId: definition.commandId,
-      enabled: isRecord(rawItem) ? rawItem.enabled === true : false
-    };
-  });
-
-  return {
-    interactionId,
-    requestedSurface,
-    items
-  };
 }
 
 function nativeEditRequestFromRaw(
@@ -133,146 +71,6 @@ function nativeEditRequestFromRaw(
       ? { hasSelection: rawRequest.hasSelection }
       : {})
   };
-}
-
-function enabledStateForCommand(
-  request: EditContextMenuPopupRequest,
-  commandId: EditCommandId
-): boolean {
-  return (
-    request.items.find((item) => item.commandId === commandId)?.enabled ?? false
-  );
-}
-
-export function buildEditContextMenuTemplate(
-  request: EditContextMenuPopupRequest,
-  language: Language,
-  onSelect: (commandId: EditCommandId) => void
-): MenuItemConstructorOptions[] {
-  return editContextMenuItems.map((item) => ({
-    label: t(language, item.labelKey),
-    enabled: enabledStateForCommand(request, item.commandId),
-    click: () => onSelect(item.commandId)
-  }));
-}
-
-function logContextMenuOpened(
-  debugLogger: Pick<DebugLogger, "log"> | undefined,
-  request: EditContextMenuPopupRequest
-): void {
-  debugLogger?.log({
-    level: "debug",
-    event: "contextMenu.opened",
-    details: {
-      interactionId: request.interactionId,
-      requestedSurface: request.requestedSurface
-    }
-  });
-}
-
-function logContextMenuCommandSelected(
-  debugLogger: Pick<DebugLogger, "log"> | undefined,
-  request: EditContextMenuPopupRequest,
-  commandId: EditCommandId
-): void {
-  debugLogger?.log({
-    level: "debug",
-    event: "contextMenu.command.selected",
-    details: {
-      interactionId: request.interactionId,
-      commandId,
-      requestedSurface: request.requestedSurface
-    }
-  });
-}
-
-function logContextMenuSuppressed(
-  debugLogger: Pick<DebugLogger, "log"> | undefined,
-  details: {
-    readonly interactionId?: string;
-    readonly requestedSurface?: ContextMenuSurface;
-    readonly reason: ContextMenuSuppressionReason;
-  }
-): void {
-  debugLogger?.log({
-    level: "debug",
-    event: "contextMenu.suppressed",
-    details: {
-      ...(details.interactionId
-        ? { interactionId: details.interactionId }
-        : {}),
-      ...(details.requestedSurface
-        ? { requestedSurface: details.requestedSurface }
-        : {}),
-      result: "ignored",
-      reason: details.reason
-    }
-  });
-}
-
-export function popupEditContextMenu(input: {
-  request: EditContextMenuPopupRequest;
-  language: Language;
-  webContents: ContextMenuWebContents;
-  window: BrowserWindow | null;
-  debugLogger?: Pick<DebugLogger, "log">;
-}): boolean {
-  const { request, language, webContents, window, debugLogger } = input;
-
-  if (!isEditableContextSurface(request.requestedSurface)) {
-    logContextMenuSuppressed(debugLogger, {
-      interactionId: request.interactionId,
-      requestedSurface: safeContextMenuSurface(request.requestedSurface),
-      reason: "unsupported_surface"
-    });
-    return false;
-  }
-
-  if (!window || window.isDestroyed()) {
-    logContextMenuSuppressed(debugLogger, {
-      interactionId: request.interactionId,
-      requestedSurface: request.requestedSurface,
-      reason: "window_unavailable"
-    });
-    return false;
-  }
-
-  if (webContents.isDestroyed()) {
-    logContextMenuSuppressed(debugLogger, {
-      interactionId: request.interactionId,
-      requestedSurface: request.requestedSurface,
-      reason: "web_contents_destroyed"
-    });
-    return false;
-  }
-
-  const menu = Menu.buildFromTemplate(
-    buildEditContextMenuTemplate(request, language, (commandId) => {
-      logContextMenuCommandSelected(debugLogger, request, commandId);
-
-      if (!webContents.isDestroyed()) {
-        webContents.send(CONTEXT_MENU_CHANNELS.commandSelected, {
-          interactionId: request.interactionId,
-          commandId,
-          requestedSurface: request.requestedSurface
-        });
-      }
-    })
-  );
-
-  try {
-    menu.popup({ window });
-  } catch {
-    logContextMenuSuppressed(debugLogger, {
-      interactionId: request.interactionId,
-      requestedSurface: request.requestedSurface,
-      reason: "window_unavailable"
-    });
-    return false;
-  }
-
-  logContextMenuOpened(debugLogger, request);
-  return true;
 }
 
 function nativeEditOperation(
@@ -374,32 +172,6 @@ export function delegateNativeEditCommand(input: {
   return true;
 }
 
-async function handlePopupEditMenu(
-  event: IpcMainInvokeEvent,
-  rawRequest: unknown,
-  debugLogger?: Pick<DebugLogger, "log">
-): Promise<boolean> {
-  const request = popupRequestFromRaw(rawRequest);
-
-  if (!request) {
-    logContextMenuSuppressed(debugLogger, {
-      ...partialInteractionIdDetails(rawRequest),
-      reason: "invalid_command"
-    });
-    return false;
-  }
-
-  const settings = await loadSettings();
-
-  return popupEditContextMenu({
-    request,
-    language: settings.workbench.language,
-    webContents: event.sender,
-    window: BrowserWindow.fromWebContents(event.sender),
-    debugLogger
-  });
-}
-
 function handleNativeEditDelegation(
   event: IpcMainInvokeEvent,
   rawRequest: unknown,
@@ -422,9 +194,6 @@ function handleNativeEditDelegation(
 export function registerContextMenuIpc(
   debugLogger?: Pick<DebugLogger, "log">
 ): void {
-  ipcMain.handle(CONTEXT_MENU_CHANNELS.popupEditMenu, (event, rawRequest) =>
-    handlePopupEditMenu(event, rawRequest, debugLogger)
-  );
   ipcMain.handle(EDIT_CHANNELS.delegateNativeEdit, (event, rawRequest) =>
     handleNativeEditDelegation(event, rawRequest, debugLogger)
   );
