@@ -1324,8 +1324,53 @@ export function App(): JSX.Element {
   const [layout, setLayout] = useState<WorkbenchLayoutState>(
     createInitialWorkbenchLayoutState
   );
-  const [selectedPreviewRenderer, setSelectedPreviewRenderer] =
+  const [requestedPreviewRenderer, setRequestedPreviewRenderer] =
     useState<PreviewRendererId>(builtInDefaultSettings.preview.renderer);
+  const [effectivePreviewRenderer, setEffectivePreviewRenderer] =
+    useState<PreviewRendererId>(builtInDefaultSettings.preview.renderer);
+  const [isPreviewRendererSwitching, setIsPreviewRendererSwitching] =
+    useState<boolean>(false);
+  const previewRendererSwitchRequestIdRef = useRef<number>(0);
+
+  const handleSelectPreviewRenderer = useCallback(
+    (nextRenderer: PreviewRendererId) => {
+      if (
+        nextRenderer === requestedPreviewRenderer ||
+        isPreviewRendererSwitching
+      ) {
+        return;
+      }
+
+      const requestId = ++previewRendererSwitchRequestIdRef.current;
+      setRequestedPreviewRenderer(nextRenderer);
+      setIsPreviewRendererSwitching(true);
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (previewRendererSwitchRequestIdRef.current === requestId) {
+            setEffectivePreviewRenderer(nextRenderer);
+          }
+        });
+      });
+    },
+    [requestedPreviewRenderer, isPreviewRendererSwitching]
+  );
+
+  useEffect(() => {
+    if (
+      isPreviewRendererSwitching &&
+      effectivePreviewRenderer === requestedPreviewRenderer
+    ) {
+      setIsPreviewRendererSwitching(false);
+    }
+  }, [effectivePreviewRenderer, requestedPreviewRenderer, isPreviewRendererSwitching]);
+
+  useEffect(() => {
+    if (!layout.markdownEditorPreview.visible && isPreviewRendererSwitching) {
+      setIsPreviewRendererSwitching(false);
+      setEffectivePreviewRenderer(requestedPreviewRenderer);
+    }
+  }, [layout.markdownEditorPreview.visible, isPreviewRendererSwitching, requestedPreviewRenderer]);
   // #573 Slice 7: glossary entry editing happens only in glossary
   // Description tabs — the #436 bottom Glossary Entry Editor Pane is gone.
   // Every former pane entry point (Glossary side pane, Glossary Management,
@@ -2282,6 +2327,14 @@ export function App(): JSX.Element {
   const activeDocumentKey = activeDocument
     ? serializeEditorId(activeDocument.id)
     : null;
+
+  useEffect(() => {
+    previewRendererSwitchRequestIdRef.current++;
+    if (isPreviewRendererSwitching) {
+      setIsPreviewRendererSwitching(false);
+      setEffectivePreviewRenderer(requestedPreviewRenderer);
+    }
+  }, [activeDocumentKey]);
   // #387/#392: every currently open document's stable key — used below to
   // prune the runtime-only per-document Markdown EditorState / undo-history
   // cache when a tab closes. Never touches Session / Recovery / project DB;
@@ -2748,7 +2801,9 @@ export function App(): JSX.Element {
   // the active project/default renderer changes, but never write it back to
   // Application Settings, Project Settings, or Session.
   useEffect(() => {
-    setSelectedPreviewRenderer(effectiveSettings.preview.renderer);
+    setRequestedPreviewRenderer(effectiveSettings.preview.renderer);
+    setEffectivePreviewRenderer(effectiveSettings.preview.renderer);
+    setIsPreviewRendererSwitching(false);
   }, [effectiveSettings.preview.renderer, project?.activeProjectFilePath]);
   // #272: recomputed whenever the Project or the open-editor set changes.
   // Cheap (no serialization / hashing) — the coordinator debounces and
@@ -13006,9 +13061,10 @@ export function App(): JSX.Element {
         canTogglePreview={isPreviewEligible}
         isPreviewVisible={layout.markdownEditorPreview.visible}
         onTogglePreview={handleTogglePreviewVisible}
-        selectedPreviewRenderer={selectedPreviewRenderer}
+        selectedPreviewRenderer={requestedPreviewRenderer}
         defaultPreviewRenderer={effectiveSettings.preview.renderer}
-        onSelectPreviewRenderer={setSelectedPreviewRenderer}
+        onSelectPreviewRenderer={handleSelectPreviewRenderer}
+        isPreviewRendererSwitching={isPreviewRendererSwitching}
         isCommandPaletteOpen={isCommandPaletteOpen}
         commandPaletteLaunchAnimationDurationMs={
           effectiveSettings.commandPalette.launchAnimation.durationMs
@@ -13360,7 +13416,8 @@ export function App(): JSX.Element {
                           activeDocument.id
                         )}
                         documentStates={markdownEditorDocumentStatesRef.current}
-                        previewRenderer={selectedPreviewRenderer}
+                        previewRenderer={effectivePreviewRenderer}
+                        isPreviewRendererSwitching={isPreviewRendererSwitching}
                         narouMarkText={
                           effectiveSettings.editor.emphasisMark.narouMarkText
                         }

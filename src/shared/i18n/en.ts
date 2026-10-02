@@ -2396,6 +2396,7 @@ export const enTranslations = {
   "preview.mermaid.errorMessage": "Failed to render Mermaid diagram.",
   "preview.mermaid.errorHint": "Check the diagram syntax.",
   "preview.mermaid.showDetails": "Show details",
+  "preview.switchingRenderer": "Switching preview renderer…",
   "workspace.editor": "Editor",
   "workspace.markdownEditor": "Markdown editor",
   "workspace.markdownPreview": "Markdown preview",

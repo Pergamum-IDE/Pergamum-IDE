@@ -1,3 +1,4 @@
+import refreshIconRaw from "../../assets/icons/codicons/general/refresh.svg?raw";
 import type { JapaneseLintSource } from "../shared/japaneseLint";
 import type { JapaneseLintNotice } from "./japaneseLint/japaneseLintGutterExtension";
 import {
@@ -510,6 +511,8 @@ interface EditorSurfaceProps {
   documentStates?: Map<string, MarkdownEditorDocumentState>;
   /** `preview.renderer` (#507). */
   previewRenderer?: PreviewRendererId;
+  /** #680: renderer switching in progress. */
+  isPreviewRendererSwitching?: boolean;
   /** `editor.emphasisMark.narouMarkText` (#507). */
   narouMarkText?: string;
   /** `preview.updateDelayMs` (#250 follow-up) — see useDebouncedPreviewContent. */
@@ -709,6 +712,7 @@ export function EditorSurface({
   activeDocumentKey,
   documentStates,
   previewRenderer,
+  isPreviewRendererSwitching = false,
   narouMarkText,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
@@ -840,6 +844,7 @@ export function EditorSurface({
           // #573 Slice 3: glossary Description always previews as plain
           // (horizontal) Markdown.
           previewRenderer={isGlossaryDescription ? "markdown" : previewRenderer}
+          isPreviewRendererSwitching={isPreviewRendererSwitching}
           narouMarkText={narouMarkText}
           previewUpdateDelayMs={previewUpdateDelayMs}
           newFileLineEndingFallback={newFileLineEndingFallback}
@@ -930,6 +935,7 @@ interface MarkdownEditorSurfaceProps {
   /** #392: see EditorSurfaceProps's own doc comment. */
   documentStates?: Map<string, MarkdownEditorDocumentState>;
   previewRenderer?: PreviewRendererId;
+  isPreviewRendererSwitching?: boolean;
   narouMarkText?: string;
   previewUpdateDelayMs: number;
   newFileLineEndingFallback: NewFileLineEnding;
@@ -1061,6 +1067,7 @@ function MarkdownEditorSurface({
   documentKey,
   documentStates,
   previewRenderer,
+  isPreviewRendererSwitching = false,
   narouMarkText,
   previewUpdateDelayMs,
   newFileLineEndingFallback,
@@ -3546,13 +3553,26 @@ function MarkdownEditorSurface({
 
       {isPreviewAvailable ? (
         <section
-          className="pane"
+          className={`pane${isPreviewRendererSwitching ? " pane--busy" : ""}`}
           aria-label={translate("workspace.markdownPreview")}
           ref={previewPaneRef}
+          aria-busy={isPreviewRendererSwitching ? "true" : undefined}
         >
           <div className="paneHeader">
             {translate("workspace.preview")}
           </div>
+          {isPreviewRendererSwitching ? (
+            <div className="previewBusyOverlay" role="status" aria-live="polite">
+              <span
+                className="previewBusySpinner"
+                aria-hidden="true"
+                dangerouslySetInnerHTML={{ __html: refreshIconRaw }}
+              />
+              <span className="previewBusyText">
+                {translate("preview.switchingRenderer")}
+              </span>
+            </div>
+          ) : null}
           <GlossaryPreviewDecorator
             previewHtml={previewHtml}
             surfaceIndex={surfaceIndex}
