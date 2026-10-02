@@ -71,3 +71,75 @@ describe("application menu wiring in App (#664)", () => {
     }
   });
 });
+
+describe("keyboard / modal wiring of the Renderer menu in App (#665)", () => {
+  const stripComments = (source: string) =>
+    source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  it("hands the menu the app-wide modal state and the IME guard", () => {
+    const bar = app.indexOf("<ApplicationMenuBar");
+    const block = app.slice(bar, bar + 700);
+
+    expect(block).toContain(
+      "isKeyboardBlocked={isApplicationMenuKeyboardBlocked}"
+    );
+    expect(block).toContain(
+      "isImeComposing={imeCompositionSaveGuard.isComposing}"
+    );
+  });
+
+  it("the blocked state is built on isAppModalSurfacePendingOrOpen and the other dialogs", () => {
+    const start = app.indexOf("const isApplicationMenuKeyboardBlocked =");
+    const block = app.slice(start, start + 900);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(block).toContain("isAppModalSurfacePendingOrOpen ||");
+    for (const dialog of [
+      "rubyDialogState !== null",
+      "emphasisMarkDialogState !== null",
+      "linkInsertDialogState !== null",
+      "isGlossaryExportWizardOpen",
+      "exportConfirmationState !== null"
+    ]) {
+      expect(block, dialog).toContain(dialog);
+    }
+  });
+
+  it("does not decide modality from a DOM query", () => {
+    for (const path of [
+      "src/renderer/ApplicationMenuBar.tsx",
+      "src/renderer/applicationMenuKeyboard.ts"
+    ]) {
+      const code = stripComments(readFileSync(path, "utf8"));
+
+      expect(code, path).not.toContain("aria-modal");
+      expect(code, path).not.toMatch(/role=['"]?(alert)?dialog/);
+    }
+  });
+
+  it("keeps the native bar hidden without autoHideMenuBar (Alt must not bring it back)", () => {
+    for (const path of [
+      "src/main/main.ts",
+      "src/main/menu.ts",
+      "src/main/nativeMenuBarVisibility.ts"
+    ]) {
+      const code = stripComments(readFileSync(path, "utf8"));
+
+      expect(code, path).not.toMatch(/autoHideMenuBar\s*:\s*true/);
+      expect(code, path).not.toMatch(/setAutoHideMenuBar\(\s*true/);
+    }
+  });
+
+  it("never infers a mnemonic from label text and draws no underline", () => {
+    const code = stripComments(
+      readFileSync("src/renderer/applicationMenuKeyboard.ts", "utf8")
+    );
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+
+    expect(code).toContain("menu.mnemonic");
+    expect(code).not.toMatch(/label\[0\]|label\.includes|label\.charAt/);
+    expect(stripComments(css.slice(css.indexOf("/* #665:")))).not.toMatch(
+      /underline|text-decoration/
+    );
+  });
+});

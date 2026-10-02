@@ -15926,3 +15926,17 @@ label.settingsItemHeader {
   margin-inline: 6px;
   background: var(--pg-color-border-default);
 }
+
+/* #665: keyboard focus of the Renderer menu. The state comes from the menu's own
+   focus key (data-focused), so it is visible however focus arrived. Only
+   semantic tokens; no underline (mnemonics are shown as text). */
+.applicationMenuItem:focus {
+  outline: none;
+}
+
+.applicationMenuBarItem[data-focused="true"],
+.applicationMenuItem[data-focused="true"] {
+  background: var(--pg-color-surface-hover);
+  outline: 2px solid var(--pg-color-focus-ring);
+  outline-offset: -2px;
+}
