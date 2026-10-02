@@ -95,6 +95,8 @@ function setup(
   const writes: { path: string; content: string }[] = [];
   const dialogs: string[] = [];
   const created: JapaneseLintHost[] = [];
+  const reads: string[] = [];
+  const encodingLookups: number[] = [];
   const logger = { log: (input: Logged) => void events.push(input) } as never;
   const service: JapaneseMachineCheckService = createJapaneseMachineCheckService({
     createHost: (getSettings) => {
@@ -119,8 +121,14 @@ function setup(
     currentProjectRootPath: () =>
       state.projectRoot === undefined ? root : state.projectRoot,
     settingsProvider: async () => state.settings,
-    textEncodingProvider: async () => state.encoding ?? "utf8",
+    textEncodingProvider: async () => {
+      encodingLookups.push(1);
+
+      return state.encoding ?? "utf8";
+    },
     readFile: async (absolute) => {
+      reads.push(absolute);
+
       if (state.readFailure) {
         throw new Error(`ENOENT ${absolute} ${secretText}`);
       }
@@ -159,7 +167,17 @@ function setup(
     logger
   });
 
-  return { service, world, events, created, state, writes, dialogs };
+  return {
+    service,
+    world,
+    events,
+    created,
+    state,
+    writes,
+    dialogs,
+    reads,
+    encodingLookups
+  };
 }
 
 const lintDocumentsReceived = (child: { received: unknown[] } | undefined) =>
@@ -170,11 +188,12 @@ const lintDocumentsReceived = (child: { received: unknown[] } | undefined) =>
 describe("prepare (#625 P2a)", () => {
   it("returns name, extension, format, sizes, enabled rules and an estimate", async () => {
     const { service, created } = setup({ "sub/a.md": `${joshi}\n二行目。` });
-    const result = await service.prepare({ relativePath: "sub/a.md" });
+    const result = await service.prepare({ kind: "projectFile", relativePath: "sub/a.md" });
 
     expect(result).toMatchObject({
       ok: true,
-      fileName: "a.md",
+      targetKind: "projectFile",
+      displayName: "a.md",
       ext: ".md",
       format: "markdown",
       sourceChars: joshi.length + 1 + 4,
@@ -191,12 +210,12 @@ describe("prepare (#625 P2a)", () => {
   it("classifies .markdown and .txt", async () => {
     const { service } = setup({ "b.markdown": joshi, "c.txt": joshi });
 
-    expect(await service.prepare({ relativePath: "b.markdown" })).toMatchObject({
+    expect(await service.prepare({ kind: "projectFile", relativePath: "b.markdown" })).toMatchObject({
       ok: true,
       format: "markdown",
       ext: ".markdown"
     });
-    expect(await service.prepare({ relativePath: "c.txt" })).toMatchObject({
+    expect(await service.prepare({ kind: "projectFile", relativePath: "c.txt" })).toMatchObject({
       ok: true,
       format: "text",
       ext: ".txt"
@@ -207,7 +226,7 @@ describe("prepare (#625 P2a)", () => {
     const { service } = setup();
 
     expect(
-      await service.prepare({ relativePath: "a.md", isDirty: true })
+      await service.prepare({ kind: "projectFile", relativePath: "a.md", isDirty: true })
     ).toMatchObject({ ok: true, isDirty: true });
   });
 
@@ -217,10 +236,10 @@ describe("prepare (#625 P2a)", () => {
       "l.md": "あ".repeat(150_000)
     });
 
-    expect(await service.prepare({ relativePath: "m.md" })).toMatchObject({
+    expect(await service.prepare({ kind: "projectFile", relativePath: "m.md" })).toMatchObject({
       estimate: "medium"
     });
-    expect(await service.prepare({ relativePath: "l.md" })).toMatchObject({
+    expect(await service.prepare({ kind: "projectFile", relativePath: "l.md" })).toMatchObject({
       estimate: "long"
     });
   });
@@ -246,7 +265,7 @@ describe("prepare (#625 P2a)", () => {
     };
     const { service } = setup(undefined, undefined, { settings: off });
 
-    expect(await service.prepare({ relativePath: "a.md" })).toMatchObject({
+    expect(await service.prepare({ kind: "projectFile", relativePath: "a.md" })).toMatchObject({
       ok: true,
       enabledRuleIds: []
     });
@@ -255,34 +274,419 @@ describe("prepare (#625 P2a)", () => {
   it("refuses safely: bad input, unsupported files, no project, escapes, unreadable files", async () => {
     const { service } = setup({ "a.md": joshi });
 
-    for (const bad of [undefined, null, 5, "a.md", {}, { relativePath: "" }]) {
+    for (const bad of [undefined, null, 5, "a.md", {}, { kind: "projectFile", relativePath: "" }]) {
       expect(await service.prepare(bad)).toEqual({
         ok: false,
         reason: "invalid-request"
       });
     }
-    expect(await service.prepare({ relativePath: "cover.png" })).toEqual({
+    expect(await service.prepare({ kind: "projectFile", relativePath: "cover.png" })).toEqual({
       ok: false,
       reason: "unsupported-file"
     });
-    expect(await service.prepare({ relativePath: "..\\..\\secret.md" })).toEqual({
+    expect(await service.prepare({ kind: "projectFile", relativePath: "..\\..\\secret.md" })).toEqual({
       ok: false,
       reason: "invalid-request"
     });
-    expect(await service.prepare({ relativePath: "C:\\other\\x.md" })).toEqual({
+    expect(await service.prepare({ kind: "projectFile", relativePath: "C:\\other\\x.md" })).toEqual({
       ok: false,
       reason: "invalid-request"
     });
-    expect(await service.prepare({ relativePath: "missing.md" })).toEqual({
+    expect(await service.prepare({ kind: "projectFile", relativePath: "missing.md" })).toEqual({
       ok: false,
       reason: "read-failed"
     });
 
     const noProject = setup(undefined, undefined, { projectRoot: null });
 
-    expect(await noProject.service.prepare({ relativePath: "a.md" })).toEqual({
+    expect(await noProject.service.prepare({ kind: "projectFile", relativePath: "a.md" })).toEqual({
       ok: false,
       reason: "no-project"
+    });
+  });
+
+  it("a legacy request without kind is invalid, not guessed (#688)", async () => {
+    const { service } = setup({ "a.md": joshi });
+
+    expect(await service.prepare({ relativePath: "a.md" })).toEqual({
+      ok: false,
+      reason: "invalid-request"
+    });
+  });
+
+  describe("glossary Description target (#688)", () => {
+    const description = (
+      text: string,
+      displayName = "アリス / Description"
+    ) => ({ kind: "glossaryDescription", text, displayName });
+
+    it("prepares the draft snapshot as Markdown without any file I/O or Worker", async () => {
+      const { service, created, reads, encodingLookups } = setup({});
+      const result = await service.prepare(
+        description(`${joshi}
+二行目。`)
+      );
+
+      expect(result).toMatchObject({
+        ok: true,
+        targetKind: "glossaryDescription",
+        displayName: "アリス / Description",
+        ext: ".md",
+        format: "markdown",
+        sourceChars: joshi.length + 1 + 4,
+        sourceLines: 2,
+        isDirty: false,
+        estimate: "short"
+      });
+      expect(result.ok && result.enabledRuleIds).toContain("max-ten");
+      expect(result).not.toHaveProperty("fileName");
+      expect(reads).toEqual([]);
+      expect(encodingLookups).toEqual([]);
+      expect(created).toHaveLength(0);
+    });
+
+    it("counts the normalized text: a\r\nb\rc is three lines of five characters", async () => {
+      const { service } = setup({});
+
+      expect(await service.prepare(description("a\r\nb\rc"))).toMatchObject({
+        ok: true,
+        sourceChars: 5,
+        sourceLines: 3
+      });
+    });
+
+    it("prepares an empty Description (0 characters, 1 line, short)", async () => {
+      const { service } = setup({});
+
+      expect(await service.prepare(description(""))).toMatchObject({
+        ok: true,
+        sourceChars: 0,
+        sourceLines: 1,
+        estimate: "short"
+      });
+    });
+
+    it("classes the size from the snapshot, with no body size cap", async () => {
+      const { service } = setup({});
+
+      expect(
+        await service.prepare(description("あ".repeat(100_001)))
+      ).toMatchObject({ ok: true, sourceChars: 100_001, estimate: "long" });
+    });
+
+    it("needs an open project, like a project file, and still does no I/O", async () => {
+      const { service, created, reads, encodingLookups } = setup(
+        {},
+        undefined,
+        { projectRoot: null }
+      );
+
+      expect(await service.prepare(description("本文。"))).toEqual({
+        ok: false,
+        reason: "no-project"
+      });
+      expect(reads).toEqual([]);
+      expect(encodingLookups).toEqual([]);
+      expect(created).toHaveLength(0);
+    });
+
+    it("runs in the existing Worker on the normalized snapshot, as Markdown (.md), with no file I/O", async () => {
+      const seen: { source: string; format: string; ext: string }[] = [];
+      const { service, created, reads, encodingLookups, world } = setup(
+        {},
+        {
+          lint: async (source, options) => {
+            seen.push({ source, format: options.format, ext: options.ext });
+
+            return realLint(source, options);
+          },
+          realDictionary
+        }
+      );
+      const result = await service.run(description(`${joshi}\r\n二行目。`));
+
+      expect(result.ok).toBe(true);
+      expect(seen).toEqual([
+        { source: `${joshi}\n二行目。`, format: "markdown", ext: ".md" }
+      ]);
+      expect(created).toHaveLength(1);
+      expect(world.children).toHaveLength(1);
+      expect(reads).toEqual([]);
+      expect(encodingLookups).toEqual([]);
+    }, 30_000);
+
+    it("summarizes with targetKind and the given displayName, and no path or file name", async () => {
+      const { service } = setup({});
+      const result = await service.run(description(joshi, "アリス"));
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+
+      expect(result.summary).toMatchObject({
+        targetKind: "glossaryDescription",
+        displayName: "アリス",
+        sourceChars: joshi.length,
+        sourceLines: 1,
+        truncated: false
+      });
+      expect(result.summary.totalMessages).toBeGreaterThan(0);
+      expect(result.summary.returnedMessages).toBe(result.summary.totalMessages);
+      expect(result.summary.ruleCounts.map((c) => c.ruleId)).toContain(
+        "no-doubled-joshi"
+      );
+      expect(typeof result.summary.elapsedMs).toBe("number");
+      for (const forbidden of ["fileName", "absolutePath", "relativePath", "path"]) {
+        expect(result.summary).not.toHaveProperty(forbidden);
+      }
+    });
+
+    it("uses only what the request carries (each run is its own snapshot)", async () => {
+      const { service, reads } = setup({ "a.md": joshi });
+      const first = await service.run(description(joshi, "A"));
+      const second = await service.run(description("問題のない文です。", "B"));
+
+      expect(first.ok && first.summary.displayName).toBe("A");
+      expect(first.ok && first.summary.totalMessages).toBeGreaterThan(0);
+      expect(second.ok && second.summary.displayName).toBe("B");
+      expect(second.ok && second.summary.totalMessages).toBe(0);
+      expect(reads).toEqual([]);
+    });
+
+    it("reports the same coarse progress stages", async () => {
+      const { service } = setup({});
+      const stages: string[] = [];
+
+      await service.run(description(joshi), (p) => void stages.push(p.stage));
+
+      expect(stages).toEqual([
+        "starting",
+        "dictionary-check",
+        "lint-running",
+        "aggregating"
+      ]);
+    });
+
+    it("can be canceled, and the late result is never adopted", async () => {
+      const stuck = gate();
+      const { service, world, created } = setup(
+        {},
+        {
+          lint: async (...args) => {
+            await stuck.opened;
+
+            return realLint(...args);
+          },
+          realDictionary
+        }
+      );
+      const pending = service.run(description(joshi));
+
+      await vi.waitFor(() =>
+        expect(lintDocumentsReceived(world.children[0])).toBe(1)
+      );
+      await service.cancel();
+
+      expect(await pending).toEqual({ ok: false, reason: "canceled" });
+      stuck.release();
+      await vi.waitFor(() => expect(created[0]?.getState()).toBe("disposed"));
+      expect(await service.saveReport({ resultId: "x" })).toEqual({
+        ok: false,
+        reason: "not-ready"
+      });
+    });
+
+    it("a project switch during the run cancels it and keeps no result", async () => {
+      const stuck = gate();
+      const ctx = setup(
+        {},
+        {
+          lint: async (...args) => {
+            await stuck.opened;
+
+            return realLint(...args);
+          },
+          realDictionary
+        }
+      );
+      const pending = ctx.service.run(description(joshi));
+
+      await vi.waitFor(() =>
+        expect(lintDocumentsReceived(ctx.world.children[0])).toBe(1)
+      );
+      ctx.service.handleProjectBoundary("switched");
+      stuck.release();
+
+      expect(await pending).toEqual({ ok: false, reason: "canceled" });
+      expect(await ctx.service.saveReport({ resultId: "x" })).toEqual({
+        ok: false,
+        reason: "not-ready"
+      });
+    });
+
+    it("a finished result is not saveable after the project changed or the result was discarded", async () => {
+      const ctx = setup({});
+      const ran = await ctx.service.run(description(joshi));
+
+      expect(ran.ok).toBe(true);
+      if (!ran.ok) {
+        return;
+      }
+
+      ctx.state.projectRoot = path.resolve("C:\\Other");
+      expect(
+        await ctx.service.saveReport({ resultId: ran.summary.resultId })
+      ).toEqual({ ok: false, reason: "not-ready" });
+      expect(ctx.dialogs).toHaveLength(0);
+
+      ctx.state.projectRoot = undefined;
+      await ctx.service.discardResult({ resultId: ran.summary.resultId });
+      expect(
+        await ctx.service.saveReport({ resultId: ran.summary.resultId })
+      ).toEqual({ ok: false, reason: "not-ready" });
+    });
+
+    describe("report", () => {
+      const finish = async (
+        ctx: ReturnType<typeof setup>,
+        displayName: string,
+        text = joshi
+      ): Promise<string> => {
+        const ran = await ctx.service.run(description(text, displayName));
+
+        if (!ran.ok) {
+          throw new Error(`run failed: ${ran.reason}`);
+        }
+
+        return ran.summary.resultId;
+      };
+
+      it("is suggested in the project root as <name>.lint.md and written", async () => {
+        const ctx = setup({});
+        const saved = await ctx.service.saveReport({
+          resultId: await finish(ctx, "アリス")
+        });
+
+        expect(saved).toEqual({ ok: true, fileName: "アリス.lint.md" });
+        expect(ctx.dialogs).toEqual([path.join(root, "アリス.lint.md")]);
+        expect(ctx.writes).toHaveLength(1);
+        expect(ctx.writes[0]?.path).toBe(path.join(root, "アリス.lint.md"));
+      });
+
+      it("makes only the suggested file name safe; the report keeps the name as is", async () => {
+        const ctx = setup({});
+
+        await ctx.service.saveReport({
+          resultId: await finish(ctx, "Type:Moon/Zero?")
+        });
+
+        expect(ctx.dialogs).toEqual([path.join(root, "Type_Moon_Zero_.lint.md")]);
+
+        const report = ctx.writes[0]!.content;
+
+        expect(report).toContain("| 対象 | Type:Moon/Zero? |");
+        expect(report).toContain("| 種別 | Glossary Description |");
+        expect(report).toContain("| 形式 | Markdown |");
+        expect(report).not.toContain("| ファイル |");
+        expect(report).not.toContain("Type_Moon_Zero_");
+        expect(report).toContain("| 実行日時 | 2026-09-30 02:31 |");
+        expect(report).toContain("### 助詞の重なり\n");
+        expect(report).toContain("`no-doubled-joshi`");
+        expect(report).toContain("私は彼は好きだ。");
+        // No fake path or project root in the report.
+        expect(report).not.toContain(root);
+        expect(report).not.toMatch(/\.md\b.*(?:パス|path)/i);
+      });
+
+      it("keeps a very long name whole in the summary and report; only the suggested file name is cut", async () => {
+        const long = "あ".repeat(300);
+        const ctx = setup({});
+        const ran = await ctx.service.run(description(joshi, long));
+
+        expect(ran.ok && ran.summary.displayName).toBe(long);
+
+        await ctx.service.saveReport({
+          resultId: ran.ok ? ran.summary.resultId : ""
+        });
+
+        expect(ctx.writes[0]!.content).toContain(`| 対象 | ${long} |`);
+        expect(ctx.dialogs).toEqual([
+          path.join(root, `${"あ".repeat(120)}.lint.md`)
+        ]);
+      });
+
+      it("keeps AC/DC as the target while suggesting AC_DC.lint.md", async () => {
+        const ctx = setup({});
+
+        await ctx.service.saveReport({ resultId: await finish(ctx, "AC/DC") });
+
+        expect(ctx.dialogs).toEqual([path.join(root, "AC_DC.lint.md")]);
+        expect(ctx.writes[0]!.content).toContain("| 対象 | AC/DC |");
+      });
+
+      it("uses the English labels for an English UI", async () => {
+        const ctx = setup({}, undefined, { language: "en" });
+
+        await ctx.service.saveReport({ resultId: await finish(ctx, "Alice") });
+
+        const report = ctx.writes[0]!.content;
+
+        expect(report).toContain("| Target | Alice |");
+        expect(report).toContain("| Type | Glossary Description |");
+        expect(report).toContain("| Format | Markdown |");
+      });
+
+      it("refuses to write into a Pergamum data file", async () => {
+        for (const name of [
+          "pergamum.db",
+          "pergamum.json",
+          "pergamum.db-wal",
+          "pergamum.db-shm",
+          "pergamum.db-journal"
+        ]) {
+          const ctx = setup({}, undefined, {
+            saveTarget: path.join(root, name)
+          });
+
+          expect(
+            await ctx.service.saveReport({ resultId: await finish(ctx, "アリス") })
+          ).toEqual({ ok: false, reason: "invalid-target" });
+          expect(ctx.writes, name).toHaveLength(0);
+        }
+      });
+
+      it("has no source file to protect: a name equal to the suggestion is fine", async () => {
+        const ctx = setup({}, undefined, {
+          saveTarget: path.join(root, "a.md")
+        });
+
+        expect(
+          await ctx.service.saveReport({ resultId: await finish(ctx, "アリス") })
+        ).toEqual({ ok: true, fileName: "a.md" });
+      });
+    });
+
+    it("never logs the body or the display name", async () => {
+      const { service, events } = setup({});
+      const target = description(
+        "SECRET_GLOSSARY_BODY_688。",
+        "SECRET_GLOSSARY_NAME_688"
+      );
+
+      await service.prepare(target);
+
+      const ran = await service.run(target);
+
+      if (ran.ok) {
+        await service.saveReport({ resultId: ran.summary.resultId });
+      }
+      await setup({}, undefined, { projectRoot: null }).service.prepare(target);
+
+      const logged = JSON.stringify(events);
+
+      expect(logged).not.toContain("SECRET_GLOSSARY_BODY_688");
+      expect(logged).not.toContain("SECRET_GLOSSARY_NAME_688");
     });
   });
 
@@ -387,11 +791,11 @@ describe("prepare (#625 P2a)", () => {
       "sub\\..\\..\\secret.md",
       "."
     ]) {
-      expect(await service.prepare({ relativePath })).toEqual({
+      expect(await service.prepare({ kind: "projectFile", relativePath })).toEqual({
         ok: false,
         reason: relativePath === "." ? "unsupported-file" : "invalid-request"
       });
-      expect(await service.run({ relativePath })).toEqual({
+      expect(await service.run({ kind: "projectFile", relativePath })).toEqual({
         ok: false,
         reason: relativePath === "." ? "unsupported-file" : "invalid-request"
       });
@@ -405,7 +809,7 @@ describe("prepare (#625 P2a)", () => {
     const fallback = setup({ "s.txt": sjis }, undefined, { encoding: "utf8" });
 
     for (const { service } of [configured, fallback]) {
-      expect(await service.prepare({ relativePath: "s.txt" })).toMatchObject({
+      expect(await service.prepare({ kind: "projectFile", relativePath: "s.txt" })).toMatchObject({
         ok: true,
         sourceChars: joshi.length
       });
@@ -415,7 +819,7 @@ describe("prepare (#625 P2a)", () => {
   it("counts CRLF text like the editor does (one line break each)", async () => {
     const { service } = setup({ "crlf.md": "あ\r\nい\r\nう" });
 
-    expect(await service.prepare({ relativePath: "crlf.md" })).toMatchObject({
+    expect(await service.prepare({ kind: "projectFile", relativePath: "crlf.md" })).toMatchObject({
       sourceChars: 5,
       sourceLines: 3
     });
@@ -427,11 +831,12 @@ describe("run (#625 P2a)", () => {
     const { service, world } = setup({ "a.md": joshi, "b.markdown": joshi, "c.txt": joshi });
 
     for (const file of ["a.md", "b.markdown", "c.txt"]) {
-      const result = await service.run({ relativePath: file });
+      const result = await service.run({ kind: "projectFile", relativePath: file });
 
       expect(result.ok, file).toBe(true);
       if (result.ok) {
-        expect(result.summary.fileName).toBe(file);
+        expect(result.summary.displayName).toBe(file);
+        expect(result.summary.targetKind).toBe("projectFile");
         expect(result.summary.totalMessages).toBeGreaterThan(0);
         expect(result.summary.returnedMessages).toBe(result.summary.totalMessages);
         expect(result.summary.truncated).toBe(false);
@@ -462,7 +867,7 @@ describe("run (#625 P2a)", () => {
       }))
     );
     const { service } = setup(undefined, { lint: async () => many, realDictionary });
-    const result = await service.run({ relativePath: "a.md" });
+    const result = await service.run({ kind: "projectFile", relativePath: "a.md" });
 
     expect(result.ok && result.summary.ruleCounts).toEqual([
       { ruleId: "max-ten", count: 3 },
@@ -480,7 +885,7 @@ describe("run (#625 P2a)", () => {
       index
     }));
     const { service } = setup(undefined, { lint: async () => many, realDictionary });
-    const result = await service.run({ relativePath: "a.md" });
+    const result = await service.run({ kind: "projectFile", relativePath: "a.md" });
 
     expect(result.ok && result.summary).toMatchObject({
       totalMessages: 1500,
@@ -494,7 +899,7 @@ describe("run (#625 P2a)", () => {
     const commas = "私は、朝に、昼に、夜に、犬と散歩をした。";
     const { service, state } = setup({ "a.md": joshi, "c.txt": commas });
     const ruleIds = async (file: string) => {
-      const result = await service.run({ relativePath: file });
+      const result = await service.run({ kind: "projectFile", relativePath: file });
 
       return result.ok ? result.summary.ruleCounts.map((c) => c.ruleId) : [];
     };
@@ -513,7 +918,7 @@ describe("run (#625 P2a)", () => {
     const long = `${"あ".repeat(60)}。`;
     const { service, state } = setup({ "a.md": long });
     const ids = async () => {
-      const result = await service.run({ relativePath: "a.md" });
+      const result = await service.run({ kind: "projectFile", relativePath: "a.md" });
 
       return result.ok ? result.summary.ruleCounts.map((c) => c.ruleId) : [];
     };
@@ -544,7 +949,7 @@ describe("run (#625 P2a)", () => {
     };
     const { service, created } = setup(undefined, undefined, { settings: off });
 
-    expect(await service.run({ relativePath: "a.md" })).toEqual({
+    expect(await service.run({ kind: "projectFile", relativePath: "a.md" })).toEqual({
       ok: false,
       reason: "no-rules"
     });
@@ -554,14 +959,14 @@ describe("run (#625 P2a)", () => {
   it("never rejects, whatever the input", async () => {
     const { service } = setup();
 
-    for (const bad of [undefined, null, 0, "x", {}, [], { relativePath: 1 }]) {
+    for (const bad of [undefined, null, 0, "x", {}, [], { kind: "projectFile", relativePath: 1 }]) {
       await expect(service.run(bad)).resolves.toMatchObject({ ok: false });
     }
-    await expect(service.run({ relativePath: "missing.md" })).resolves.toEqual({
+    await expect(service.run({ kind: "projectFile", relativePath: "missing.md" })).resolves.toEqual({
       ok: false,
       reason: "read-failed"
     });
-    await expect(service.run({ relativePath: "cover.png" })).resolves.toEqual({
+    await expect(service.run({ kind: "projectFile", relativePath: "cover.png" })).resolves.toEqual({
       ok: false,
       reason: "unsupported-file"
     });
@@ -571,7 +976,7 @@ describe("run (#625 P2a)", () => {
     const { service } = setup();
     const stages: string[] = [];
 
-    await service.run({ relativePath: "a.md" }, (p: JapaneseMachineCheckProgress) =>
+    await service.run({ kind: "projectFile", relativePath: "a.md" }, (p: JapaneseMachineCheckProgress) =>
       stages.push(p.stage)
     );
 
@@ -580,7 +985,7 @@ describe("run (#625 P2a)", () => {
 
   it("a throwing progress listener does not break the run", async () => {
     const { service } = setup();
-    const result = await service.run({ relativePath: "a.md" }, () => {
+    const result = await service.run({ kind: "projectFile", relativePath: "a.md" }, () => {
       throw new Error("renderer gone");
     });
 
@@ -597,17 +1002,17 @@ describe("run (#625 P2a)", () => {
       },
       realDictionary
     });
-    const first = service.run({ relativePath: "a.md" });
+    const first = service.run({ kind: "projectFile", relativePath: "a.md" });
 
     await vi.waitFor(() => expect(lintDocumentsReceived(world.children[0])).toBe(1));
-    expect(await service.run({ relativePath: "a.md" })).toEqual({
+    expect(await service.run({ kind: "projectFile", relativePath: "a.md" })).toEqual({
       ok: false,
       reason: "busy"
     });
     stuck.release();
     expect((await first).ok).toBe(true);
     // ... and the next one is fine again.
-    expect((await service.run({ relativePath: "a.md" })).ok).toBe(true);
+    expect((await service.run({ kind: "projectFile", relativePath: "a.md" })).ok).toBe(true);
   });
 });
 
@@ -616,10 +1021,10 @@ describe("Worker lifecycle (#625 P2a)", () => {
     const { service, world, created } = setup();
 
     expect(created).toHaveLength(0);
-    await service.prepare({ relativePath: "a.md" });
+    await service.prepare({ kind: "projectFile", relativePath: "a.md" });
     expect(created).toHaveLength(0);
 
-    await service.run({ relativePath: "a.md" });
+    await service.run({ kind: "projectFile", relativePath: "a.md" });
     expect(created).toHaveLength(1);
     await vi.waitFor(() => expect(created[0]?.getState()).toBe("disposed"));
     expect(world.children[0]?.exited || world.children[0]?.killed).toBe(true);
@@ -639,11 +1044,11 @@ describe("Worker lifecycle (#625 P2a)", () => {
       realDictionary
     });
 
-    expect(await service.run({ relativePath: "a.md" })).toEqual({
+    expect(await service.run({ kind: "projectFile", relativePath: "a.md" })).toEqual({
       ok: false,
       reason: "lint-failed"
     });
-    expect((await service.run({ relativePath: "a.md" })).ok).toBe(true);
+    expect((await service.run({ kind: "projectFile", relativePath: "a.md" })).ok).toBe(true);
     expect(world.children).toHaveLength(2);
   });
 
@@ -657,7 +1062,7 @@ describe("Worker lifecycle (#625 P2a)", () => {
       },
       realDictionary
     });
-    const pending = service.run({ relativePath: "a.md" });
+    const pending = service.run({ kind: "projectFile", relativePath: "a.md" });
 
     await vi.waitFor(() => expect(lintDocumentsReceived(world.children[0])).toBe(1));
     world.children[0]!.crash(1);
@@ -673,7 +1078,7 @@ describe("Worker lifecycle (#625 P2a)", () => {
       dictionaryExists: false
     });
 
-    expect(await service.run({ relativePath: "a.md" })).toEqual({
+    expect(await service.run({ kind: "projectFile", relativePath: "a.md" })).toEqual({
       ok: false,
       reason: "worker-failed"
     });
@@ -689,7 +1094,7 @@ describe("Worker lifecycle (#625 P2a)", () => {
       },
       realDictionary
     });
-    const pending = service.run({ relativePath: "a.md" });
+    const pending = service.run({ kind: "projectFile", relativePath: "a.md" });
 
     await vi.waitFor(() => expect(lintDocumentsReceived(world.children[0])).toBe(1));
     await service.dispose();
@@ -714,7 +1119,7 @@ describe("cancel (#625 P2a)", () => {
       },
       realDictionary
     });
-    const pending = service.run({ relativePath: "a.md" });
+    const pending = service.run({ kind: "projectFile", relativePath: "a.md" });
 
     await vi.waitFor(() => expect(lintDocumentsReceived(world.children[0])).toBe(1));
     await service.cancel();
@@ -740,7 +1145,7 @@ describe("cancel (#625 P2a)", () => {
 
     await expect(service.cancel()).resolves.toBeUndefined();
 
-    const pending = service.run({ relativePath: "a.md" });
+    const pending = service.run({ kind: "projectFile", relativePath: "a.md" });
 
     await vi.waitFor(() => expect(lintDocumentsReceived(world.children[0])).toBe(1));
     await Promise.all([service.cancel(), service.cancel(), service.cancel()]);
@@ -751,7 +1156,7 @@ describe("cancel (#625 P2a)", () => {
 
   it("a cancel that arrives before the Worker exists still wins", async () => {
     const { service, created } = setup();
-    const pending = service.run({ relativePath: "a.md" });
+    const pending = service.run({ kind: "projectFile", relativePath: "a.md" });
 
     // run() has not passed its first await yet.
     await service.cancel();
@@ -774,13 +1179,13 @@ describe("cancel (#625 P2a)", () => {
       },
       realDictionary
     });
-    const pending = service.run({ relativePath: "a.md" });
+    const pending = service.run({ kind: "projectFile", relativePath: "a.md" });
 
     await vi.waitFor(() => expect(lintDocumentsReceived(world.children[0])).toBe(1));
     await service.cancel();
     await pending;
 
-    expect((await service.run({ relativePath: "a.md" })).ok).toBe(true);
+    expect((await service.run({ kind: "projectFile", relativePath: "a.md" })).ok).toBe(true);
     stuck.release();
   });
 });
@@ -812,7 +1217,7 @@ describe("Instant Linter independence (#625 P2a)", () => {
       settingsProvider: async () => undefined,
       logger: { log: () => undefined }
     });
-    const running = wizard.service.run({ relativePath: "a.md" });
+    const running = wizard.service.run({ kind: "projectFile", relativePath: "a.md" });
 
     await vi.waitFor(() =>
       expect(lintDocumentsReceived(wizard.world.children[0])).toBe(1)
@@ -862,7 +1267,7 @@ describe("Instant Linter independence (#625 P2a)", () => {
 
     await instant.lint({ text: joshi, format: "text", ext: ".txt" });
 
-    const running = wizard.service.run({ relativePath: "a.md" });
+    const running = wizard.service.run({ kind: "projectFile", relativePath: "a.md" });
 
     await vi.waitFor(() =>
       expect(lintDocumentsReceived(wizard.world.children[0])).toBe(1)
@@ -885,7 +1290,7 @@ describe("Markdown report save (#625 P2b)", () => {
     ctx: ReturnType<typeof setup>,
     relativePath = `${sub}/a.md`
   ): Promise<string> => {
-    const result = await ctx.service.run({ relativePath });
+    const result = await ctx.service.run({ kind: "projectFile", relativePath });
 
     if (!result.ok) {
       throw new Error(`run failed: ${result.reason}`);
@@ -1010,7 +1415,7 @@ describe("Markdown report save (#625 P2b)", () => {
       },
       realDictionary
     });
-    const first = ctx.service.run({ relativePath: "a.md" });
+    const first = ctx.service.run({ kind: "projectFile", relativePath: "a.md" });
 
     await vi.waitFor(() => expect(lintDocumentsReceived(ctx.world.children[0])).toBe(1));
     // Nothing finished yet.
@@ -1187,7 +1592,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
   };
   const startRun = async (
     ctx: ReturnType<typeof stuckSetup>,
-    request: Record<string, unknown> = { relativePath: "a.md" },
+    request: Record<string, unknown> = { kind: "projectFile", relativePath: "a.md" },
     progress: (p: { runId: string; stage: string }) => void = () => undefined
   ) => {
     const pending = ctx.service.run(request, progress);
@@ -1202,7 +1607,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
     ctx: ReturnType<typeof setup>,
     file = "a.md"
   ): Promise<string> => {
-    const result = await ctx.service.run({ relativePath: file });
+    const result = await ctx.service.run({ kind: "projectFile", relativePath: file });
 
     if (!result.ok) {
       throw new Error(result.reason);
@@ -1257,7 +1662,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
       }).not.toThrow();
       expect(ctx.created).toHaveLength(0);
       // ... and a normal run works afterwards.
-      expect((await ctx.service.run({ relativePath: "a.md" })).ok).toBe(true);
+      expect((await ctx.service.run({ kind: "projectFile", relativePath: "a.md" })).ok).toBe(true);
     });
 
     it("a run started right after can proceed once the old one has ended", async () => {
@@ -1271,7 +1676,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
       await first;
       ctx.stuck.release();
 
-      expect((await ctx.service.run({ relativePath: "a.md" })).ok).toBe(true);
+      expect((await ctx.service.run({ kind: "projectFile", relativePath: "a.md" })).ok).toBe(true);
     });
 
     it("drops a save that was waiting in the OS save dialog", async () => {
@@ -1295,7 +1700,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
   it("stops reporting progress once the project boundary was hit", async () => {
     const ctx = stuckSetup();
     const seen: { runId: string; stage: string }[] = [];
-    const { pending } = await startRun(ctx, { relativePath: "a.md", runId: "run-a" }, (p) =>
+    const { pending } = await startRun(ctx, { kind: "projectFile", relativePath: "a.md", runId: "run-a" }, (p) =>
       seen.push(p)
     );
 
@@ -1346,10 +1751,10 @@ describe("lifecycle hardening (#625 P2c)", () => {
       const named: string[] = [];
       const anonymous: string[] = [];
 
-      await ctx.service.run({ relativePath: "a.md", runId: "run-1" }, (p) =>
+      await ctx.service.run({ kind: "projectFile", relativePath: "a.md", runId: "run-1" }, (p) =>
         named.push(p.runId)
       );
-      await ctx.service.run({ relativePath: "a.md" }, (p) => anonymous.push(p.runId));
+      await ctx.service.run({ kind: "projectFile", relativePath: "a.md" }, (p) => anonymous.push(p.runId));
 
       expect(new Set(named)).toEqual(new Set(["run-1"]));
       expect(named.length).toBeGreaterThan(0);
@@ -1360,7 +1765,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
 
     it("cancel({runId}) of another run does nothing; of the current run cancels it", async () => {
       const ctx = stuckSetup();
-      const { pending } = await startRun(ctx, { relativePath: "a.md", runId: "run-now" });
+      const { pending } = await startRun(ctx, { kind: "projectFile", relativePath: "a.md", runId: "run-now" });
 
       await ctx.service.cancel({ runId: "run-old" });
       await ctx.service.cancel({ runId: "bad id!" });
@@ -1369,7 +1774,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
       expect((await pending).ok).toBe(true);
 
       const second = stuckSetup();
-      const { pending: running } = await startRun(second, { relativePath: "a.md", runId: "run-now" });
+      const { pending: running } = await startRun(second, { kind: "projectFile", relativePath: "a.md", runId: "run-now" });
 
       await second.service.cancel({ runId: "run-now" });
       expect(await running).toEqual({ ok: false, reason: "canceled" });
@@ -1379,7 +1784,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
     it("a late cancel of an earlier run cannot cancel the next run", async () => {
       const ctx = setup({ "a.md": joshi });
 
-      await ctx.service.run({ relativePath: "a.md", runId: "run-1" });
+      await ctx.service.run({ kind: "projectFile", relativePath: "a.md", runId: "run-1" });
 
       const stuck = gate();
       const second = setup(
@@ -1393,7 +1798,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
           realDictionary
         }
       );
-      const running = second.service.run({ relativePath: "a.md", runId: "run-2" });
+      const running = second.service.run({ kind: "projectFile", relativePath: "a.md", runId: "run-2" });
 
       await vi.waitFor(() =>
         expect(lintDocumentsReceived(second.world.children[0])).toBe(1)
@@ -1406,7 +1811,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
 
     it("a cancel that arrives while the file is still being read cancels that run", async () => {
       const ctx = setup({ "a.md": joshi });
-      const pending = ctx.service.run({ relativePath: "a.md", runId: "run-early" });
+      const pending = ctx.service.run({ kind: "projectFile", relativePath: "a.md", runId: "run-early" });
 
       await ctx.service.cancel({ runId: "run-early" });
 
@@ -1497,7 +1902,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
 
       await expect(ctx.service.dispose()).resolves.toBeUndefined();
       await expect(ctx.service.dispose()).resolves.toBeUndefined();
-      await ctx.service.run({ relativePath: "a.md" });
+      await ctx.service.run({ kind: "projectFile", relativePath: "a.md" });
       await expect(
         Promise.all([ctx.service.dispose(), ctx.service.dispose()])
       ).resolves.toBeDefined();
@@ -1578,7 +1983,7 @@ describe("lifecycle hardening (#625 P2c)", () => {
       const running = stuckSetup(files, {
         saveTarget: path.join(root, "very-secret-folder", "out.md")
       });
-      const { pending } = await startRun(running, { relativePath: secretFile });
+      const { pending } = await startRun(running, { kind: "projectFile", relativePath: secretFile });
 
       running.service.handleProjectBoundary("switched");
       await pending;
@@ -1707,8 +2112,8 @@ describe("logging privacy (#625 P2a)", () => {
 
     const ok = setup({ [secretFile]: `${secretText}\n${joshi}` });
 
-    await ok.service.prepare({ relativePath: secretFile });
-    await ok.service.run({ relativePath: secretFile });
+    await ok.service.prepare({ kind: "projectFile", relativePath: secretFile });
+    await ok.service.run({ kind: "projectFile", relativePath: secretFile });
 
     const failing = setup(
       { [secretFile]: secretText },
@@ -1720,11 +2125,11 @@ describe("logging privacy (#625 P2a)", () => {
       }
     );
 
-    await failing.service.run({ relativePath: secretFile });
+    await failing.service.run({ kind: "projectFile", relativePath: secretFile });
 
     const unreadable = setup({}, undefined, { readFailure: true });
 
-    await unreadable.service.run({ relativePath: secretFile });
+    await unreadable.service.run({ kind: "projectFile", relativePath: secretFile });
 
     const run = ok.events.find(
       (e) => e.event === "japaneseLint.run.completed" && e.details?.linterMode === "wizard"
@@ -1789,6 +2194,6 @@ describe("logging privacy (#625 P2a)", () => {
     });
 
     void service;
-    expect((await guarded.run({ relativePath: "a.md" })).ok).toBe(true);
+    expect((await guarded.run({ kind: "projectFile", relativePath: "a.md" })).ok).toBe(true);
   });
 });

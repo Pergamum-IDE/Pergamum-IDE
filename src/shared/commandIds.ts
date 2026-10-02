@@ -146,6 +146,7 @@ export const applicationMenuCommandIds = [
   editorCommandIds.close,
   commandPaletteCommandIds.open,
   assistCommandIds.showLineEndingDistribution,
+  assistCommandIds.openJapaneseMachineCheckDialog,
   assistCommandIds.insertParagraphIndent,
   assistCommandIds.removeParagraphIndent,
   glossaryTabCommandIds.manageTags,

@@ -13,7 +13,9 @@ import type {
   JapaneseMachineCheckPrepareResult,
   JapaneseMachineCheckProgress,
   JapaneseMachineCheckRunResult,
-  JapaneseMachineCheckSaveReportResult
+  JapaneseMachineCheckSaveReportResult,
+  JapaneseMachineCheckSummary,
+  JapaneseMachineCheckTarget
 } from "../../src/shared/japaneseMachineCheck";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -39,7 +41,8 @@ const prepared = (
   overrides: Partial<Extract<JapaneseMachineCheckPrepareResult, { ok: true }>> = {}
 ): JapaneseMachineCheckPrepareResult => ({
   ok: true,
-  fileName: "chapter1.md",
+  targetKind: "projectFile",
+  displayName: "chapter1.md",
   ext: ".md",
   format: "markdown",
   sourceChars: 1234,
@@ -68,7 +71,12 @@ interface Harness {
 
 async function mount(
   prepareResult: JapaneseMachineCheckPrepareResult = prepared(),
-  isDirty = false
+  isDirty = false,
+  target: JapaneseMachineCheckTarget = {
+    kind: "projectFile",
+    relativePath: "Drafts/chapter1.md",
+    isDirty
+  }
 ): Promise<Harness> {
   let progressListener: ((p: JapaneseMachineCheckProgress) => void) | null = null;
   let resolveRun!: (result: JapaneseMachineCheckRunResult) => void;
@@ -106,8 +114,7 @@ async function mount(
   await act(async () => {
     root.render(
       <JapaneseMachineCheckDialog
-        relativePath="Drafts/chapter1.md"
-        isDirty={isDirty}
+        target={target}
         translate={translate}
         platform="windows"
         bridge={bridge}
@@ -157,6 +164,7 @@ describe("Japanese machine check dialog: estimate screen (#625 P2a)", () => {
     const text = document.body.textContent ?? "";
 
     expect(h.prepare).toHaveBeenCalledWith({
+      kind: "projectFile",
       relativePath: "Drafts/chapter1.md",
       isDirty: false
     });
@@ -259,8 +267,7 @@ describe("Japanese machine check dialog: estimate screen (#625 P2a)", () => {
     await act(async () => {
       root.render(
         <JapaneseMachineCheckDialog
-          relativePath="a.md"
-          isDirty={false}
+          target={{ kind: "projectFile", relativePath: "a.md", isDirty: false }}
           translate={translate}
           bridge={rejecting}
           onClose={() => undefined}
@@ -290,12 +297,18 @@ describe("Japanese machine check dialog: running screen (#625 P2a)", () => {
   it("Run starts the check and shows the file, elapsed time, a status and a note - no progress bar", async () => {
     const h = await running();
 
+    // The very target prepare received, plus the run id (#688).
     expect(h.run).toHaveBeenCalledWith({
+      kind: "projectFile",
       relativePath: "Drafts/chapter1.md",
+      isDirty: false,
       runId: expect.stringMatching(/^[A-Za-z0-9_.-]{1,80}$/)
     });
     expect(document.body.textContent).toContain("chapter1.md");
-    expect(document.body.textContent).toContain("日本語を解析中です...");
+    // The status line alone says what it is doing; no fixed title repeats it.
+    expect(document.body.textContent).not.toContain("日本語を解析中です...");
+    expect(document.body.textContent).not.toContain("Analyzing Japanese text");
+    expect(q(".japaneseMachineCheckRunningTitle")).toBeNull();
     expect(q('[data-japanese-machine-check="progress"]')).toBeNull();
     expect(document.querySelector("progress")).toBeNull();
     expect(q('[data-japanese-machine-check="status"]')?.textContent).toBe(
@@ -310,6 +323,27 @@ describe("Japanese machine check dialog: running screen (#625 P2a)", () => {
     expect(q('[data-japanese-machine-check="running-note"]')?.textContent).toContain(
       "必要であればキャンセルできます。"
     );
+  });
+
+  it("shows each progress stage as the one status line, with no fixed title repeating it", async () => {
+    const h = await running();
+    const stages: [Parameters<Harness["emitProgress"]>[0]["stage"], string][] = [
+      ["dictionary-check", "辞書を確認しています..."],
+      ["lint-running", "日本語を解析しています..."],
+      ["aggregating", "結果を集計しています..."]
+    ];
+
+    for (const [stage, text] of stages) {
+      h.emitProgress({ stage });
+      await flush();
+      expect(q('[data-japanese-machine-check="status"]')?.textContent).toBe(text);
+      expect(document.body.textContent).not.toContain("日本語を解析中です...");
+    }
+    // The remaining parts of the screen are still there.
+    expect(q(".japaneseMachineCheckFile")?.textContent).toBe("chapter1.md");
+    expect(q('[data-japanese-machine-check="elapsed"]')).not.toBeNull();
+    expect(q('[data-japanese-machine-check="running-note"]')).not.toBeNull();
+    expect(q('[data-japanese-machine-check="cancel"]')).not.toBeNull();
   });
 
   it("the elapsed time counts up (mm:ss) while running", async () => {
@@ -372,7 +406,8 @@ describe("Japanese machine check dialog: running screen (#625 P2a)", () => {
       ok: true,
       summary: {
         resultId: "result-late",
-        fileName: "chapter1.md",
+        targetKind: "projectFile",
+        displayName: "chapter1.md",
         totalMessages: 5,
         returnedMessages: 5,
         truncated: false,
@@ -472,7 +507,8 @@ describe("Japanese machine check dialog: summary screen (#625 P2a)", () => {
       ok: true,
       summary: {
         resultId: "result-1",
-        fileName: "chapter1.md",
+        targetKind: "projectFile",
+        displayName: "chapter1.md",
         totalMessages: truncated ? 4321 : 15,
         returnedMessages: truncated ? 1000 : 15,
         truncated,
@@ -554,7 +590,8 @@ describe("Japanese style check dialog: Markdown report save (#625 P2b)", () => {
       ok: true,
       summary: {
         resultId: "result-1",
-        fileName: "chapter1.md",
+        targetKind: "projectFile",
+        displayName: "chapter1.md",
         totalMessages: counts.length,
         returnedMessages: counts.length,
         truncated: false,
@@ -734,7 +771,8 @@ describe("Japanese style check dialog: lifecycle (#625 P2c)", () => {
         ok: true,
         summary: {
           resultId: "late",
-          fileName: "chapter1.md",
+          targetKind: "projectFile",
+          displayName: "chapter1.md",
           totalMessages: 1,
           returnedMessages: 1,
           truncated: false,
@@ -762,7 +800,8 @@ describe("Japanese style check dialog: lifecycle (#625 P2c)", () => {
       ok: true,
       summary: {
         resultId: "result-9",
-        fileName: "chapter1.md",
+        targetKind: "projectFile",
+        displayName: "chapter1.md",
         totalMessages: 1,
         returnedMessages: 1,
         truncated: false,
@@ -825,8 +864,11 @@ describe("Japanese machine check dialog: platform button order (#625 P2a)", () =
       await act(async () => {
         root.render(
           <JapaneseMachineCheckDialog
-            relativePath="a.md"
-            isDirty={false}
+            target={{
+              kind: "projectFile",
+              relativePath: "a.md",
+              isDirty: false
+            }}
             translate={translate}
             platform={platform}
             bridge={bridge}
@@ -844,5 +886,188 @@ describe("Japanese machine check dialog: platform button order (#625 P2a)", () =
 
     expect(await order("windows")).toEqual(["実行", "キャンセル"]);
     expect(await order("macos")).toEqual(["キャンセル", "実行"]);
+  });
+});
+
+// #688 Slice 4: a glossary Description target in the same dialog.
+describe("Japanese machine check dialog: glossary Description target (#688)", () => {
+  const glossaryTarget: JapaneseMachineCheckTarget = {
+    kind: "glossaryDescription",
+    text: "これは説明です。",
+    displayName: "アリス"
+  };
+  const glossaryPrepared = (
+    overrides: Partial<Extract<JapaneseMachineCheckPrepareResult, { ok: true }>> = {}
+  ): JapaneseMachineCheckPrepareResult =>
+    prepared({
+      targetKind: "glossaryDescription",
+      displayName: "アリス",
+      ext: ".md",
+      format: "markdown",
+      sourceChars: 8,
+      sourceLines: 1,
+      isDirty: false,
+      ...overrides
+    });
+  const mountGlossary = (
+    result: JapaneseMachineCheckPrepareResult = glossaryPrepared()
+  ): Promise<Harness> => mount(result, false, glossaryTarget);
+  const clickRun = async (): Promise<void> => {
+    act(() => (q('[data-japanese-machine-check="run"]') as HTMLButtonElement).click());
+    await flush();
+  };
+  const glossarySummary = (
+    overrides: Partial<JapaneseMachineCheckSummary> = {}
+  ): JapaneseMachineCheckRunResult => ({
+    ok: true,
+    summary: {
+      resultId: "glossary-result",
+      targetKind: "glossaryDescription",
+      displayName: "アリス",
+      totalMessages: 1,
+      returnedMessages: 1,
+      truncated: false,
+      sourceChars: 8,
+      sourceLines: 1,
+      elapsedMs: 10,
+      ruleCounts: [{ ruleId: "no-doubled-joshi", count: 1 }],
+      ...overrides
+    }
+  });
+
+  it("prepares with the frozen target and shows the name, type and format - no file wording", async () => {
+    const h = await mountGlossary();
+    const text = document.body.textContent ?? "";
+
+    expect(h.prepare).toHaveBeenCalledWith(glossaryTarget);
+    expect(text).toContain("アリス");
+    expect(text).toContain("Glossary Description");
+    expect(text).toContain("Markdown");
+    expect(text).toContain("対象");
+    expect(text).toContain("種別");
+    expect(text).toContain("形式");
+    expect(text).toContain("文字数");
+    expect(text).toContain("行数");
+    expect(text).toContain("2 項目");
+    expect(q('[data-japanese-machine-check="estimate-text"]')?.textContent).toContain(
+      "短い文書です。"
+    );
+    expect(text).not.toContain("対象ファイル");
+    expect(text).not.toContain("ファイル種別");
+    expect(text).not.toContain("(.md)");
+    expect(text).not.toContain(".md");
+  });
+
+  it("never shows the saved-file dirty warning, even if told dirty", async () => {
+    await mountGlossary(glossaryPrepared({ isDirty: true }));
+
+    expect(q('[data-japanese-machine-check="dirty-warning"]')).toBeNull();
+    expect(document.body.textContent).not.toContain("保存されていない変更");
+  });
+
+  it("says 'target', not 'file', while it is being prepared", async () => {
+    let finish!: (value: JapaneseMachineCheckPrepareResult) => void;
+    const bridge = {
+      prepare: () =>
+        new Promise<JapaneseMachineCheckPrepareResult>((resolve) => {
+          finish = resolve;
+        }),
+      run: vi.fn(),
+      cancel: vi.fn(async () => undefined),
+      saveReport: vi.fn(),
+      discardResult: vi.fn(async () => undefined),
+      onProgress: () => () => undefined
+    } as unknown as JapaneseMachineCheckBridge;
+
+    await act(async () => {
+      root.render(
+        <JapaneseMachineCheckDialog
+          target={glossaryTarget}
+          translate={translate}
+          bridge={bridge}
+          onClose={() => undefined}
+        />
+      );
+    });
+
+    expect(document.body.textContent).toContain("対象を確認しています...");
+    expect(document.body.textContent).not.toContain("ファイルを確認しています");
+    await act(async () => finish(glossaryPrepared()));
+  });
+
+  it("runs the very same target (plus the run id), and shows its name while running", async () => {
+    const h = await mountGlossary();
+
+    await clickRun();
+
+    expect(h.run).toHaveBeenCalledWith({
+      ...glossaryTarget,
+      runId: expect.stringMatching(/^[A-Za-z0-9_.-]{1,80}$/)
+    });
+    expect(h.run.mock.calls[0]?.[0]).toMatchObject({
+      text: "これは説明です。",
+      displayName: "アリス"
+    });
+    expect(q(".japaneseMachineCheckFile")?.textContent).toBe("アリス");
+    expect(document.body.textContent).not.toContain(".md");
+    expect(q('[data-japanese-machine-check="status"]')?.textContent).toBe(
+      "準備しています..."
+    );
+  });
+
+  it("shows progress and can be canceled like a file check", async () => {
+    const h = await mountGlossary();
+
+    await clickRun();
+    h.emitProgress({ stage: "lint-running" });
+    await flush();
+    expect(q('[data-japanese-machine-check="status"]')?.textContent).toBe(
+      "日本語を解析しています..."
+    );
+
+    act(() => (q('[data-japanese-machine-check="cancel"]') as HTMLButtonElement).click());
+    await flush();
+
+    expect(h.cancel).toHaveBeenCalledWith({ runId: h.currentRunId() });
+  });
+
+  it("summarizes with the target name and type (no file name) and saves the report by id only", async () => {
+    const h = await mountGlossary();
+
+    await clickRun();
+    await act(async () => h.resolveRun(glossarySummary()));
+    await flush();
+
+    const text = document.body.textContent ?? "";
+
+    expect(text).toContain("アリス");
+    expect(text).toContain("Glossary Description");
+    expect(text).not.toContain("アリス.md");
+    expect(text).not.toContain("アリス / Description");
+    expect(text).not.toContain("対象ファイル");
+
+    const save = document.querySelector<HTMLButtonElement>(
+      '[data-japanese-machine-check="save-report"]'
+    );
+
+    if (save) {
+      act(() => save.click());
+      await flush();
+      expect(h.saveReport).toHaveBeenCalledWith({ resultId: "glossary-result" });
+    } else {
+      throw new Error("save report button missing");
+    }
+  });
+
+  it("closing a finished Glossary check discards its kept result", async () => {
+    const h = await mountGlossary();
+
+    await clickRun();
+    await act(async () => h.resolveRun(glossarySummary()));
+    await flush();
+    act(() => root.unmount());
+    root = createRoot(container);
+
+    expect(h.discardResult).toHaveBeenCalledWith({ resultId: "glossary-result" });
   });
 });

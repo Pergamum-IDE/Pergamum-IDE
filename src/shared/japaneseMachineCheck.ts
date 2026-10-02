@@ -34,16 +34,48 @@ export function japaneseMachineCheckFormatForPath(
     : null;
 }
 
-/** A project-relative path of a file in the File Explorer. */
-export interface JapaneseMachineCheckTarget {
-  readonly relativePath: string;
-}
+/**
+ * #688: what a check is run on. A discriminated union (`kind` is required)
+ * so a project file and a glossary Description are never confused, and no fake
+ * path is ever needed for the latter.
+ *
+ * The same target object is meant to be handed to `prepare` and to `run`, so
+ * the estimate and the run cannot end up on different snapshots.
+ */
 
-export interface JapaneseMachineCheckPrepareRequest
-  extends JapaneseMachineCheckTarget {
-  /** The File Explorer knows the file has unsaved changes in an editor. */
+/** A saved file of the project, named by its project-relative path. */
+export interface JapaneseMachineCheckProjectFileTarget {
+  readonly kind: "projectFile";
+  /** Project-relative path of the File Explorer file. */
+  readonly relativePath: string;
+  /**
+   * The File Explorer knows the file has unsaved changes in an editor. Only a
+   * warning flag: the check always reads the saved file, never editor text.
+   */
   readonly isDirty?: boolean;
 }
+
+/**
+ * The text of a glossary Description (checked as Markdown). Slice 1 only
+ * defines and validates this shape; Main does not run it yet.
+ */
+export interface JapaneseMachineCheckGlossaryDescriptionTarget {
+  readonly kind: "glossaryDescription";
+  /** The draft text to check. Its size is not limited here (Worker run). */
+  readonly text: string;
+  /** User-facing name of the target, e.g. "アリス / Description". */
+  readonly displayName: string;
+}
+
+export type JapaneseMachineCheckTarget =
+  | JapaneseMachineCheckProjectFileTarget
+  | JapaneseMachineCheckGlossaryDescriptionTarget;
+
+/** No prepare-specific metadata yet: prepare takes the target as is. */
+export type JapaneseMachineCheckPrepareRequest = JapaneseMachineCheckTarget;
+
+/** Longest accepted project-relative path (metadata, not body text). */
+export const JAPANESE_MACHINE_CHECK_MAX_RELATIVE_PATH_LENGTH = 4096;
 
 export type JapaneseMachineCheckFailureReason =
   | "invalid-request"
@@ -75,11 +107,18 @@ export function estimateJapaneseMachineCheck(
 export type JapaneseMachineCheckPrepareResult =
   | {
       readonly ok: true;
-      readonly fileName: string;
+      readonly targetKind: JapaneseMachineCheckTarget["kind"];
+      /** The user-facing name of the target (a file name, or the given name). */
+      readonly displayName: string;
       readonly ext: string;
       readonly format: JapaneseLintFormat;
       readonly sourceChars: number;
       readonly sourceLines: number;
+      /**
+       * A project file whose editor holds unsaved changes that this check
+       * (which reads the saved file) leaves out. Always false for a glossary
+       * Description: its draft snapshot itself is what is checked.
+       */
       readonly isDirty: boolean;
       readonly enabledRuleIds: readonly string[];
       readonly estimate: JapaneseMachineCheckEstimate;
@@ -131,7 +170,12 @@ export interface JapaneseMachineCheckSummary {
    * never reaches the Renderer.
    */
   readonly resultId: string;
-  readonly fileName: string;
+  readonly targetKind: JapaneseMachineCheckTarget["kind"];
+  /**
+   * The user-facing name of what was checked: a file name, or a glossary
+   * Description's entry name as given (never altered).
+   */
+  readonly displayName: string;
   /** Every finding textlint reported. */
   readonly totalMessages: number;
   /** Findings kept (at most the result cap). */
@@ -167,10 +211,9 @@ export interface JapaneseMachineCheckProgress {
  * #625 P2c: the Renderer names each run so progress and cancel can be matched
  * to it. Optional on the wire (Main makes one up when missing).
  */
-export interface JapaneseMachineCheckRunRequest
-  extends JapaneseMachineCheckTarget {
+export type JapaneseMachineCheckRunRequest = JapaneseMachineCheckTarget & {
   readonly runId?: string;
-}
+};
 
 export interface JapaneseMachineCheckCancelRequest {
   /** Cancel only this run; absent = whatever is running. */
@@ -189,26 +232,54 @@ export function parseJapaneseMachineCheckRunId(value: unknown): string | null {
   return typeof runId === "string" && runIdPattern.test(runId) ? runId : null;
 }
 
+/**
+ * Validates the untrusted target of a prepare / run request. Returns null for
+ * anything that is not a well-formed target. Metadata (path, display name) is
+ * length-limited; the body text of a glossary Description deliberately is not
+ * (it is checked in a Worker, like the instant linter's text).
+ */
 export function parseJapaneseMachineCheckRequest(
   value: unknown
-): JapaneseMachineCheckPrepareRequest | null {
+): JapaneseMachineCheckTarget | null {
   if (typeof value !== "object" || value === null) {
     return null;
   }
 
-  const { relativePath, isDirty } = value as Record<string, unknown>;
+  const record = value as Record<string, unknown>;
 
-  if (
-    typeof relativePath !== "string" ||
-    relativePath.length === 0 ||
-    relativePath.length > 4096 ||
-    relativePath.includes("\0")
-  ) {
-    return null;
+  if (record.kind === "projectFile") {
+    const { relativePath, isDirty } = record;
+
+    if (
+      typeof relativePath !== "string" ||
+      relativePath.length === 0 ||
+      relativePath.length > JAPANESE_MACHINE_CHECK_MAX_RELATIVE_PATH_LENGTH ||
+      relativePath.includes("\0")
+    ) {
+      return null;
+    }
+
+    return {
+      kind: "projectFile",
+      relativePath,
+      ...(typeof isDirty === "boolean" ? { isDirty } : {})
+    };
   }
 
-  return {
-    relativePath,
-    ...(typeof isDirty === "boolean" ? { isDirty } : {})
-  };
+  if (record.kind === "glossaryDescription") {
+    const { text, displayName } = record;
+
+    if (
+      typeof text !== "string" ||
+      typeof displayName !== "string" ||
+      displayName.trim().length === 0 ||
+      displayName.includes("\0")
+    ) {
+      return null;
+    }
+
+    return { kind: "glossaryDescription", text, displayName };
+  }
+
+  return null;
 }

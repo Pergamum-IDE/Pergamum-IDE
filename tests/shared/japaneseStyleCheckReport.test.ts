@@ -39,7 +39,7 @@ function build(
   const messages = partial.messages ?? [finding()];
 
   return buildJapaneseStyleCheckReport({
-    fileName: "道標.txt",
+    target: { kind: "projectFile", displayName: "道標.txt", format: "text" },
     executedAt,
     totalMessages: messages.length,
     returnedMessages: messages.length,
@@ -223,7 +223,7 @@ describe("Markdown report (#625 P2b)", () => {
 
   it("escapes so that the tables and lists do not break", () => {
     const report = build({
-      fileName: "a|b`c*.md",
+      target: { kind: "projectFile", displayName: "a|b`c*.md", format: "markdown" },
       sourceText: "x | y `z` *w* <t>",
       messages: [
         finding({ message: "a|b\nc *bold* <tag> `code`", index: 4 })
@@ -262,7 +262,7 @@ describe("Markdown report (#625 P2b)", () => {
     const report = build({
       translate: en,
       numberLocale: "en-US",
-      fileName: "novel.md",
+      target: { kind: "projectFile", displayName: "novel.md", format: "markdown" },
       totalMessages: 1101,
       returnedMessages: 1,
       truncated: true
@@ -274,5 +274,60 @@ describe("Markdown report (#625 P2b)", () => {
     expect(report).toContain("Line 12, column 8");
     expect(report).toContain("details are limited to the first 1,000");
     expect(report).not.toContain("Machine");
+  });
+});
+
+describe("Markdown report of a glossary Description (#688)", () => {
+  const glossary = (
+    displayName: string,
+    translate: Translate = ja
+  ): string =>
+    build({
+      target: { kind: "glossaryDescription", displayName, format: "markdown" },
+      translate
+    });
+
+  it("shows the target name, the type and the format - and no file row", () => {
+    const report = glossary("アリス");
+
+    expect(report).toContain("| 対象 | アリス |");
+    expect(report).toContain("| 種別 | Glossary Description |");
+    expect(report).toContain("| 形式 | Markdown |");
+    expect(report).not.toContain("| ファイル |");
+    // The rest of the report is the usual one.
+    expect(report).toContain("| 実行日時 | 2026-09-30 02:31 |");
+    expect(report).toContain("## チェック項目別件数");
+  });
+
+  it("shows the display name exactly as given, never a file-name-safe form", () => {
+    const report = glossary("Type:Moon/Zero?");
+
+    expect(report).toContain("| 対象 | Type:Moon/Zero? |");
+    expect(report).not.toContain("Type_Moon_Zero_");
+    expect(report).not.toContain(".lint.md");
+  });
+
+  it("escapes Markdown in the display name (a table cell must not break)", () => {
+    const name = "a|b" + String.fromCharCode(96) + "c*<d>";
+    const report = glossary(name);
+
+    expect(report).toContain(`| 対象 | ${escapeMarkdownText(name)} |`);
+    expect(escapeMarkdownText(name)).not.toBe(name);
+  });
+
+  it("has English labels", () => {
+    const report = glossary("Alice", en);
+
+    expect(report).toContain("| Target | Alice |");
+    expect(report).toContain("| Type | Glossary Description |");
+    expect(report).toContain("| Format | Markdown |");
+  });
+
+  it("leaves the project-file report with its single File row", () => {
+    const report = build();
+
+    expect(report).toContain("| ファイル | 道標.txt |");
+    expect(report).not.toContain("| 種別 |");
+    expect(report).not.toContain("| 形式 |");
   });
 });

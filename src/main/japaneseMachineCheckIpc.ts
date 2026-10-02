@@ -24,6 +24,7 @@ import {
 } from "../shared/japaneseMachineCheck";
 import { japaneseLintRuleIds } from "../shared/japaneseLintRules";
 import { buildJapaneseStyleCheckReport } from "../shared/japaneseStyleCheckReport";
+import { glossaryDescriptionReportFileName } from "../shared/japaneseMachineCheckReportFileName";
 import { buildJapaneseLintWorkerConfig } from "../shared/japaneseLintWorkerProtocol";
 import { isProtectedPergamumDataFilePath } from "../shared/saveTargetPolicy";
 import { writeFileAtomic } from "./atomicFileWrite";
@@ -100,12 +101,13 @@ export interface JapaneseMachineCheckService {
  * What a finished run keeps, in the Main Process only, so the report can be
  * built on request. Replaced by the next run, dropped on discard / quit.
  */
-interface FinishedRun {
+interface FinishedRunBase {
   readonly resultId: string;
   /** The project the run belonged to; a report is never saved across it. */
   readonly projectRoot: string;
-  readonly absolutePath: string;
-  readonly fileName: string;
+  /** What the user sees as the target (as given; never altered). */
+  readonly displayName: string;
+  readonly format: "markdown" | "text";
   readonly sourceText: string;
   readonly messages: readonly JapaneseLintDiagnostic[];
   readonly totalMessages: number;
@@ -113,14 +115,46 @@ interface FinishedRun {
   readonly executedAt: Date;
 }
 
-interface LoadedSource {
+/** Only a project file has a path (the report's default place, and a guard). */
+type FinishedRun =
+  | (FinishedRunBase & {
+      readonly kind: "projectFile";
+      readonly absolutePath: string;
+    })
+  | (FinishedRunBase & { readonly kind: "glossaryDescription" });
+
+/**
+ * #688: what was loaded for a target. Only a project file has a path; a glossary
+ * Description is just text (its `.md` is lint-format metadata, not a file).
+ */
+interface LoadedProjectFileSource {
+  readonly kind: "projectFile";
   readonly absolutePath: string;
-  readonly fileName: string;
+  /** The file name shown to the user. */
+  readonly displayName: string;
   readonly ext: string;
   readonly format: "markdown" | "text";
   readonly lintExt: ".md" | ".markdown" | ".txt";
   readonly text: string;
+  /**
+   * The editor holds unsaved changes this check leaves out (it reads the saved
+   * file).
+   */
+  readonly isDirty: boolean;
 }
+
+interface LoadedGlossaryDescriptionSource {
+  readonly kind: "glossaryDescription";
+  /** The caller's name for the target, as given. */
+  readonly displayName: string;
+  readonly ext: ".md";
+  readonly format: "markdown";
+  readonly lintExt: ".md";
+  /** The draft snapshot, newline-normalized. */
+  readonly text: string;
+}
+
+type LoadedSource = LoadedProjectFileSource | LoadedGlossaryDescriptionSource;
 
 function countLines(text: string): number {
   let lines = 1;
@@ -262,13 +296,34 @@ export function createJapaneseMachineCheckService(
   async function load(
     rawRequest: unknown
   ): Promise<
-    | { readonly ok: true; readonly source: LoadedSource; readonly isDirty: boolean }
+    | { readonly ok: true; readonly source: LoadedSource }
     | { readonly ok: false; readonly reason: JapaneseMachineCheckFailureReason }
   > {
     const request = parseJapaneseMachineCheckRequest(rawRequest);
 
     if (request === null) {
       return { ok: false, reason: "invalid-request" };
+    }
+
+    if (request.kind === "glossaryDescription") {
+      // The Renderer's draft snapshot is the source: no file, no database, no
+      // encoding. It still belongs to the open project.
+      if (deps.currentProjectRootPath() === null) {
+        return { ok: false, reason: "no-project" };
+      }
+
+      return {
+        ok: true,
+        source: {
+          kind: "glossaryDescription",
+          displayName: request.displayName,
+          ext: ".md",
+          format: "markdown",
+          lintExt: ".md",
+          // Untrusted IPC input: same newline normalization as a file source.
+          text: request.text.replace(/\r\n?/g, "\n")
+        }
+      };
     }
 
     const format = japaneseMachineCheckFormatForPath(request.relativePath);
@@ -304,10 +359,11 @@ export function createJapaneseMachineCheckService(
 
       return {
         ok: true,
-        isDirty: request.isDirty === true,
         source: {
+          kind: "projectFile",
+          isDirty: request.isDirty === true,
           absolutePath: absolute,
-          fileName: path.basename(absolute),
+          displayName: path.basename(absolute),
           ext: lintExt,
           format,
           lintExt,
@@ -343,12 +399,13 @@ export function createJapaneseMachineCheckService(
 
       return {
         ok: true,
-        fileName: loaded.source.fileName,
+        targetKind: loaded.source.kind,
+        displayName: loaded.source.displayName,
         ext: loaded.source.ext,
         format: loaded.source.format,
         sourceChars,
         sourceLines: countLines(loaded.source.text),
-        isDirty: loaded.isDirty,
+        isDirty: loaded.source.kind === "projectFile" && loaded.source.isDirty,
         enabledRuleIds: config.enabledRuleIds,
         estimate: estimateJapaneseMachineCheck(sourceChars)
       };
@@ -508,11 +565,11 @@ export function createJapaneseMachineCheckService(
       });
 
       // The findings and the checked text stay here for the report.
-      lastRun = {
+      const finishedBase = {
         resultId: jobId,
         projectRoot,
-        absolutePath: source.absolutePath,
-        fileName: source.fileName,
+        displayName: source.displayName,
+        format: source.format,
         sourceText: source.text,
         messages: outcome.messages,
         totalMessages: outcome.totalMessages,
@@ -520,11 +577,21 @@ export function createJapaneseMachineCheckService(
         executedAt: deps.now?.() ?? new Date()
       };
 
+      lastRun =
+        source.kind === "projectFile"
+          ? {
+              ...finishedBase,
+              kind: "projectFile",
+              absolutePath: source.absolutePath
+            }
+          : { ...finishedBase, kind: "glossaryDescription" };
+
       return {
         ok: true,
         summary: {
           resultId: jobId,
-          fileName: source.fileName,
+          targetKind: source.kind,
+          displayName: source.displayName,
           totalMessages: outcome.totalMessages,
           returnedMessages: outcome.messages.length,
           truncated: outcome.truncated,
@@ -599,10 +666,19 @@ export function createJapaneseMachineCheckService(
     };
 
     try {
-      const defaultPath = path.join(
-        path.dirname(run.absolutePath),
-        `${run.fileName}.lint.md`
-      );
+      // A project file's report goes next to the file, named after it. A
+      // glossary Description has no file: the project root, and a file name
+      // made safe from its name (only the suggestion - never the name shown).
+      const defaultPath =
+        run.kind === "projectFile"
+          ? path.join(
+              path.dirname(run.absolutePath),
+              `${run.displayName}.lint.md`
+            )
+          : path.join(
+              run.projectRoot,
+              glossaryDescriptionReportFileName(run.displayName)
+            );
       const chosen = await deps.showSaveDialog(defaultPath, owner);
 
       // The project was closed / switched, or the result discarded, while the
@@ -634,9 +710,11 @@ export function createJapaneseMachineCheckService(
       }
 
       // Never overwrite the checked manuscript or a Pergamum data file.
+      // (Only a project file has a source file to protect.)
       const sameAsSource =
+        run.kind === "projectFile" &&
         path.resolve(chosen).toLowerCase() ===
-        path.resolve(run.absolutePath).toLowerCase();
+          path.resolve(run.absolutePath).toLowerCase();
 
       if (
         sameAsSource ||
@@ -656,7 +734,11 @@ export function createJapaneseMachineCheckService(
 
       const language = await deps.languageProvider().catch(() => "ja" as Language);
       const content = buildJapaneseStyleCheckReport({
-        fileName: run.fileName,
+        target: {
+          kind: run.kind,
+          displayName: run.displayName,
+          format: run.format
+        },
         executedAt: run.executedAt,
         totalMessages: run.totalMessages,
         returnedMessages: run.messages.length,

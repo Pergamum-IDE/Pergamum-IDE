@@ -1006,6 +1006,7 @@ export const knownDebugLogCommandIds = [
   editorCommandIds.close,
   commandPaletteCommandIds.open,
   assistCommandIds.showLineEndingDistribution,
+  assistCommandIds.openJapaneseMachineCheckDialog,
   assistCommandIds.insertParagraphIndent,
   assistCommandIds.removeParagraphIndent,
   ...editCommandIds,

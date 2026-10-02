@@ -776,6 +776,7 @@ describe("application menu", () => {
           .map((item) => item.label)
       ).toEqual([
         "改行コード分布...",
+        "日本語表現チェック...",
         "段落字下げ一括挿入",
         "段落字下げ一括削除",
         "語彙を管理...",
@@ -796,6 +797,7 @@ describe("application menu", () => {
 
       expect(send.mock.calls.map((call) => call[1])).toEqual([
         assistCommandIds.showLineEndingDistribution,
+        assistCommandIds.openJapaneseMachineCheckDialog,
         assistCommandIds.insertParagraphIndent,
         assistCommandIds.removeParagraphIndent,
         glossaryTabCommandIds.manageEntries,
@@ -806,6 +808,9 @@ describe("application menu", () => {
     it("includes Assist command IDs in the application-menu-sendable allowlist", () => {
       expect(applicationMenuCommandIds).toContain(
         assistCommandIds.showLineEndingDistribution
+      );
+      expect(applicationMenuCommandIds).toContain(
+        assistCommandIds.openJapaneseMachineCheckDialog
       );
       expect(applicationMenuCommandIds).toContain(
         assistCommandIds.insertParagraphIndent
@@ -862,8 +867,11 @@ describe("application menu", () => {
       expect(assistItems[0]?.id).toBe(
         assistCommandIds.showLineEndingDistribution
       );
-      expect(assistItems[1]?.id).toBe(assistCommandIds.insertParagraphIndent);
-      expect(assistItems[2]?.id).toBe(assistCommandIds.removeParagraphIndent);
+      expect(assistItems[1]?.id).toBe(
+        assistCommandIds.openJapaneseMachineCheckDialog
+      );
+      expect(assistItems[2]?.id).toBe(assistCommandIds.insertParagraphIndent);
+      expect(assistItems[3]?.id).toBe(assistCommandIds.removeParagraphIndent);
       expect(
         fileItemByLabel(
           submenuItems(fileItemByLabel(fileItems, "Import")),
