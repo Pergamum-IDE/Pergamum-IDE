@@ -143,25 +143,51 @@ describe("DocumentTabBar special tabs (#181)", () => {
     expect(tabMarkup(markup, 1)).toContain('aria-selected="true"');
   });
 
-  it("renders a close button for Settings without dirty document affordances", () => {
+  it("marks the Resume Hub special tab active with isActive and aria-selected=\"true\" when activeWorkspaceTabId is specialWorkspaceTabId(\"resumeHub\") (#682)", () => {
+    const resumeHubTab: SpecialWorkspaceTab = {
+      kind: "special",
+      id: "resumeHub",
+      title: "編集再開"
+    };
     const markup = renderTabBar(
       [
         {
           id: projectDocumentId,
           title: "chapter-01.md",
-          isDirty: true,
+          isDirty: false,
           isExternalMarkdownFile: false
         }
       ],
       {
-        activeWorkspaceTabId: specialWorkspaceTabId("settings"),
-        specialTabs: [settingsTab]
+        activeWorkspaceTabId: specialWorkspaceTabId("resumeHub"),
+        specialTabs: [settingsTab, resumeHubTab]
       }
     );
-    const settingsTabMarkup = tabMarkup(markup, 1);
 
-    expect(settingsTabMarkup).toContain("documentTabCloseButton");
-    expect(settingsTabMarkup).not.toContain("documentTabDirtyIndicator");
+    // Document tab and Settings tab are aria-selected="false" and class="documentTab"
+    expect(markup).toContain('class="documentTab" role="tab" tabindex="0" aria-selected="false" title="chapter-01.md"');
+    expect(markup).toContain('class="documentTab" role="tab" tabindex="0" aria-selected="false" title="Application Settings"');
+
+    // Resume Hub tab is active (aria-selected="true" and class="documentTab isActive")
+    expect(markup).toContain('class="documentTab isActive" role="tab" tabindex="0" aria-selected="true" title="編集再開"');
+  });
+
+  it("derives activeWorkspaceTabId in App.tsx with isResumeHubTabActive -> specialWorkspaceTabId(\"resumeHub\") (#682)", () => {
+    const { readFileSync } = require("node:fs");
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+    const activeWorkspaceTabIdIndex = appSource.indexOf(
+      "const activeWorkspaceTabId: WorkspaceTabId | undefined ="
+    );
+
+    expect(activeWorkspaceTabIdIndex).toBeGreaterThan(-1);
+
+    const derivationBlock = appSource.slice(
+      activeWorkspaceTabIdIndex,
+      appSource.indexOf(";", activeWorkspaceTabIdIndex)
+    );
+
+    expect(derivationBlock).toContain("isResumeHubTabActive");
+    expect(derivationBlock).toContain('specialWorkspaceTabId("resumeHub")');
   });
 });
 

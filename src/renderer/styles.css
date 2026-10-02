@@ -14967,6 +14967,7 @@ label.settingsItemHeader {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transform: translateY(-0.2em);
 }
 
 .commandPaletteLaunchGhost {

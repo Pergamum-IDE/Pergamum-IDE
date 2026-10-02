@@ -4595,13 +4595,15 @@ export function App(): JSX.Element {
           ? specialWorkspaceTabId("projectSettings")
           : isDebugLogTabActive
             ? specialWorkspaceTabId("debugLog")
-            : isKeyboardShortcutsTabActive
-              ? specialWorkspaceTabId("keyboardShortcuts")
-              : isSettingsTabActive
-                ? specialWorkspaceTabId("settings")
-                : openDocumentsState.activeDocumentId
-                  ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
-                  : undefined;
+            : isResumeHubTabActive
+              ? specialWorkspaceTabId("resumeHub")
+              : isKeyboardShortcutsTabActive
+                ? specialWorkspaceTabId("keyboardShortcuts")
+                : isSettingsTabActive
+                  ? specialWorkspaceTabId("settings")
+                  : openDocumentsState.activeDocumentId
+                    ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
+                    : undefined;
 
   // #355 → #354: "Select in File Explorer" (and every other tab context-menu
   // command) now dispatches through `handleTabAction` below, defined after
