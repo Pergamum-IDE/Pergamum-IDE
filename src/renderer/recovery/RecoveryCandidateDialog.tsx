@@ -12,7 +12,7 @@ import checkSquareIconUrl from "../../../assets/icons/feather/dialog/check-squar
 import clipboardIconUrl from "../../../assets/icons/feather/dialog/clipboard.svg?url";
 import xCircleIconUrl from "../../../assets/icons/feather/dialog/x-circle.svg?url";
 import hourglassIconUrl from "../../../assets/icons/ionicons/dialog/hourglass-outline.svg?url";
-import trashBinIconUrl from "../../../assets/icons/ionicons/dialog/trash-bin-outline.svg?url";
+import trashIconUrl from "../../../assets/icons/codicons/dialog/trash.svg?url";
 import {
   performClipboardCopy,
   type ClipboardAdapter
@@ -106,7 +106,7 @@ function discardButtonIconState(
 function discardButtonIconStyle(
   state: DiscardButtonIconState
 ): DiscardButtonIconStyle {
-  const iconUrl = state === "ready" ? trashBinIconUrl : hourglassIconUrl;
+  const iconUrl = state === "ready" ? trashIconUrl : hourglassIconUrl;
   return {
     "--recovery-discard-button-icon": `url("${iconUrl}")`
   };
@@ -485,13 +485,24 @@ export function RecoveryCandidateDialog({
               <thead>
                 <tr>
                   <th scope="col" className="recoveryCandidateDialogCheckboxCol">
-                    <input
-                      ref={headerCheckboxRef}
-                      type="checkbox"
-                      aria-label={translate("dialog.recovery.selectAll")}
-                      checked={headerState === "checked"}
-                      onChange={handleHeaderCheckbox}
-                    />
+                    <label
+                      className="recoveryCandidateDialogSwitch"
+                      title={translate("dialog.recovery.selectAll")}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        ref={headerCheckboxRef}
+                        type="checkbox"
+                        className="recoveryCandidateDialogSwitchInput"
+                        aria-label={translate("dialog.recovery.selectAll")}
+                        checked={headerState === "checked"}
+                        data-recovery-header-state={headerState}
+                        onChange={handleHeaderCheckbox}
+                      />
+                      <span className="recoveryCandidateDialogSwitchTrack">
+                        <span className="recoveryCandidateDialogSwitchThumb" />
+                      </span>
+                    </label>
                   </th>
                   {SORTABLE_COLUMNS.map((column) => (
                     <th
@@ -530,15 +541,25 @@ export function RecoveryCandidateDialog({
                       onClick={() => handleRowCheckbox(candidate.recoveryId)}
                     >
                       <td className="recoveryCandidateDialogCheckboxCol">
-                        <input
-                          type="checkbox"
-                          aria-label={candidate.displayName}
-                          checked={selected}
+                        <label
+                          className="recoveryCandidateDialogSwitch"
+                          title={candidate.displayName}
                           onClick={(event) => event.stopPropagation()}
-                          onChange={() =>
-                            handleRowCheckbox(candidate.recoveryId)
-                          }
-                        />
+                        >
+                          <input
+                            type="checkbox"
+                            className="recoveryCandidateDialogSwitchInput"
+                            aria-label={candidate.displayName}
+                            checked={selected}
+                            onClick={(event) => event.stopPropagation()}
+                            onChange={() =>
+                              handleRowCheckbox(candidate.recoveryId)
+                            }
+                          />
+                          <span className="recoveryCandidateDialogSwitchTrack">
+                            <span className="recoveryCandidateDialogSwitchThumb" />
+                          </span>
+                        </label>
                       </td>
                       <td>{candidate.displayName}</td>
                       <td>

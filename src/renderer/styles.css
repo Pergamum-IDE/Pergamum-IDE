@@ -13245,6 +13245,84 @@ label.settingsItemHeader {
   white-space: nowrap;
 }
 
+.recoveryCandidateDialogSwitch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 40px;
+  block-size: 22px;
+  cursor: pointer;
+}
+
+.recoveryCandidateDialogSwitchInput {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+
+.recoveryCandidateDialogSwitchTrack {
+  position: relative;
+  display: inline-block;
+  inline-size: 36px;
+  block-size: 20px;
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 999px;
+  background: var(--workspace-sidebar-divider);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.recoveryCandidateDialogSwitchThumb {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  inline-size: 14px;
+  block-size: 14px;
+  border-radius: 999px;
+  background: var(--pg-color-surface-background);
+  box-shadow: 0 1px 2px rgba(15, 23, 32, 0.28);
+  transition: inset-inline-start 120ms ease;
+}
+
+.recoveryCandidateDialogSwitchInput:checked
+  + .recoveryCandidateDialogSwitchTrack {
+  border-color: var(--app-dialog-confirm-background);
+  background: var(--app-dialog-confirm-background);
+}
+
+.recoveryCandidateDialogSwitchInput:checked
+  + .recoveryCandidateDialogSwitchTrack
+  .recoveryCandidateDialogSwitchThumb {
+  inset-inline-start: 18px;
+}
+
+.recoveryCandidateDialogSwitchInput[data-recovery-header-state="indeterminate"]
+  + .recoveryCandidateDialogSwitchTrack {
+  border-color: var(--app-dialog-confirm-background);
+  background: var(--workspace-sidebar-divider);
+}
+
+.recoveryCandidateDialogSwitchInput[data-recovery-header-state="indeterminate"]
+  + .recoveryCandidateDialogSwitchTrack
+  .recoveryCandidateDialogSwitchThumb {
+  inset-inline-start: 10px;
+  background: var(--app-dialog-confirm-background);
+}
+
+.recoveryCandidateDialogSwitchInput:focus-visible
+  + .recoveryCandidateDialogSwitchTrack {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: 2px;
+}
+
+.recoveryCandidateDialogSwitchInput:disabled
+  + .recoveryCandidateDialogSwitchTrack {
+  opacity: 0.5;
+}
+
 .recoveryCandidateDialogSortButton {
   display: inline-flex;
   align-items: center;

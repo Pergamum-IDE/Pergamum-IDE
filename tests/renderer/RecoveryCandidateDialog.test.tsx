@@ -158,6 +158,9 @@ describe("RecoveryCandidateDialog markup", () => {
       'assets/icons/ionicons/dialog/hourglass-outline.svg?url'
     );
     expect(source).toContain(
+      'assets/icons/codicons/dialog/trash.svg?url'
+    );
+    expect(source).not.toContain(
       'assets/icons/ionicons/dialog/trash-bin-outline.svg?url'
     );
     expect(source).not.toContain("reload-outline.svg?url");
@@ -544,6 +547,64 @@ describe("RecoveryCandidateDialog behavior", () => {
     expect(css).toContain(".recoveryCandidateDialogRow-selected:hover");
   });
 
+  it("renders toggle slider visual structure while maintaining native checkbox semantics (#672)", () => {
+    render(baseProps());
+
+    const headerBox = headerCheckbox();
+    expect(headerBox.tagName).toBe("INPUT");
+    expect(headerBox.type).toBe("checkbox");
+    expect(headerBox.getAttribute("data-recovery-header-state")).toBe("unchecked");
+
+    const headerLabel = headerBox.closest("label.recoveryCandidateDialogSwitch");
+    expect(headerLabel).not.toBeNull();
+    expect(headerLabel?.querySelector(".recoveryCandidateDialogSwitchTrack")).not.toBeNull();
+    expect(headerLabel?.querySelector(".recoveryCandidateDialogSwitchThumb")).not.toBeNull();
+
+    const rowBox = rowCheckboxes()[0];
+    expect(rowBox.tagName).toBe("INPUT");
+    expect(rowBox.type).toBe("checkbox");
+
+    const rowLabel = rowBox.closest("label.recoveryCandidateDialogSwitch");
+    expect(rowLabel).not.toBeNull();
+    expect(rowLabel?.querySelector(".recoveryCandidateDialogSwitchTrack")).not.toBeNull();
+    expect(rowLabel?.querySelector(".recoveryCandidateDialogSwitchThumb")).not.toBeNull();
+
+    act(() => rowBox.click());
+    expect(headerBox.getAttribute("data-recovery-header-state")).toBe("indeterminate");
+  });
+
+  it("styles toggle slider track, thumb, checked, indeterminate, and focus-visible states (#672)", () => {
+    const css = readFileSync("src/renderer/styles.css", "utf8");
+    expect(css).toContain(".recoveryCandidateDialogSwitch");
+    expect(css).toContain(".recoveryCandidateDialogSwitchInput");
+    expect(css).toContain(".recoveryCandidateDialogSwitchTrack");
+    expect(css).toContain(".recoveryCandidateDialogSwitchThumb");
+    expect(css).toContain(".recoveryCandidateDialogSwitchInput:checked");
+    expect(css).toContain('[data-recovery-header-state="indeterminate"]');
+    expect(css).toContain(".recoveryCandidateDialogSwitchInput:focus-visible");
+  });
+
+  it("clicking the visible switch track toggles selection exactly once and does not double-toggle (#672)", () => {
+    render(baseProps());
+    const tracks = document.querySelectorAll(".recoveryCandidateDialogSwitchTrack");
+    expect(tracks.length).toBeGreaterThan(1); // header + rows
+    const rowTrack = tracks[1] as HTMLElement;
+
+    expect(rowCheckboxes()[0].checked).toBe(false);
+
+    act(() => {
+      rowTrack.click();
+    });
+
+    expect(rowCheckboxes()[0].checked).toBe(true);
+
+    act(() => {
+      rowTrack.click();
+    });
+
+    expect(rowCheckboxes()[0].checked).toBe(false);
+  });
+
   it("Decide Later calls onClose and never a restore / delete path", () => {
     const props = baseProps();
     render(props);
@@ -622,7 +683,7 @@ describe("RecoveryCandidateDialog behavior", () => {
 
       advance(1);
       expect(selectedButton.disabled).toBe(false);
-      expect(discardButtonIconPayload(selectedButton)).toContain("m432 144");
+      expect(discardButtonIconPayload(selectedButton)).toContain("M14 2H10");
 
       await act(async () => {
         selectedButton.click();
@@ -682,7 +743,7 @@ describe("RecoveryCandidateDialog behavior", () => {
       advance(1);
       expect(footerButton(DISCARD_ALL).disabled).toBe(false);
       expect(discardButtonIconPayload(footerButton(DISCARD_ALL))).toContain(
-        "m432 144"
+        "M14 2H10"
       );
       // Never selected a row — Discard All does not depend on selectedCount.
       expect(rowCheckboxes().some((c) => c.checked)).toBe(false);
@@ -753,7 +814,7 @@ describe("RecoveryCandidateDialog behavior", () => {
       );
       const pendingIcon = discardButtonIconPayload(allButton());
       expect(pendingIcon).toContain("M145.61 464");
-      expect(pendingIcon).not.toContain("m432 144");
+      expect(pendingIcon).not.toContain("M14 2H10");
       expect(
         allButton().querySelector(".recoveryDiscardPendingIcon")
       ).toBeNull();
@@ -763,7 +824,7 @@ describe("RecoveryCandidateDialog behavior", () => {
       advance(5000);
       expect(allButton().disabled).toBe(false);
       const readyIcon = discardButtonIconPayload(allButton());
-      expect(readyIcon).toContain("m432 144");
+      expect(readyIcon).toContain("M14 2H10");
       expect(readyIcon).not.toContain("M145.61 464");
     });
 
