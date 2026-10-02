@@ -756,17 +756,17 @@ describe("application menu", () => {
       expect(labels.indexOf("Help")).toBeGreaterThan(labels.indexOf("Window"));
     });
 
-    it("renders 支援 as the Assist menu label in Japanese", () => {
+    it("renders アシスト as the Assist menu label in Japanese", () => {
       const template = buildApplicationMenu("ja", emptyMenuOptions(), "win32");
 
-      expect(template.map((item) => item.label)).toContain("支援");
+      expect(template.map((item) => item.label)).toContain("アシスト");
     });
 
     it("renders paragraph indent + glossary tag items in the Japanese Assist menu", () => {
       const assistItems = submenuItems(
         findTopLevelMenu(
           buildApplicationMenu("ja", emptyMenuOptions(), "win32"),
-          "支援"
+          "アシスト"
         )
       );
 
@@ -828,7 +828,7 @@ describe("application menu", () => {
             { getMainWindow: () => window },
             "win32"
           ),
-          "支援"
+          "アシスト"
         )
       );
       const manageItem = assistItems.find(

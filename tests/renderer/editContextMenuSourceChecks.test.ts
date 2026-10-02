@@ -157,6 +157,13 @@ function allSourceText(): string {
  * listener that only calls `preventDefault()` on an UNHANDLED reload /
  * forceReload key (never a command, never `stopPropagation()`), so Chromium's
  * reload cannot fire; it is unrelated to the native-edit-command delegation.
+ *
+ * ApplicationMenuBar.tsx (#663) is the same category: while one of its popups
+ * is open, a window-level key listener only dismisses the popup on Escape
+ * (removed as soon as the menu closes). It binds no shortcut, runs no command
+ * and ignores every other key; keyboard navigation is #665, and shortcuts stay
+ * with the native menu backend. Unrelated to the native-edit-command
+ * delegation.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
@@ -185,6 +192,7 @@ const onKeyDownExemptFileNames = new Set([
   "globalKeyboardShortcuts.ts",
   "reloadKeyFallback.ts",
   "KeyboardShortcutCaptureDialog.tsx",
+  "ApplicationMenuBar.tsx",
   "App.tsx",
   "EditorSurface.tsx"
 ]);
@@ -269,13 +277,22 @@ describe("edit context menu source checks", () => {
   });
 
   it("does not bridge Application menu Edit roles into the new context/edit route", () => {
-    const source = sourceText("src/main/menu.ts");
+    // #662: the Edit roles are native-role items of the canonical menu model
+    // (the Electron adapter maps them to Electron roles).
+    const model = sourceText("src/shared/applicationMenuModel.ts");
 
-    expect(source).toContain('roleItem("cut"');
-    expect(source).toContain('roleItem("copy"');
-    expect(source).toContain('roleItem("paste"');
-    expect(source).toContain('roleItem("selectAll"');
-    expect(source).not.toContain("contextMenu.");
-    expect(source).not.toContain("edit.command.");
+    expect(model).toContain('nativeRole("cut"');
+    expect(model).toContain('nativeRole("copy"');
+    expect(model).toContain('nativeRole("paste"');
+    expect(model).toContain('nativeRole("selectAll"');
+    for (const path of [
+      "src/shared/applicationMenuModel.ts",
+      "src/main/applicationMenuAdapter.ts",
+      "src/main/menu.ts"
+    ]) {
+      const source = sourceText(path);
+      expect(source).not.toContain("contextMenu.");
+      expect(source).not.toContain("edit.command.");
+    }
   });
 });

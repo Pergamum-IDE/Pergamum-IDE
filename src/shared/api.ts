@@ -607,8 +607,38 @@ export const DEBUG_LOG_CHANNELS = {
 
 export const APPLICATION_MENU_CHANNELS = {
   command: "applicationMenu:command",
-  setEnablement: "applicationMenu:setEnablement"
+  setEnablement: "applicationMenu:setEnablement",
+  /** renderer -> main: run an allowlisted native role (#664) */
+  invokeNativeRole: "applicationMenu:invokeNativeRole"
 } as const;
+
+/**
+ * #664: the native roles the Renderer menu may ask Main to run. These are the
+ * Windows / Linux menu's roles that act on the focused web contents (the same
+ * ones the Electron menu runs through its role): an allowlist, never an open
+ * "run any role" API. Full screen goes through the existing `window` API and
+ * the macOS-only roles never reach the Renderer menu.
+ */
+export const rendererMenuNativeRoles = [
+  "undo",
+  "redo",
+  "cut",
+  "copy",
+  "paste",
+  "selectAll",
+  "toggleDevTools"
+] as const;
+
+export type RendererMenuNativeRole = (typeof rendererMenuNativeRoles)[number];
+
+export function isRendererMenuNativeRole(
+  value: unknown
+): value is RendererMenuNativeRole {
+  return (
+    typeof value === "string" &&
+    (rendererMenuNativeRoles as readonly string[]).includes(value)
+  );
+}
 
 export const JAPANESE_LINT_CHANNELS = {
   lint: "japaneseLint:lint",
@@ -649,9 +679,9 @@ export const WINDOW_CHANNELS = {
  * #252 follow-up: renderer -> main push of live command enablement (from
  * `CommandRegistry.isEnabledForContext`, the same evaluation the Command
  * Palette already uses), keyed by `ApplicationMenuCommandId`, so the
- * native Electron menu — built once at startup and otherwise never
- * touched — can reflect `when` (e.g. `editor.kind.markdown`) as a real
- * disabled state. Commands not present in the map are left as they are;
+ * native Electron menu — rebuilt only at startup and for keybinding
+ * changes, never for enablement — can reflect `when` (e.g.
+ * `editor.kind.markdown`) as a real disabled state. Commands not present in the map are left as they are;
  * a command that never declares a `when` is simply always sent as `true`.
  */
 export type ApplicationMenuEnablementMap = Record<string, boolean>;
@@ -1798,6 +1828,12 @@ export interface PergamumApi {
   applicationMenu: {
     onCommand: (callback: (commandId: string) => void) => () => void;
     setEnablement: (enablement: ApplicationMenuEnablementMap) => void;
+    /**
+     * #664: runs one allowlisted native role on this window's web contents
+     * (what the native menu's role item would do). Resolves false when the
+     * role is not allowlisted or could not run.
+     */
+    invokeNativeRole: (role: RendererMenuNativeRole) => Promise<boolean>;
   };
   lifecycle: {
     onWindowCloseRequest: (

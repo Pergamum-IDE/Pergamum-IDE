@@ -9,6 +9,10 @@
  */
 
 import {
+  MENU_ACCELERATOR_COMMAND_IDS,
+  selectMenuKeybindingKeys
+} from "../shared/menuKeybindingSelection";
+import {
   resolveDefaultKeybindings,
   toElectronAccelerator,
   type KeybindingCatalog,
@@ -16,28 +20,9 @@ import {
   type ResolvedKeybinding
 } from "../shared/keybindings";
 
-/**
- * The commands that have an application-menu item (primary item or hidden
- * alias). App-scope commands that are handled by a renderer window listener
- * instead (the Command Palette prefix shortcuts, #643) are deliberately NOT
- * here, so the menu can never claim their keys: an Electron accelerator would
- * intercept the keystroke before the renderer sees it (see #556).
- */
-export const MENU_ACCELERATOR_COMMAND_IDS: readonly string[] = [
-  "workspace.project.open",
-  "editor.file.new",
-  "editor.close",
-  "editor.document.save",
-  "editor.saveAll",
-  "editor.saveAs",
-  "workbench.commandPalette.open",
-  "search.project.openFromSelection",
-  "search.project.replace.openFromSelection",
-  "workspace.applicationSettings.open",
-  "app.zoom.in",
-  "app.zoom.out",
-  "app.zoom.reset"
-];
+// #664: the list and the row selection moved to shared so the Renderer menu's
+// shortcut labels use the very same rule.
+export { MENU_ACCELERATOR_COMMAND_IDS };
 
 export interface MenuAcceleratorLookup {
   /** The primary accelerator (first default key), or `undefined`. */
@@ -79,26 +64,19 @@ export function createMenuAcceleratorLookup(
    */
   rows?: readonly ResolvedKeybinding[]
 ): MenuAcceleratorLookup {
+  const keys = selectMenuKeybindingKeys(
+    rows ?? resolveDefaultKeybindings(platform, catalog),
+    commandIds
+  );
   const byCommand = new Map<string, string[]>();
-  const allowed = commandIds === null ? null : new Set(commandIds);
 
-  for (const binding of rows ?? resolveDefaultKeybindings(platform, catalog)) {
-    if (
-      (allowed !== null && !allowed.has(binding.command)) ||
-      binding.scope !== "app" ||
-      binding.source !== "pergamum" ||
-      binding.readonly ||
-      binding.key === null
-    ) {
-      continue;
-    }
-    const accelerators = byCommand.get(binding.command) ?? [];
-    accelerators.push(
-      toElectronAccelerator(binding.key, platform, {
-        modStyle: "commandOrControl"
-      })
+  for (const [commandId, commandKeys] of keys) {
+    byCommand.set(
+      commandId,
+      commandKeys.map((key) =>
+        toElectronAccelerator(key, platform, { modStyle: "commandOrControl" })
+      )
     );
-    byCommand.set(binding.command, accelerators);
   }
 
   return {

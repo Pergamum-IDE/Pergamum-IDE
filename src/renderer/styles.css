@@ -2331,10 +2331,22 @@ button:active {
   background: var(--pg-color-button-active-background);
 }
 
+/* The shell fills the VISIBLE client area. `100vh` is the viewport height
+   including a horizontal scrollbar, so with one showing (narrow window) the
+   shell overshot the client area and the page got its own vertical
+   scrollbar (#663). Percentage heights resolve against the client area, so
+   they never include that scrollbar's height. Horizontal overflow is left
+   as is. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
 .appShell {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   min-width: 0;
   color: var(--pg-color-app-foreground);
   background: var(--pg-color-app-background);
@@ -15784,4 +15796,147 @@ label.settingsItemHeader {
   margin: 8px 0 0;
   padding-inline-start: 18px;
   font-size: 13px;
+}
+
+/* #663: Renderer application menu bar (Windows / Linux). Only existing
+   semantic --pg-color-* tokens are used, so every built-in theme (and a
+   runtime theme switch) restyles it without any menu-specific theme code.
+   Font is inherited from the workbench. */
+.applicationMenuBar {
+  position: relative;
+  /* Above the toolbar / tabs / editor and their dropdowns (100), below
+     dialogs (1000) and notifications. */
+  z-index: 100;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  block-size: 28px;
+  padding-inline: 4px;
+  border-block-end: 1px solid var(--pg-color-panel-border);
+  background: var(--pg-color-panel-header-background);
+  color: var(--pg-color-panel-foreground);
+  font-size: 13px;
+  user-select: none;
+}
+
+.applicationMenuBarItemSlot {
+  display: flex;
+}
+
+.applicationMenuBarItem {
+  display: flex;
+  align-items: center;
+  /* The global `button` rule sets a 32px height; stretch to the 28px bar. */
+  block-size: auto;
+  padding-inline: 10px;
+  border: 0;
+  border-radius: 4px;
+  margin-block: 2px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+
+.applicationMenuBarItem:hover {
+  background: var(--pg-color-surface-hover);
+}
+
+.applicationMenuBarItem[data-open="true"] {
+  background: var(--pg-color-surface-active);
+}
+
+.applicationMenuBarItem:focus-visible {
+  outline: 2px solid var(--pg-color-focus-ring);
+  outline-offset: -2px;
+}
+
+.applicationMenuPopup {
+  position: fixed;
+  min-inline-size: 200px;
+  max-inline-size: 360px;
+  max-block-size: calc(100vh - 8px);
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--pg-color-border-default);
+  border-radius: 6px;
+  background: var(--pg-color-surface-background);
+  color: var(--pg-color-surface-foreground);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.applicationMenuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-block-size: 26px;
+  padding-inline: 10px;
+  border-radius: 4px;
+  cursor: default;
+  white-space: nowrap;
+}
+
+.applicationMenuItem:hover,
+.applicationMenuItem[data-open="true"] {
+  background: var(--pg-color-surface-hover);
+}
+
+.applicationMenuItem[data-disabled="true"] {
+  color: var(--pg-color-text-disabled);
+}
+
+.applicationMenuItem[data-disabled="true"]:hover {
+  background: transparent;
+}
+
+.applicationMenuItemLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.applicationMenuItemShortcut {
+  flex: 0 0 auto;
+  color: var(--pg-color-surface-muted);
+}
+
+.applicationMenuItem[data-disabled="true"] .applicationMenuItemShortcut {
+  color: inherit;
+}
+
+/* Submenu indicator: a CSS chevron (font independent), mirrored for RTL. */
+.applicationMenuItemChevron {
+  flex: 0 0 auto;
+  inline-size: 6px;
+  block-size: 6px;
+  border-block-start: 1.5px solid var(--pg-color-surface-muted);
+  border-inline-end: 1.5px solid var(--pg-color-surface-muted);
+  transform: rotate(45deg);
+}
+
+.applicationMenuItemChevron:dir(rtl) {
+  transform: rotate(-135deg);
+}
+
+.applicationMenuSeparator {
+  block-size: 1px;
+  margin-block: 4px;
+  margin-inline: 6px;
+  background: var(--pg-color-border-default);
+}
+
+/* #665: keyboard focus of the Renderer menu. The state comes from the menu's own
+   focus key (data-focused), so it is visible however focus arrived. Only
+   semantic tokens; no underline (mnemonics are shown as text). */
+.applicationMenuItem:focus {
+  outline: none;
+}
+
+.applicationMenuBarItem[data-focused="true"],
+.applicationMenuItem[data-focused="true"] {
+  background: var(--pg-color-surface-hover);
+  outline: 2px solid var(--pg-color-focus-ring);
+  outline-offset: -2px;
 }

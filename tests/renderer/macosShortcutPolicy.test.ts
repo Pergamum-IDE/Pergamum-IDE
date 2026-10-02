@@ -395,22 +395,29 @@ describe("darwin catalog safety (#636)", () => {
 });
 
 describe("Cmd+W / Cmd+Shift+W (#636)", () => {
-  const menu = readFileSync("src/main/menu.ts", "utf8");
+  // #662: the structure lives in the canonical model, accelerators in the
+  // Electron adapter.
+  const model = readFileSync("src/shared/applicationMenuModel.ts", "utf8");
+  const adapter = readFileSync("src/main/applicationMenuAdapter.ts", "utf8");
 
   it("keeps editor.close on CommandOrControl+W (catalog-derived, #642)", () => {
-    expect(menu).toMatch(
-      /editorCommandIds\.close,\s*language,\s*"menu\.closeCurrentTab",\s*options,\s*accelerators\.get\(editorCommandIds\.close\)/
+    // No keybinding override in the model (default "primary") ...
+    expect(model).toMatch(
+      /command\(editorCommandIds\.close,\s*"menu\.closeCurrentTab"\)/
     );
+    // ... and the adapter takes the primary key from the catalog lookup.
+    expect(adapter).toContain("context.accelerators.get(item.commandId)");
     for (const platform of platforms) {
       expect(catalogKey(platform, "editor.close")).toBe("Mod-w");
     }
   });
 
   it("gives the darwin native close role Cmd+Shift+W so it cannot claim Cmd+W", () => {
-    const start = menu.indexOf('"menu.close"');
-    expect(start).toBeGreaterThan(-1);
-    const block = menu.slice(start, start + 120);
-    expect(block).toContain('"CommandOrControl+Shift+W"');
-    expect(menu.slice(start - 200, start)).toContain('roleItem(\n              "close"');
+    // macOS only, as a native role ...
+    expect(model).toMatch(
+      /nativeRole\("close", "menu\.close", \{ platforms: \["darwin"\] \}\)/
+    );
+    // ... with its own accelerator, distinct from editor.close's Cmd+W.
+    expect(adapter).toMatch(/close:\s*"CommandOrControl\+Shift\+W"/);
   });
 });
