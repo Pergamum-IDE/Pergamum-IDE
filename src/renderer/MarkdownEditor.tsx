@@ -76,7 +76,12 @@ import {
   captureEditorViewState,
   type EditorViewState
 } from "./editorViewState";
-import type { MarkdownEditorGlossaryCompletionConfig } from "./glossaryCompletionExtension";
+import {
+  publishCurrentGlossaryCompletionConfig,
+  unpublishCurrentGlossaryCompletionConfig,
+  type MarkdownEditorGlossaryCompletionConfig
+} from "./glossaryCompletionExtension";
+
 import {
   nextActiveFindEditorInstanceId,
   publishCurrentActiveFindConfig,
@@ -1437,6 +1442,17 @@ export function MarkdownEditor({
   useEffect(() => {
     glossaryCompletionRef.current = glossaryCompletion ?? null;
   }, [glossaryCompletion]);
+
+  useEffect(() => {
+    if (!glossaryCompletion) {
+      return undefined;
+    }
+    publishCurrentGlossaryCompletionConfig(glossaryCompletion);
+    return () => {
+      unpublishCurrentGlossaryCompletionConfig(glossaryCompletion);
+    };
+  }, [glossaryCompletion]);
+
 
   // #425 follow-up: publish this editor's `activeFind` config into the
   // module-level current-Active-Find slot the Ctrl+F / Ctrl+H keymap reads.
