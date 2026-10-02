@@ -39,7 +39,11 @@ export const assistCommandIds = {
     "assist.lineEndingDistribution.show"
   ),
   insertParagraphIndent: defineCommandId("assist.paragraphIndent.insert"),
-  removeParagraphIndent: defineCommandId("assist.paragraphIndent.remove")
+  removeParagraphIndent: defineCommandId("assist.paragraphIndent.remove"),
+  openExportDialog: defineCommandId("assist.export.openDialog"),
+  openJapaneseMachineCheckDialog: defineCommandId(
+    "assist.japaneseMachineCheck.openDialog"
+  )
 } as const;
 
 /**
@@ -85,6 +89,9 @@ export const editorCommandIds = {
   insertImage: defineCommandId("editor.image.insert"),
   insertBlockquote: defineCommandId("editor.markdown.insertBlockquote"),
   toggleSyntaxChecker: defineCommandId("editor.markdown.toggleSyntaxChecker"),
+  toggleInstantJapaneseLint: defineCommandId(
+    "editor.japaneseLint.toggleInstant"
+  ),
   bold: defineCommandId("editor.markdown.bold"),
   italic: defineCommandId("editor.markdown.italic"),
   strikethrough: defineCommandId("editor.markdown.strikethrough"),

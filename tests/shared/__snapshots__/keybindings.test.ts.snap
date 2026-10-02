@@ -2,6 +2,9 @@
 
 exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
 {
+  "app.about.open": [
+    null,
+  ],
   "app.hide": [
     "Mod-h",
   ],
@@ -20,6 +23,21 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
   ],
   "app.zoom.reset": [
     "Mod-0",
+  ],
+  "assist.export.openDialog": [
+    null,
+  ],
+  "assist.japaneseMachineCheck.openDialog": [
+    null,
+  ],
+  "assist.lineEndingDistribution.show": [
+    null,
+  ],
+  "assist.paragraphIndent.insert": [
+    null,
+  ],
+  "assist.paragraphIndent.remove": [
+    null,
   ],
   "developer.toggleDevTools": [
     "Mod-Shift-d",
@@ -71,6 +89,9 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
   ],
   "editor.indent": [
     "Mod-]",
+  ],
+  "editor.japaneseLint.toggleInstant": [
+    null,
   ],
   "editor.line.copyDown": [
     "Shift-Alt-ArrowDown",
@@ -181,8 +202,20 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
   "glossary.completion.open": [
     "Alt-\`",
   ],
+  "glossary.entry.manage": [
+    null,
+  ],
   "glossary.entry.openFromSelection": [
     "Mod-g",
+  ],
+  "glossary.tag.manage": [
+    null,
+  ],
+  "import.text.bulk.openDialog": [
+    null,
+  ],
+  "project.settings.open": [
+    null,
   ],
   "search.project.openFromSelection": [
     "Mod-Shift-f",
@@ -216,6 +249,9 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
     "F1",
   ],
   "workbench.commandPalette.projectSearch.open": [
+    null,
+  ],
+  "workbench.showResumeHub": [
     null,
   ],
   "workspace.applicationSettings.open": [
@@ -265,6 +301,9 @@ exports[`resolveDefaultKeybindings (#639) > darwin resolution snapshot 1`] = `
 
 exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
 {
+  "app.about.open": [
+    null,
+  ],
   "app.hide": [
     null,
   ],
@@ -283,6 +322,21 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
   ],
   "app.zoom.reset": [
     "Mod-0",
+  ],
+  "assist.export.openDialog": [
+    null,
+  ],
+  "assist.japaneseMachineCheck.openDialog": [
+    null,
+  ],
+  "assist.lineEndingDistribution.show": [
+    null,
+  ],
+  "assist.paragraphIndent.insert": [
+    null,
+  ],
+  "assist.paragraphIndent.remove": [
+    null,
   ],
   "developer.toggleDevTools": [
     "Mod-Shift-d",
@@ -334,6 +388,9 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
   ],
   "editor.indent": [
     "Mod-]",
+  ],
+  "editor.japaneseLint.toggleInstant": [
+    null,
   ],
   "editor.line.copyDown": [
     "Shift-Alt-ArrowDown",
@@ -444,8 +501,20 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
   "glossary.completion.open": [
     "Ctrl-Space",
   ],
+  "glossary.entry.manage": [
+    null,
+  ],
   "glossary.entry.openFromSelection": [
     "Mod-g",
+  ],
+  "glossary.tag.manage": [
+    null,
+  ],
+  "import.text.bulk.openDialog": [
+    null,
+  ],
+  "project.settings.open": [
+    null,
   ],
   "search.project.openFromSelection": [
     "Mod-Shift-f",
@@ -480,6 +549,9 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
   ],
   "workbench.commandPalette.projectSearch.open": [
     "Mod-%",
+  ],
+  "workbench.showResumeHub": [
+    null,
   ],
   "workspace.applicationSettings.open": [
     "Mod-,",
@@ -528,6 +600,9 @@ exports[`resolveDefaultKeybindings (#639) > linux resolution snapshot 1`] = `
 
 exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
 {
+  "app.about.open": [
+    null,
+  ],
   "app.hide": [
     null,
   ],
@@ -546,6 +621,21 @@ exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
   ],
   "app.zoom.reset": [
     "Mod-0",
+  ],
+  "assist.export.openDialog": [
+    null,
+  ],
+  "assist.japaneseMachineCheck.openDialog": [
+    null,
+  ],
+  "assist.lineEndingDistribution.show": [
+    null,
+  ],
+  "assist.paragraphIndent.insert": [
+    null,
+  ],
+  "assist.paragraphIndent.remove": [
+    null,
   ],
   "developer.toggleDevTools": [
     "Mod-Shift-d",
@@ -597,6 +687,9 @@ exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
   ],
   "editor.indent": [
     "Mod-]",
+  ],
+  "editor.japaneseLint.toggleInstant": [
+    null,
   ],
   "editor.line.copyDown": [
     "Shift-Alt-ArrowDown",
@@ -707,8 +800,20 @@ exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
   "glossary.completion.open": [
     "Ctrl-Space",
   ],
+  "glossary.entry.manage": [
+    null,
+  ],
   "glossary.entry.openFromSelection": [
     "Mod-g",
+  ],
+  "glossary.tag.manage": [
+    null,
+  ],
+  "import.text.bulk.openDialog": [
+    null,
+  ],
+  "project.settings.open": [
+    null,
   ],
   "search.project.openFromSelection": [
     "Mod-Shift-f",
@@ -743,6 +848,9 @@ exports[`resolveDefaultKeybindings (#639) > win32 resolution snapshot 1`] = `
   ],
   "workbench.commandPalette.projectSearch.open": [
     "Mod-%",
+  ],
+  "workbench.showResumeHub": [
+    null,
   ],
   "workspace.applicationSettings.open": [
     "Mod-,",

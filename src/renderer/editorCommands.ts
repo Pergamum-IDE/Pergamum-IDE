@@ -80,6 +80,8 @@ export interface EditorCommandController {
   canOutdent(): boolean;
   togglePreview(): void | Promise<void>;
   canTogglePreview(): boolean;
+  toggleInstantJapaneseLint?(): void | Promise<void>;
+  canToggleInstantJapaneseLint?(): boolean;
   delegateNativeEditCommand(
     commandId: EditCommandId | string
   ): void | Promise<void>;
@@ -105,6 +107,8 @@ export interface EditorCommandTitles {
   insertBlockquoteDescription: string;
   toggleSyntaxChecker: string;
   toggleSyntaxCheckerDescription: string;
+  toggleInstantJapaneseLint?: string;
+  toggleInstantJapaneseLintDescription?: string;
   bold: string;
   boldDescription: string;
   italic: string;
@@ -182,6 +186,12 @@ export function createEditorCommandTitles(
     ),
     toggleSyntaxCheckerDescription: translate(
       "command.editor.markdown.toggleSyntaxChecker.description"
+    ),
+    toggleInstantJapaneseLint: translate(
+      "command.editor.japaneseLint.toggleInstant"
+    ),
+    toggleInstantJapaneseLintDescription: translate(
+      "command.editor.japaneseLint.toggleInstant.description"
     ),
     bold: translate("command.editor.markdown.bold"),
     boldDescription: translate("command.editor.markdown.bold.description"),
@@ -409,6 +419,23 @@ export function createEditorCommands(
         return controller.toggleSyntaxChecker();
       },
       isEnabled: () => controller.canToggleSyntaxChecker()
+    },
+    {
+      id: editorCommandIds.toggleInstantJapaneseLint,
+      title:
+        titles.toggleInstantJapaneseLint ??
+        "Toggle Instant Japanese Style Check",
+      description: titles.toggleInstantJapaneseLintDescription ?? "",
+      category: "view",
+      paletteOrder: 25,
+      execute: () => {
+        if (!controller.canToggleInstantJapaneseLint?.()) {
+          return;
+        }
+
+        return controller.toggleInstantJapaneseLint?.();
+      },
+      isEnabled: () => controller.canToggleInstantJapaneseLint?.() ?? false
     },
     {
       id: editorCommandIds.bold,

@@ -102,6 +102,7 @@ export function filterKeyboardShortcutGroups(
  */
 export const KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS: Readonly<Record<string, TranslationKey>> = {
   "Application": "keyboardShortcuts.category.application",
+  "Assist": "keyboardShortcuts.category.assist",
   "Command Palette": "keyboardShortcuts.category.commandPalette",
   "Developer": "keyboardShortcuts.category.developer",
   "Edit": "keyboardShortcuts.category.edit",
@@ -109,6 +110,7 @@ export const KEYBOARD_SHORTCUT_CATEGORY_LABEL_KEYS: Readonly<Record<string, Tran
   "File": "keyboardShortcuts.category.file",
   "File Explorer": "keyboardShortcuts.category.fileExplorer",
   "Glossary": "keyboardShortcuts.category.glossary",
+  "Help": "keyboardShortcuts.category.help",
   "Markdown": "keyboardShortcuts.category.markdown",
   "Search": "keyboardShortcuts.category.search",
   "View": "keyboardShortcuts.category.view",

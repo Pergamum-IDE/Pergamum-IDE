@@ -29,6 +29,9 @@ export interface AssistCommandController {
   showLineEndingDistribution(): void;
   insertParagraphIndent(): void;
   removeParagraphIndent(): void;
+  openExportDialog?(): void;
+  openJapaneseMachineCheckDialog?(): void;
+  canRunJapaneseMachineCheck?(): boolean;
 }
 
 export interface AssistCommandTitles {
@@ -38,6 +41,10 @@ export interface AssistCommandTitles {
   insertParagraphIndentDescription: string;
   removeParagraphIndent: string;
   removeParagraphIndentDescription: string;
+  openExportDialog?: string;
+  openExportDialogDescription?: string;
+  openJapaneseMachineCheckDialog?: string;
+  openJapaneseMachineCheckDialogDescription?: string;
 }
 
 type AssistCommand = Command<readonly [], void>;
@@ -59,6 +66,16 @@ export function createAssistCommandTitles(
     removeParagraphIndent: translate("command.assist.paragraphIndent.remove"),
     removeParagraphIndentDescription: translate(
       "command.assist.paragraphIndent.remove.description"
+    ),
+    openExportDialog: translate("command.assist.export.openDialog"),
+    openExportDialogDescription: translate(
+      "command.assist.export.openDialog.description"
+    ),
+    openJapaneseMachineCheckDialog: translate(
+      "command.assist.japaneseMachineCheck.openDialog"
+    ),
+    openJapaneseMachineCheckDialogDescription: translate(
+      "command.assist.japaneseMachineCheck.openDialog.description"
     )
   };
 }
@@ -94,6 +111,27 @@ export function createAssistCommands(
       category: "assist",
       paletteOrder: 30,
       execute: () => controller.removeParagraphIndent()
+    },
+    {
+      id: assistCommandIds.openExportDialog,
+      title: titles.openExportDialog ?? "Export Project...",
+      description: titles.openExportDialogDescription ?? "",
+      when: { key: "project.isOpen" },
+      category: "assist",
+      paletteOrder: 40,
+      execute: () => controller.openExportDialog?.()
+    },
+    {
+      id: assistCommandIds.openJapaneseMachineCheckDialog,
+      title: titles.openJapaneseMachineCheckDialog ?? "Japanese Style Check...",
+      description: titles.openJapaneseMachineCheckDialogDescription ?? "",
+      when: { key: "project.isOpen" },
+      ...(controller.canRunJapaneseMachineCheck === undefined
+        ? {}
+        : { isEnabled: () => controller.canRunJapaneseMachineCheck!() }),
+      category: "assist",
+      paletteOrder: 50,
+      execute: () => controller.openJapaneseMachineCheckDialog?.()
     }
   ];
 }

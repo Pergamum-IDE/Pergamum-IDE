@@ -54,7 +54,9 @@ describe("assist commands (#252)", () => {
     expect(registry.list().map((command) => command.id)).toEqual([
       "assist.lineEndingDistribution.show",
       "assist.paragraphIndent.insert",
-      "assist.paragraphIndent.remove"
+      "assist.paragraphIndent.remove",
+      "assist.export.openDialog",
+      "assist.japaneseMachineCheck.openDialog"
     ]);
   });
 
@@ -227,7 +229,15 @@ describe("assist commands (#252)", () => {
       removeParagraphIndent:
         "translated:command.assist.paragraphIndent.remove",
       removeParagraphIndentDescription:
-        "translated:command.assist.paragraphIndent.remove.description"
+        "translated:command.assist.paragraphIndent.remove.description",
+      openExportDialog:
+        "translated:command.assist.export.openDialog",
+      openExportDialogDescription:
+        "translated:command.assist.export.openDialog.description",
+      openJapaneseMachineCheckDialog:
+        "translated:command.assist.japaneseMachineCheck.openDialog",
+      openJapaneseMachineCheckDialogDescription:
+        "translated:command.assist.japaneseMachineCheck.openDialog.description"
     });
   });
 
