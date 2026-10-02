@@ -52,6 +52,9 @@ export function ApplicationMenuBar({
   isDisabled
 }: ApplicationMenuBarProps) {
   const isVisible = shouldShowRendererMenuBar(platform);
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  // Re-projected whenever a menu opens or switches (#664): enablement that
+  // depends on the focused element (Cut / Paste) is then read fresh.
   const menus = useMemo(
     () =>
       isVisible
@@ -61,9 +64,8 @@ export function ApplicationMenuBar({
             isDisabled
           })
         : [],
-    [isVisible, platform, translate, getShortcutLabel, isDisabled]
+    [isVisible, platform, translate, getShortcutLabel, isDisabled, openIndex]
   );
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRefs = useRef<(HTMLButtonElement | null)[]>([]);
 

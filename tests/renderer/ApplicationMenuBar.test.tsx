@@ -36,7 +36,7 @@ function mount(
     platform?: AppPlatform;
     language?: Language;
     onInvoke?: (target: RendererMenuInvokeTarget) => void;
-    getShortcutLabel?: (commandId: string) => string | undefined;
+    getShortcutLabel?: (request: { id: string; kind: string }) => string | undefined;
     isDisabled?: (commandId: string) => boolean;
   } = {}
 ): void {
@@ -183,8 +183,8 @@ describe("ApplicationMenuBar structure (#663)", () => {
 
   it("shows injected shortcut labels and disabled state", () => {
     mount({
-      getShortcutLabel: (id) =>
-        id === editorCommandIds.saveDocument ? "Ctrl+S" : undefined,
+      getShortcutLabel: (request) =>
+        request.id === editorCommandIds.saveDocument ? "Ctrl+S" : undefined,
       isDisabled: (id) => id === editorCommandIds.saveAll
     });
     click(trigger("File"));

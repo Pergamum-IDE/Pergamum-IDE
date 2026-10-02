@@ -37,7 +37,6 @@ import { sanitizedFileIoErrorReasonFromMessage } from "../shared/sanitizedFileIo
 import { sanitizedFileIoErrorMessage } from "../shared/sanitizedFileIoErrorMessage";
 import { projectDocumentDiscoverySettingChanged } from "./projectDocumentsRefresh";
 import {
-  applicationMenuCommandIds,
   type ApplicationMenuCommandId,
   type EditCommandId
 } from "../shared/commandIds";
@@ -106,6 +105,10 @@ import {
 import { isPathEqualOrInsideDirectory } from "../shared/saveTargetPolicy";
 import { ActivityBar } from "./ActivityBar";
 import { ApplicationMenuBar } from "./ApplicationMenuBar";
+import {
+  computeApplicationMenuEnablement,
+  useApplicationMenuIntegration
+} from "./applicationMenuIntegration";
 import {
   AboutDialog,
   aboutCreditsHeading,
@@ -2670,27 +2673,36 @@ export function App(): JSX.Element {
     window.addEventListener("resize", handleWindowResize);
     return () => window.removeEventListener("resize", handleWindowResize);
   }, []);
+  // #664: ONE renderer-side entry for an application-menu command. The native
+  // menu's incoming IPC command and a click on the Renderer menu both run
+  // through it (same IME save guard, same CommandRegistry execution with
+  // source "applicationMenu"), so the two surfaces cannot diverge.
+  const receiveApplicationMenuCommand = (commandId: string): void => {
+    logRendererDebugEvent({
+      level: "debug",
+      event: "application_menu.command.received",
+      details: {
+        commandId,
+        operation: "command",
+        result: "succeeded"
+      }
+    });
+    imeCompositionSaveGuard.handleCommand(
+      commandId,
+      executeUiCommandRef.current
+    );
+  };
+  const receiveApplicationMenuCommandRef = useRef(receiveApplicationMenuCommand);
+  receiveApplicationMenuCommandRef.current = receiveApplicationMenuCommand;
   useEffect(
     () =>
       subscribeApplicationMenuCommands(
         window.pergamum.applicationMenu.onCommand,
         () => (commandId) => {
-          logRendererDebugEvent({
-            level: "debug",
-            event: "application_menu.command.received",
-            details: {
-              commandId,
-              operation: "command",
-              result: "succeeded"
-            }
-          });
-          imeCompositionSaveGuard.handleCommand(
-            commandId,
-            executeUiCommandRef.current
-          );
+          receiveApplicationMenuCommandRef.current(commandId);
         }
       ),
-    [imeCompositionSaveGuard]
+    []
   );
   useEffect(
     () =>
@@ -4324,17 +4336,19 @@ export function App(): JSX.Element {
   // so `assist.lineEndingDistribution.show` (and any other menu command
   // that declares a `when`) is grayed out consistently in both surfaces.
   useEffect(() => {
-    const enablement: Record<string, boolean> = {};
-
-    for (const commandId of applicationMenuCommandIds) {
-      enablement[commandId] = commandRegistry.isEnabledForContext(
-        commandId,
-        commandContext
-      );
-    }
-
-    window.pergamum.applicationMenu.setEnablement(enablement);
+    // #664: the same calculation drives the Renderer menu's disabled state.
+    window.pergamum.applicationMenu.setEnablement(
+      computeApplicationMenuEnablement(commandRegistry, commandContext)
+    );
   }, [commandRegistry, commandContext]);
+  // #664: click execution, shortcut labels and disabled state of the Renderer
+  // application menu (Windows / Linux), all from the existing infrastructure.
+  const applicationMenuIntegration = useApplicationMenuIntegration({
+    commandRegistry,
+    commandContext,
+    executeMenuCommand: (commandId) =>
+      receiveApplicationMenuCommandRef.current(commandId)
+  });
   useEffect(
     () =>
       window.pergamum.contextMenu.onCommandSelected((selection) => {
@@ -12897,12 +12911,15 @@ export function App(): JSX.Element {
       onBlurCapture={handleAppBlurCapture}
       onContextMenuCapture={handleContextMenuCapture}
     >
-      {/* #663: Windows / Linux only (renders nothing on macOS). Command
-          execution (`onInvoke`), shortcut labels and enablement are wired in
-          #664. */}
+      {/* #663: Windows / Linux only (renders nothing on macOS). #664: the
+          click / shortcut label / disabled state come from the existing
+          command, keybinding and enablement infrastructure. */}
       <ApplicationMenuBar
         platform={window.pergamum.platform}
         translate={translate}
+        onInvoke={applicationMenuIntegration.onInvoke}
+        getShortcutLabel={applicationMenuIntegration.getShortcutLabel}
+        isDisabled={applicationMenuIntegration.isDisabled}
       />
       <EditorToolbar
         canUseMarkdownToolbarCommands={canUseMarkdownToolbarCommands}
