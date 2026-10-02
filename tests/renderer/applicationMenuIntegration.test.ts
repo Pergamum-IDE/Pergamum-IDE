@@ -19,6 +19,7 @@ import {
 import {
   formatKeybindingLabel,
   resolveDefaultKeybindings,
+  resolveEffectiveKeybindings,
   type PergamumPlatform,
   type ResolvedKeybinding
 } from "../../src/shared/keybindings";
@@ -146,18 +147,47 @@ describe("Renderer menu shortcut labels (#664)", () => {
     expect(labels.get("Zoom In")).not.toBe("Ctrl++");
   });
 
-  it("keybinding: none and primaryUnlabeled items show no label", () => {
+  it("keybinding: none items show no label, while primaryUnlabeled items show their primary key (#667)", () => {
     const labels = labelOf("win32", rowsFor("win32"), "File");
 
-    // Open Markdown File (none) and Application Settings (primaryUnlabeled).
+    // Open Markdown File (none) shows no label.
     expect(labels.get("Open Markdown File...")).toBeUndefined();
+    // Application Settings (primaryUnlabeled) shows its primary key in Renderer menu.
+    expect(labels.get("Application Settings...")).toBe("Ctrl+,");
+  });
+
+  it("shows user override for primaryUnlabeled (Application Settings) via unbind + add semantics (#667)", () => {
+    const { keybindings } = resolveEffectiveKeybindings({
+      platform: "win32",
+      userEntries: [
+        {
+          key: "Mod-,",
+          command: `-${workspaceCommandIds.openApplicationSettings}`
+        },
+        {
+          key: "Mod-Alt-9",
+          command: workspaceCommandIds.openApplicationSettings
+        }
+      ]
+    });
+
+    const labels = labelOf("win32", keybindings, "File");
+    expect(labels.get("Application Settings...")).toBe("Ctrl+Alt+9");
+  });
+
+  it("shows no label when primaryUnlabeled (Application Settings) is unbound (#667)", () => {
+    const { keybindings } = resolveEffectiveKeybindings({
+      platform: "win32",
+      userEntries: [
+        {
+          key: "Mod-,",
+          command: `-${workspaceCommandIds.openApplicationSettings}`
+        }
+      ]
+    });
+
+    const labels = labelOf("win32", keybindings, "File");
     expect(labels.get("Application Settings...")).toBeUndefined();
-    // ... although the key is bound in the effective rows.
-    expect(
-      rowsFor("win32").find(
-        (row) => row.command === workspaceCommandIds.openApplicationSettings
-      )?.key
-    ).not.toBeNull();
   });
 
   it("native roles show their documented native shortcut from the catalog rows", () => {

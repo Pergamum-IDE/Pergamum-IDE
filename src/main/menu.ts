@@ -175,17 +175,18 @@ function isApplicationMenuEnablementMap(
 }
 
 /**
- * #252 follow-up: the native menu is built once at startup and never
- * rebuilt — this updates individual `MenuItem.enabled` flags in place (via
- * the stable `id: commandId` that `applicationMenuAdapter` sets on every
- * command menu item) instead of reconstructing the whole menu, so a
- * live `CommandContext` change (e.g. Application Settings becoming the
- * active tab, which makes `editor.kind.markdown` false) is reflected
- * immediately without flicker or losing menu state.
- */
-/**
- * The last enablement the renderer reported, so a rebuilt menu (#647: after a
- * keybinding change) gets the same enabled / disabled items back.
+ * #252 follow-up: the native menu is rebuilt only for a startup install and
+ * for keybinding changes (#647 / #650), not for command enablement. Enablement
+ * updates individual `MenuItem.enabled` flags in place (via the stable
+ * `id: commandId` that `applicationMenuAdapter` sets on every command menu
+ * item) instead of reconstructing the whole menu, so a live `CommandContext`
+ * change (e.g. Application Settings becoming the active tab, which makes
+ * `editor.kind.markdown` false) is reflected immediately without flicker or
+ * losing menu state.
+ *
+ * `lastMenuEnablement` is the last enablement the renderer reported, so a
+ * rebuilt menu (#647: after a keybinding change) gets the same enabled /
+ * disabled items back.
  */
 const lastMenuEnablement: Record<string, boolean> = {};
 

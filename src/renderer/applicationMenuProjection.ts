@@ -85,9 +85,10 @@ function resolveLabel(label: ApplicationMenuLabel, translate: Translate): string
 /**
  * #664: the keybinding row an item shows, decided by the model's metadata:
  * an explicit `shortcutDisplayId` wins (display-only native rows); otherwise a
- * command item follows its `keybinding` policy (`primaryUnlabeled` and
- * `none` show nothing) and a native role with a commandId shows that
- * command's native row.
+ * command item follows its `keybinding` policy (`primary` and
+ * `primaryUnlabeled` request its customizable primary shortcut; `none` shows
+ * nothing) and a native role with a commandId shows that command's native
+ * row.
  */
 function shortcutRequestFor(
   item: ApplicationMenuItem
@@ -97,7 +98,8 @@ function shortcutRequestFor(
       return { id: item.shortcutDisplayId, kind: "nativeRole" };
     }
 
-    return (item.keybinding ?? "primary") === "primary"
+    const keybinding = item.keybinding ?? "primary";
+    return keybinding === "primary" || keybinding === "primaryUnlabeled"
       ? { id: item.commandId, kind: "customizable" }
       : undefined;
   }

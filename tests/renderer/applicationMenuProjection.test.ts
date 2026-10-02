@@ -7,7 +7,8 @@ import {
 } from "../../src/shared/applicationMenuModel";
 import {
   applicationCommandIds,
-  editorCommandIds
+  editorCommandIds,
+  workspaceCommandIds
 } from "../../src/shared/commandIds";
 import {
   presentMnemonicLabel,
@@ -212,6 +213,23 @@ describe("renderer menu projection (#663)", () => {
 
     expect(save).toMatchObject({ shortcutLabel: "Ctrl+S", disabled: false });
     expect(saveAll).toMatchObject({ disabled: true });
+  });
+
+  it("#667: requests customizable shortcut for primaryUnlabeled items (Application Settings)", () => {
+    const requestedIds: string[] = [];
+    flatten(
+      projectApplicationMenu("windows", {
+        translate: translateFor("en"),
+        getShortcutLabel: (request) => {
+          if (request.kind === "customizable") {
+            requestedIds.push(request.id);
+          }
+          return undefined;
+        }
+      })
+    );
+
+    expect(requestedIds).toContain(workspaceCommandIds.openApplicationSettings);
   });
 
   it("#668 presentMnemonicLabel: suffix only when the label lacks the letter", () => {

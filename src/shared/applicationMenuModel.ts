@@ -68,9 +68,10 @@ export type ApplicationMenuLabel =
 /**
  * How a command item uses the effective keybindings of its `commandId`.
  *   - `primary` (default): the item carries the command's primary key
- *   - `primaryUnlabeled`: the primary key is bound, but the visible item shows
- *     no shortcut label (#591: Electron localizes the comma key label as
- *     "Ctrl+カンマ" on Japanese Windows)
+ *   - `primaryUnlabeled`: the primary key is bound, but the native visible item
+ *     shows no shortcut label (#591: Electron localizes the comma key label as
+ *     "Ctrl+カンマ" on Japanese Windows). The Renderer menu displays its primary
+ *     shortcut label (#667).
  *   - `none`: the item never carries a shortcut
  */
 export type ApplicationMenuKeybinding = "primary" | "primaryUnlabeled" | "none";
