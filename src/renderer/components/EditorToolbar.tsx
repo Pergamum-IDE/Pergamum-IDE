@@ -103,6 +103,8 @@ export interface EditorToolbarProps {
   onOpenCommandPalette: (initialPrefix: QuickAccessPrefix) => void;
   /** #574: locked to Markdown for glossaryDescription tabs. */
   isGlossaryDescription?: boolean;
+  /** #680: renderer switching in progress. */
+  isPreviewRendererSwitching?: boolean;
   canSaveCurrentDocument?: boolean;
   onSaveCurrentDocument?: () => void;
   isFullscreen?: boolean;
@@ -156,6 +158,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   commandPaletteLaunchAnimationDurationMs,
   onOpenCommandPalette,
   isGlossaryDescription = false,
+  isPreviewRendererSwitching = false,
   canSaveCurrentDocument = false,
   onSaveCurrentDocument,
   isFullscreen = false,
@@ -619,7 +622,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
           <PreviewRendererDropdown
             selectedRenderer={isGlossaryDescription ? "markdown" : selectedPreviewRenderer}
             defaultRenderer={defaultPreviewRenderer}
-            disabled={isGlossaryDescription || !canTogglePreview || !isPreviewVisible}
+            disabled={isGlossaryDescription || !canTogglePreview || !isPreviewVisible || isPreviewRendererSwitching}
             onSelectRenderer={onSelectPreviewRenderer}
             translate={translate}
           />

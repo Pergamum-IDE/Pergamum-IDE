@@ -2395,6 +2395,7 @@ export const jaTranslations = {
   "preview.mermaid.errorMessage": "Mermaid 図の描画に失敗しました",
   "preview.mermaid.errorHint": "構文を確認してください。",
   "preview.mermaid.showDetails": "詳細を表示",
+  "preview.switchingRenderer": "プレビューを切り替えています…",
   "workspace.editor": "エディタ",
   "workspace.markdownEditor": "Markdownエディタ",
   "workspace.markdownPreview": "Markdownプレビュー",

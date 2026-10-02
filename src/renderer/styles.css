@@ -6826,6 +6826,62 @@ label.settingsItemHeader {
   min-height: 0;
   flex-direction: column;
   background: var(--pg-color-surface-background);
+  position: relative;
+}
+
+.pane--busy {
+  cursor: wait;
+}
+
+.previewBusyOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: var(--pg-color-surface-background);
+  opacity: 0.92;
+  cursor: wait;
+}
+
+.previewBusySpinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--pg-color-surface-muted);
+  animation: previewBusySpin 0.8s linear infinite;
+}
+
+.previewBusySpinner svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+@keyframes previewBusySpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .previewBusySpinner {
+    animation: none;
+  }
+}
+
+.previewBusyText {
+  font-size: 13px;
+  color: var(--pg-color-surface-muted);
+  user-select: none;
 }
 
 .pane + .pane {
