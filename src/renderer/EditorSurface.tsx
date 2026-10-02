@@ -1430,9 +1430,56 @@ function MarkdownEditorSurface({
 
   const handlePreviewContentCommitted = useCallback(
     (container: HTMLElement) => {
-      rebuildBlockMap(container, "htmlRegenerated");
+      const result = rebuildBlockMap(container, "htmlRegenerated");
+      if (!isSyncScrollEditorToPreviewEnabled || !editorScroller) {
+        return;
+      }
+
+      const topSourceLine = editorAdapter?.getTopSourceLine() ?? null;
+      if (typeof topSourceLine !== "number") {
+        return;
+      }
+      const editorMax = getMaxScroll(editorScroller, previewScrollAxis);
+      const editorCurrent = getScrollOffset(editorScroller, previewScrollAxis);
+      const isEditorAtEnd = editorMax > 0 && editorCurrent >= editorMax - 1;
+
+      if (isVerticalPreviewRenderer(previewRenderer)) {
+        const syncResult = computeVerticalScrollLeftForLine({
+          topSourceLine,
+          blocks: result.blocks,
+          container,
+          isEditorAtEnd
+        });
+        if (syncResult) {
+          scrollSyncGuard.setSuppressed("preview", true);
+          container.scrollLeft = syncResult.clampedScrollLeft;
+        }
+      } else {
+        syncPreviewScrollWithBlocks({
+          source: editorScroller,
+          sourceAxis: previewScrollAxis,
+          sourcePosition: {
+            line: topSourceLine,
+            offset: editorCurrent
+          },
+          target: container,
+          targetAxis: previewScrollAxis,
+          blocks: result.blocks,
+          guard: scrollSyncGuard,
+          targetSide: "preview",
+          isEditorAtEnd
+        });
+      }
     },
-    [rebuildBlockMap]
+    [
+      editorAdapter,
+      editorScroller,
+      isSyncScrollEditorToPreviewEnabled,
+      previewRenderer,
+      previewScrollAxis,
+      rebuildBlockMap,
+      scrollSyncGuard
+    ]
   );
 
   // #503: Build structural block map (references only, no pixel offsets) when container mounts/remounts.
