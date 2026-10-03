@@ -20,6 +20,7 @@ export interface CalloutInsertDropdownProps {
   disabled: boolean;
   onInsertCallout: (type: MarkdownCalloutType) => void;
   translate: Translate;
+  dataUsageTourTarget?: string;
 }
 
 /**
@@ -34,7 +35,8 @@ export interface CalloutInsertDropdownProps {
 export const CalloutInsertDropdown: FC<CalloutInsertDropdownProps> = ({
   disabled,
   onInsertCallout,
-  translate
+  translate,
+  dataUsageTourTarget
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -162,6 +164,7 @@ export const CalloutInsertDropdown: FC<CalloutInsertDropdownProps> = ({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         title={tooltip}
+        data-usage-tour-target={dataUsageTourTarget}
         onClick={() => {
           if (isOpen) {
             closeMenu({ restoreFocus: false });

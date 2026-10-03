@@ -1,0 +1,148 @@
+.usageTourContainer {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: auto;
+  user-select: none;
+  overflow: hidden;
+}
+
+.usageTourBackdrop {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  pointer-events: auto;
+  z-index: 1;
+  transition: background 0.15s ease-out;
+}
+
+.usageTourBackdrop.isDimmed {
+  background: var(--app-dialog-backdrop, rgba(0, 0, 0, 0.5));
+}
+
+/* Spotlight cutout highlight: visual indication only, blocks clicks to background */
+.usageTourSpotlight {
+  position: fixed;
+  border-radius: 6px;
+  pointer-events: auto;
+  z-index: 2;
+  box-shadow:
+    0 0 0 2px var(--pg-color-accent-primary, #2563a8),
+    0 0 16px rgba(37, 99, 168, 0.45),
+    0 0 0 9999px var(--app-dialog-backdrop, rgba(0, 0, 0, 0.5));
+  transition: all 0.15s ease-out;
+}
+
+.usageTourBalloon {
+  position: fixed;
+  z-index: 3;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  background: var(--app-dialog-background, #ffffff);
+  color: var(--app-dialog-foreground, #1f2933);
+  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  user-select: text;
+  transition:
+    top 0.15s ease-out,
+    left 0.15s ease-out;
+}
+
+.usageTourHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--app-dialog-border, #cbd5df);
+  background: var(--app-dialog-header-background, transparent);
+  border-top-left-radius: 7px;
+  border-top-right-radius: 7px;
+}
+
+.usageTourTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--app-dialog-foreground, #1f2933);
+}
+
+.usageTourStepBadge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pg-color-surface-muted, #52616f);
+  background: var(--pg-color-surface-hover, #eef3f8);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.usageTourBody {
+  padding: 16px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--app-dialog-foreground, #1f2933);
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.usageTourFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-top: 1px solid var(--app-dialog-border, #cbd5df);
+  background: var(--app-dialog-header-background, transparent);
+  border-bottom-left-radius: 7px;
+  border-bottom-right-radius: 7px;
+  gap: 8px;
+}
+
+.usageTourFooterRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.usageTourButton {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--app-dialog-button-border, #cbd5df);
+  background: var(--app-dialog-button-background, #ffffff);
+  color: var(--app-dialog-button-foreground, #1f2933);
+  transition: background 0.1s ease;
+}
+
+.usageTourButton:hover:not(:disabled) {
+  background: var(--pg-color-surface-hover, #eef3f8);
+}
+
+.usageTourButton:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring, #2563a8);
+  outline-offset: 1px;
+}
+
+.usageTourButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.usageTourButtonPrimary {
+  border-color: var(--pg-color-accent-primary, #2563a8);
+  background: var(--pg-color-accent-primary, #2563a8);
+  color: #ffffff;
+}
+
+.usageTourButtonPrimary:hover:not(:disabled) {
+  background: var(--pg-color-accent-secondary, #326da8);
+  border-color: var(--pg-color-accent-secondary, #326da8);
+}

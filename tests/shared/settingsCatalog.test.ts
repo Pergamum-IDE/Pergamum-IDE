@@ -1011,6 +1011,7 @@ describe("Settings Catalog Foundation (#150)", () => {
         "workbench.statusBar.visible",
         "workbench.statusBar.characterCount.visible",
         "workbench.normalizeUnicodeToNfc",
+        "workbench.usageTourAutoShowDisabled",
         "workbench.sound.enabled",
         "workbench.sound.dialog.enabled",
         "workbench.sound.newline.enabled",
@@ -1389,7 +1390,8 @@ describe("Settings Catalog Foundation (#150)", () => {
           "workbench.language",
           "workbench.statusBar.characterCount.visible",
           "workbench.statusBar.visible",
-          "workbench.normalizeUnicodeToNfc"
+          "workbench.normalizeUnicodeToNfc",
+          "workbench.usageTourAutoShowDisabled"
         ].sort()
       );
       expect(keys).not.toContain("commandPalette.description.enable");

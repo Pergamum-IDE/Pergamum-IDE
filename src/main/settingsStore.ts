@@ -365,6 +365,19 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
     workbench.colorTheme = workbenchValue.colorTheme;
   }
 
+  // #714: sparse like normalizeUnicodeToNfc — boolean validation
+  if (
+    workbenchValue !== undefined &&
+    typeof workbenchValue.usageTourAutoShowDisabled === "boolean" &&
+    validateCatalogValue(
+      "workbench.usageTourAutoShowDisabled",
+      workbenchValue.usageTourAutoShowDisabled
+    ).ok
+  ) {
+    workbench.usageTourAutoShowDisabled =
+      workbenchValue.usageTourAutoShowDisabled;
+  }
+
   return workbench;
 }
 
@@ -1240,13 +1253,15 @@ function parseWorkbenchSettingsForWrite(
   const hasNotification = keys.includes("notification");
   const hasNormalizeUnicodeToNfc = keys.includes("normalizeUnicodeToNfc");
   const hasColorTheme = keys.includes("colorTheme");
+  const hasUsageTourAutoShowDisabled = keys.includes("usageTourAutoShowDisabled");
   const expectedKeyCount =
     3 +
     (hasFontFamily ? 1 : 0) +
     (hasUiFontFamilyList ? 1 : 0) +
     (hasNotification ? 1 : 0) +
     (hasNormalizeUnicodeToNfc ? 1 : 0) +
-    (hasColorTheme ? 1 : 0);
+    (hasColorTheme ? 1 : 0) +
+    (hasUsageTourAutoShowDisabled ? 1 : 0);
 
   if (
     keys.length !== expectedKeyCount ||
@@ -1304,6 +1319,21 @@ function parseWorkbenchSettingsForWrite(
     }
 
     workbench.colorTheme = value.colorTheme;
+  }
+
+  // #714: sparse like normalizeUnicodeToNfc
+  if (hasUsageTourAutoShowDisabled) {
+    const usageTourAutoShowDisabledResolution = resolveCatalogValue(
+      "workbench.usageTourAutoShowDisabled",
+      value.usageTourAutoShowDisabled
+    );
+
+    if (!usageTourAutoShowDisabledResolution.ok) {
+      throw new Error("Invalid application settings.");
+    }
+
+    workbench.usageTourAutoShowDisabled =
+      usageTourAutoShowDisabledResolution.value;
   }
 
   if (hasUiFontFamilyList) {

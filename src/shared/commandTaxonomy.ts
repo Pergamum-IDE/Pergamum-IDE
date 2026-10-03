@@ -10,6 +10,8 @@ export const CORE_COMMAND_DOMAINS = [
   "import",
   "export",
   "app",
+  // #714: Help / onboarding commands
+  "help",
   // #252: read-only editor diagnostics/assistance (line-ending
   // distribution today; paragraph indentation, invisible characters, and
   // other document diagnostics are expected to join this domain later).

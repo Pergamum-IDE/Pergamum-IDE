@@ -24,6 +24,8 @@ export const jaTranslations = {
   "common.save": "保存",
   "command.app.about.open": "Pergamum について",
   "command.app.about.open.description": "Pergamum のバージョン、ライセンス、リポジトリ情報を表示します。",
+  "command.help.usageTour": "使い方ツアー",
+  "command.help.usageTour.description": "使い方ツアーを表示します。",
   "command.app.zoom.in": "拡大",
   "command.app.zoom.in.description": "画面全体を拡大表示します。",
   "command.app.zoom.out": "縮小",
@@ -1400,6 +1402,7 @@ export const jaTranslations = {
   "menu.file.import.bulkTextFiles": "テキストファイルをまとめてインポート...",
   "menu.help": "ヘルプ",
   "menu.showResumeHub": "作業再開画面を表示",
+  "menu.usageTour": "使い方ツアー",
   "menu.hide": "{appName}を隠す",
   "menu.hideOthers": "ほかを隠す",
   "menu.minimize": "最小化",
@@ -1958,6 +1961,8 @@ export const jaTranslations = {
   "settings.workbench.language.option.en.label": "English",
   "settings.workbench.normalizeUnicodeToNfc.label": "Unicode文字をNFC形式に正規化する",
   "settings.workbench.normalizeUnicodeToNfc.description": "外部入力や保存データのUnicode文字をNFC形式に揃え、見た目が同じ文字列を同じ表記として扱いやすくします。通常はオンのままにしてください。",
+  "settings.workbench.usageTourAutoShowDisabled.label": "使い方ツアーの起動時自動表示を無効化する",
+  "settings.workbench.usageTourAutoShowDisabled.description": "アプリケーション起動時に使い方ツアーを自動で表示しないようにします。",
   "settings.notification.output.enabled.description": "操作結果などの軽い通知を Pergamum の画面右下に表示します。警告やエラーはこの設定に関係なく、必要に応じてダイアログで表示されます。",
   "settings.notification.output.enabled.label": "アプリ内通知を表示",
   "settings.workbench.notification.durationMs.description": "情報通知（NotificationToast）が自動的に消えるまでの基準時間です。0 にすると自動的に消えません。正の値は優先度に応じて補正され、3000 ms から 30000 ms に収まります。警告やエラーはこの通知では表示されません。",
@@ -2412,7 +2417,51 @@ export const jaTranslations = {
   "workspace.markdownEditor": "Markdownエディタ",
   "workspace.markdownPreview": "Markdownプレビュー",
   "workspace.markdownWorkspace": "Markdownワークスペース",
-  "workspace.preview": "プレビュー"
+  "workspace.preview": "プレビュー",
+  "usageTour.action.back": "戻る",
+  "usageTour.action.dismissAutoShow": "説明は要らない",
+  "usageTour.action.next": "続き",
+  "usageTour.action.complete": "完了",
+  "usageTour.stepBadge.ariaLabel": "ステップ {current} / {total}",
+  "usageTour.step.welcome.title": "ようこそ",
+  "usageTour.step.welcome.body":
+    "Pergamumにようこそ。\n本アプリケーションは、Markdownファイルやテキストファイルで文章を書くことに特化したエディタです。\nこれから、Pergamumの主な機能をご案内します。",
+  "usageTour.step.fileExplorer.title": "ファイルエクスプローラー",
+  "usageTour.step.fileExplorer.body":
+    "これは【ファイルエクスプローラー】です。\nPergamumでは、【プロジェクト】という単位で文書ファイル群をまとめて管理します。\nファイルエクスプローラーでは、プロジェクト内のファイルやフォルダを確認・管理できます。",
+  "usageTour.step.search.title": "検索",
+  "usageTour.step.search.body":
+    "これは【検索】です。\nプロジェクト内の文書をまとめて検索できます。\n特定の言葉がどこに書かれているか探したいときや、複数の文書を横断して確認したいときに利用します。",
+  "usageTour.step.glossary.title": "語彙集",
+  "usageTour.step.glossary.body":
+    "これは【語彙集】です。\n登場人物、地名、用語など、執筆中に参照したい情報を登録できます。\n登録した語彙は、本文を書きながら確認したり、入力を補助したりするために利用できます。\n語彙は自由に登録することができ、タグで分類・管理することもできます。使い方はあなた次第です。",
+  "usageTour.step.documentMap.title": "文書マップ",
+  "usageTour.step.documentMap.body":
+    "これは【文書マップ】です。\n文書全体を俯瞰し、文章のどのあたりを表示・編集しているか確認できます。\n地の文、会話文、登録語彙に紐付くタグ色などで文書の構成を描画します。\n長い文書の中を移動したり、会話文の配分などを把握する目安としてお使いください。",
+  "usageTour.step.documentMetrics.title": "文書メトリクス",
+  "usageTour.step.documentMetrics.body":
+    "これは【文書メトリクス】です。\n文書の文字数など、現在の文書に関する情報を確認できます。\n原稿の分量や文章の状態を把握したいときに利用してください。",
+  "usageTour.step.commandPalette.title": "コマンドパレット",
+  "usageTour.step.commandPalette.body":
+    "これは【コマンドパレット】です。\nPergamumのさまざまな機能を、名前から探して実行できます。\n「>」で始まるときはコマンド一覧を表示しますが、モードを切り替えることで、さまざまな機能を利用できます。\n「あの機能はどこにあったかな？」というときは、まずここを開いてみてください。",
+  "usageTour.step.insertImage.title": "画像の挿入",
+  "usageTour.step.insertImage.body":
+    "これは【画像の挿入】です。\nMarkdown文書へ画像を挿入するときに利用します。\n挿入したい位置にカーソルを置いて、このボタンから画像を選択してください。\nクリップボードからの画像ペーストにも対応しています。",
+  "usageTour.step.callout.title": "コールアウト",
+  "usageTour.step.callout.body":
+    "これは【コールアウト】です。\nNote、Tip、Warningなど、本文中に目立つ囲み表示を挿入できます。\n補足や注意書きなどを本文と区別して表現したいときに利用します。\nコールアウトはMarkdownの方言にあたる記法のため、利用する環境によっては意図したとおりに表示されない場合があります。",
+  "usageTour.step.markdownLinter.title": "Markdown Linter",
+  "usageTour.step.markdownLinter.body":
+    "これは【Markdown Linter】です。\nMarkdownの書式や記述を確認し、問題のある箇所を見つけるための機能です。\nMarkdownとして正しく記述できているか確認したいときに利用します。",
+  "usageTour.step.japaneseLinter.title": "日本語 Linter",
+  "usageTour.step.japaneseLinter.body":
+    "これは【日本語 Linter】です。\n日本語の文章を確認し、表記や文章上の問題を見つけるための機能です。\n生成AIを使用せずにチェックを行うため、文章量に応じてCPUへの負荷が増加します。\n原稿を見直す際のチェックとして利用してください。",
+  "usageTour.step.preview.title": "プレビュー",
+  "usageTour.step.preview.body":
+    "これは【プレビュー】です。\nMarkdownで書いた原稿がどのように表示されるか、本文と並べて確認できます。\nこのボタンでプレビューの表示・非表示を切り替えられます。\nプレビューの既定の表示方法は、アプリケーション設定から変更できます。",
+  "usageTour.step.completed.title": "ツアー完了",
+  "usageTour.step.completed.body":
+    "使い方ツアーは以上です。\nPergamumには、このほかにも執筆を支援するさまざまな機能があります。\n本ツアーを再度見たくなったときは、「ヘルプ」→「使い方ツアー」から実行できます。"
 } as const;
 
 export type TranslationKey = keyof typeof jaTranslations;

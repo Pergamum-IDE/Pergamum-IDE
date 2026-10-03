@@ -354,6 +354,9 @@ export interface ApplicationWorkbenchSettings {
   // catalog default (pergamum-light)"; an unknown on-disk id is dropped at
   // read time rather than stored.
   colorTheme?: BuiltInThemeId;
+  // #714: sparse, like fontFamily/notification — absence means "use the
+  // catalog default (false)"; it is never eagerly written back as the default.
+  usageTourAutoShowDisabled?: boolean;
 }
 
 export interface ApplicationMarkdownFilesSettings {
@@ -519,6 +522,7 @@ export interface EffectiveWorkbenchSettings {
   notification: WorkbenchNotificationSettings;
   normalizeUnicodeToNfc: boolean;
   colorTheme: BuiltInThemeId;
+  usageTourAutoShowDisabled: boolean;
 }
 
 export interface EffectiveCommandPaletteSettings {
@@ -665,7 +669,10 @@ export const builtInDefaultSettings: EffectiveSettings = {
     normalizeUnicodeToNfc: getCatalogDefaultValue(
       "workbench.normalizeUnicodeToNfc"
     ),
-    colorTheme: getCatalogDefaultValue("workbench.colorTheme")
+    colorTheme: getCatalogDefaultValue("workbench.colorTheme"),
+    usageTourAutoShowDisabled: getCatalogDefaultValue(
+      "workbench.usageTourAutoShowDisabled"
+    )
   },
   commandPalette: {
     footerDetail: {
@@ -1099,7 +1106,11 @@ export function resolveEffectiveSettings(
       // #621: applicationOnly, sparse — falls through to the default theme.
       colorTheme:
         applicationSettings.workbench.colorTheme ??
-        builtInDefaultSettings.workbench.colorTheme
+        builtInDefaultSettings.workbench.colorTheme,
+      // #714: applicationOnly, sparse — falls through to the catalog default (false).
+      usageTourAutoShowDisabled:
+        applicationSettings.workbench.usageTourAutoShowDisabled ??
+        builtInDefaultSettings.workbench.usageTourAutoShowDisabled
     },
     commandPalette: {
       footerDetail: {

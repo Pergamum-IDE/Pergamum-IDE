@@ -21,6 +21,7 @@ function buildFullCommandRegistry(): CommandRegistry {
     registry,
     {
       openAbout: () => undefined,
+      openUsageTour: () => undefined,
       quitApplication: () => undefined,
       createProject: () => undefined,
       openProject: () => undefined,
@@ -33,6 +34,8 @@ function buildFullCommandRegistry(): CommandRegistry {
     {
       openAbout: "About Pergamum",
       openAboutDescription: "",
+      openUsageTour: "Usage Tour",
+      openUsageTourDescription: "",
       quitApplication: "Quit Pergamum",
       quitApplicationDescription: "",
       createProject: "Create Project",

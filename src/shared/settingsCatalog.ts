@@ -646,6 +646,17 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  // #714: application-wide switch for disabling automatic usage tour on startup.
+  // Defaults to false.
+  "workbench.usageTourAutoShowDisabled": defineBooleanSetting({
+    key: "workbench.usageTourAutoShowDisabled",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.workbench.usageTourAutoShowDisabled.label",
+    descriptionKey: "settings.workbench.usageTourAutoShowDisabled.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "workbench.sound.enabled": defineBooleanSetting({
     key: "workbench.sound.enabled",
     scope: "applicationOnly",

@@ -336,6 +336,13 @@ function buildNextSettings(
           normalizeUnicodeToNfc: Boolean(rawValue)
         }
       });
+    case "workbench.usageTourAutoShowDisabled":
+      return saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          usageTourAutoShowDisabled: Boolean(rawValue)
+        }
+      });
     case "workbench.sound.enabled":
       return saveRequest(settings, {
         workbench: {

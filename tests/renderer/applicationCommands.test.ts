@@ -12,6 +12,8 @@ const titles = {
   openAbout: "About Pergamum",
   openAboutDescription:
     "Show Pergamum version, license, and repository information.",
+  openUsageTour: "Usage Tour",
+  openUsageTourDescription: "Show the usage tour.",
   quitApplication: "Quit Pergamum",
   quitApplicationDescription:
     "Quit Pergamum. Check for unsaved changes before exiting.",
@@ -43,6 +45,7 @@ describe("application commands", () => {
       registry,
       {
         openAbout: () => undefined,
+        openUsageTour: () => undefined,
         quitApplication: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
@@ -57,6 +60,7 @@ describe("application commands", () => {
 
     expect(registry.list().map((command) => command.id)).toEqual([
       "app.about.open",
+      "help.usageTour",
       "app.quit",
       "workspace.project.create",
       "workspace.project.open",
@@ -71,6 +75,7 @@ describe("application commands", () => {
   it("routes app commands to their controller methods", async () => {
     const registry = new CommandRegistry();
     const openAbout = vi.fn();
+    const openUsageTour = vi.fn();
     const quitApplication = vi.fn();
     const createProject = vi.fn();
     const openProject = vi.fn();
@@ -85,6 +90,7 @@ describe("application commands", () => {
       registry,
       {
         openAbout,
+        openUsageTour,
         quitApplication,
         createProject,
         openProject,
@@ -98,6 +104,10 @@ describe("application commands", () => {
     );
 
     await registry.execute(applicationCommandIds.openAbout, executionOptions);
+    await registry.execute(
+      applicationCommandIds.openUsageTour,
+      executionOptions
+    );
     await registry.execute(
       applicationCommandIds.quitApplication,
       executionOptions
@@ -117,6 +127,7 @@ describe("application commands", () => {
     await registry.execute(applicationCommandIds.resetZoom, executionOptions);
 
     expect(openAbout).toHaveBeenCalledTimes(1);
+    expect(openUsageTour).toHaveBeenCalledTimes(1);
     expect(quitApplication).toHaveBeenCalledTimes(1);
     expect(createProject).toHaveBeenCalledTimes(1);
     expect(openProject).toHaveBeenCalledTimes(1);
@@ -127,13 +138,14 @@ describe("application commands", () => {
     expect(resetZoom).toHaveBeenCalledTimes(1);
   });
 
-  it("exposes About command metadata to the Command Palette", () => {
+  it("exposes About and Usage Tour command metadata to the Command Palette", () => {
     const registry = new CommandRegistry();
 
     registerApplicationCommands(
       registry,
       {
         openAbout: () => undefined,
+        openUsageTour: () => undefined,
         quitApplication: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
@@ -146,10 +158,22 @@ describe("application commands", () => {
       titles
     );
 
-    expect(listCommandPaletteEntries(registry)[0]).toMatchObject({
+    const paletteEntries = listCommandPaletteEntries(registry);
+    expect(
+      paletteEntries.find((entry) => entry.id === applicationCommandIds.openAbout)
+    ).toMatchObject({
       id: applicationCommandIds.openAbout,
       title: titles.openAbout,
       description: titles.openAboutDescription,
+      enabled: true,
+      disabledReason: null
+    });
+    expect(
+      paletteEntries.find((entry) => entry.id === applicationCommandIds.openUsageTour)
+    ).toMatchObject({
+      id: applicationCommandIds.openUsageTour,
+      title: titles.openUsageTour,
+      description: titles.openUsageTourDescription,
       enabled: true,
       disabledReason: null
     });
@@ -162,6 +186,7 @@ describe("application commands", () => {
       registry,
       {
         openAbout: () => undefined,
+        openUsageTour: () => undefined,
         quitApplication: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
@@ -187,6 +212,8 @@ describe("application commands", () => {
     expect(createApplicationCommandTitles(translate)).toEqual({
       openAbout: "translated:command.app.about.open",
       openAboutDescription: "translated:command.app.about.open.description",
+      openUsageTour: "translated:command.help.usageTour",
+      openUsageTourDescription: "translated:command.help.usageTour.description",
       quitApplication: "translated:command.app.quit",
       quitApplicationDescription: "translated:command.app.quit.description",
       createProject: "translated:command.workspace.project.create",
