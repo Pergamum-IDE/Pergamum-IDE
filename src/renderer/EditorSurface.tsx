@@ -32,6 +32,7 @@ import {
   type TextFilesIndentUnit,
   type WorkbenchSoundSettings
 } from "../shared/settings";
+import type { BuiltInThemeKind } from "../shared/colorTheme";
 import type { Translate } from "../shared/i18n";
 import {
   markdownDocumentForEditor,
@@ -542,6 +543,8 @@ interface EditorSurfaceProps {
    * (never reconfigures an existing document's history — see
    * markdownEditorCodeMirrorSetup.ts).
    */
+  /** #708: Current application theme kind driving CodeMirror EditorView.darkTheme. */
+  themeKind?: BuiltInThemeKind;
   undoHistoryMinDepth: number;
   /** `editor.selectionHighlightMode` (#425), active Markdown editor only. */
   selectionHighlightMode: SelectionHighlightMode;
@@ -718,6 +721,7 @@ export function EditorSurface({
   newFileLineEndingFallback,
   expectedLineEnding,
   markerGlyph,
+  themeKind,
   undoHistoryMinDepth,
   selectionHighlightMode,
   findGutterMarkers,
@@ -850,6 +854,7 @@ export function EditorSurface({
           newFileLineEndingFallback={newFileLineEndingFallback}
           expectedLineEnding={expectedLineEnding}
           markerGlyph={markerGlyph}
+          themeKind={themeKind}
           undoHistoryMinDepth={undoHistoryMinDepth}
           selectionHighlightMode={selectionHighlightMode}
           findGutterMarkers={findGutterMarkers}
@@ -941,6 +946,8 @@ interface MarkdownEditorSurfaceProps {
   newFileLineEndingFallback: NewFileLineEnding;
   expectedLineEnding: ExpectedLineEnding;
   markerGlyph: LineEndingMarkerGlyph;
+  /** #708: Current application theme kind driving CodeMirror EditorView.darkTheme. */
+  themeKind?: BuiltInThemeKind;
   /** #394 Step 1: see EditorSurfaceProps's own doc comment. */
   undoHistoryMinDepth: number;
   selectionHighlightMode: SelectionHighlightMode;
@@ -1073,6 +1080,7 @@ function MarkdownEditorSurface({
   newFileLineEndingFallback,
   expectedLineEnding,
   markerGlyph,
+  themeKind,
   undoHistoryMinDepth,
   selectionHighlightMode,
   findGutterMarkers,
@@ -3474,6 +3482,7 @@ function MarkdownEditorSurface({
         ) : null}
         <MarkdownEditor
           value={content}
+          themeKind={themeKind}
           onChange={onChangeMarkdownContent}
           activeFind={activeFindConfig}
           glossarySelectionShortcut={glossarySelectionShortcutConfig}

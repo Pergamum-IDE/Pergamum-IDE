@@ -149,6 +149,7 @@ import {
   applyWorkbenchUiFontFamilyList
 } from "./workbenchFontFamily";
 import { applyColorThemeById } from "./colorTheme";
+import { resolveColorTheme } from "../shared/colorTheme";
 import { notifyStartupVisualReady } from "./startupVisualReady";
 import { decideJapaneseLintToggle } from "../shared/japaneseLint";
 import {
@@ -13616,6 +13617,9 @@ export function App(): JSX.Element {
                   ) : activeDocument ? (
                     <EditorSurface
                         editor={activeDocument.editor}
+                        themeKind={
+                          resolveColorTheme(effectiveSettings.workbench.colorTheme).kind
+                        }
                         glossaryDescriptionMetadata={
                           glossaryDescriptionMetadataConfig
                         }

@@ -20,6 +20,11 @@ import {
   pergamumContextSurfaceAttribute,
   type EditableContextSurface
 } from "../shared/editContextMenu";
+import type { BuiltInThemeKind } from "../shared/colorTheme";
+import {
+  createEditorThemeModeExtension,
+  editorThemeModeCompartment
+} from "./editorThemeExtension";
 import type { EditorVisibleTextRange } from "./editorVisibleRange";
 import {
   DEFAULT_EDITOR_SCROLL_ALIGN,
@@ -320,6 +325,8 @@ interface MarkdownEditorProps {
   soundFeedback?: SoundFeedbackPlayer;
   soundSettings?: WorkbenchSoundSettings;
   readOnly?: boolean;
+  /** #708: Current application theme kind ("light" | "dark") driving CodeMirror EditorView.darkTheme. */
+  themeKind?: BuiltInThemeKind;
   onParagraphIndentControllerChange?: (
     controller: MarkdownEditorParagraphIndentController | null
   ) => void;
@@ -862,6 +869,7 @@ export function MarkdownEditor({
   soundFeedback,
   soundSettings,
   readOnly = false,
+  themeKind = "light",
   onParagraphIndentControllerChange,
   onViewStateControllerChange,
   onViewStateSnapshot,
@@ -925,6 +933,10 @@ export function MarkdownEditor({
   const fencedCodeIndentUnitRef = useRef(fencedCodeIndentUnit);
   const textFileIndentUnitCompartmentRef = useRef<Compartment | null>(null);
   const textFileIndentUnitRef = useRef(textFileIndentUnit);
+  // #708: CodeMirror EditorView.darkTheme facet tracking.
+  const isDark = themeKind === "dark";
+  const isDarkRef = useRef(isDark);
+  const themeModeCompartmentRef = useRef<Compartment | null>(null);
   const onChangeRef = useRef(onChange);
   // #272: read from a ref by the mount effect's cleanup (which is []-deps
   // and must not re-subscribe) so the outgoing View State is reported with
@@ -1123,6 +1135,11 @@ export function MarkdownEditor({
   const textFileIndentUnitCompartment =
     textFileIndentUnitCompartmentRef.current;
 
+  if (!themeModeCompartmentRef.current) {
+    themeModeCompartmentRef.current = new Compartment();
+  }
+  const themeModeCompartment = themeModeCompartmentRef.current;
+
   // #375 Document Map: hoisted out of the mount effect (rather than defined
   // inline there, as before #387) so the document-switch effect below can
   // build a fresh document's updateListener identically via
@@ -1263,6 +1280,8 @@ export function MarkdownEditor({
       isMarkdownDocument,
       textFileIndentUnitCompartment,
       textFileIndentUnitRef,
+      themeModeCompartment,
+      isDarkThemeRef: isDarkRef,
       glossaryCompletionRef,
       activeFindDiagnostics: {
         editorInstanceId: activeFindEditorInstanceId,
@@ -1360,6 +1379,9 @@ export function MarkdownEditor({
       ),
       textFileIndentUnitCompartment.reconfigure(
         textFileIndentUnitFacet.of(textFileIndentUnitRef.current)
+      ),
+      themeModeCompartment.reconfigure(
+        createEditorThemeModeExtension(isDarkRef.current)
       )
     ];
   }
@@ -2414,6 +2436,27 @@ export function MarkdownEditor({
       )
     });
   }, [textFileIndentUnit]);
+
+  // #708: CodeMirror EditorView.darkTheme facet reconfigure.
+  // Same-kind switches (e.g. Night Dark -> Shine Moon) change no darkTheme
+  // facet value, so we skip the CodeMirror dispatch entirely.
+  useEffect(() => {
+    if (isDarkRef.current === isDark) {
+      return;
+    }
+    isDarkRef.current = isDark;
+
+    const view = viewRef.current;
+    if (!view) {
+      return;
+    }
+
+    view.dispatch({
+      effects: themeModeCompartment.reconfigure(
+        createEditorThemeModeExtension(isDark)
+      )
+    });
+  }, [isDark, themeModeCompartment]);
 
   useEffect(() => {
     const view = viewRef.current;
