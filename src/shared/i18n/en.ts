@@ -28,6 +28,9 @@ export const enTranslations = {
   "command.app.about.open.description": "Show Pergamum version, license, and repository information.",
   "command.help.usageTour": "Usage Tour",
   "command.help.usageTour.description": "Show the usage tour.",
+  "command.help.markdownCheatSheet": "Markdown Cheat Sheet",
+  "command.help.markdownCheatSheet.description":
+    "Open the cheat sheet that compares Markdown notation with the rendered preview.",
   "command.app.zoom.in": "Zoom In",
   "command.app.zoom.in.description": "Zoom in the window.",
   "command.app.zoom.out": "Zoom Out",
@@ -322,6 +325,9 @@ export const enTranslations = {
   "dialog.textFileEncodingChange.message": "You are about to change the character encoding to {encodingLabel}.\n\nThis setting affects how plain text files (.txt) are read and written.\nIf changed without understanding its meaning, files may appear garbled or be converted unexpectedly when saved.\n\nDo you want to change this setting?",
   "dialog.textFileEncodingChange.confirm": "Change",
   "dialog.textFileEncodingChange.cancel": "Cancel",
+  "dialog.externalLink.title": "Open External Site",
+  "dialog.externalLink.message": "An external site will be opened.\n\nURL: {url}",
+  "dialog.icon.externalLink": "External link",
   "dialog.icon.error": "Error",
   "dialog.icon.info": "Information",
   "dialog.icon.question": "Confirmation",
@@ -1408,6 +1414,8 @@ export const enTranslations = {
   "menu.help": "Help",
   "menu.showResumeHub": "Show Resume Hub",
   "menu.usageTour": "Usage Tour",
+  "menu.markdownCheatSheet": "Markdown Cheat Sheet",
+  "markdownCheatSheet.tabTitle": "Markdown Cheat Sheet",
   "menu.hide": "Hide {appName}",
   "menu.hideOthers": "Hide Others",
   "menu.minimize": "Minimize",
@@ -2414,6 +2422,8 @@ export const enTranslations = {
   "preview.mermaid.errorHint": "Check the diagram syntax.",
   "preview.mermaid.showDetails": "Show details",
   "preview.switchingRenderer": "Switching preview renderer…",
+  "imageViewer.editorNotice": "Image files cannot be edited.",
+  "imageViewer.loadFailed": "The image could not be displayed.",
   "workspace.editor": "Editor",
   "workspace.markdownEditor": "Markdown editor",
   "workspace.markdownPreview": "Markdown preview",
@@ -2442,6 +2452,9 @@ export const enTranslations = {
   "usageTour.step.documentMetrics.title": "Document Metrics",
   "usageTour.step.documentMetrics.body":
     "This is [Document Metrics].\nYou can check information about the active document, including character count.\nUse this when you want to track manuscript volume and document status.",
+  "usageTour.step.editor.title": "Editor",
+  "usageTour.step.editor.body":
+    "This area is the Editor.\nDocument files support Markdown by default.\nTo edit plain text files, enable Text Files in Application Settings.\nYou can also use File Import to bring existing text files into the project.",
   "usageTour.step.commandPalette.title": "Command Palette",
   "usageTour.step.commandPalette.body":
     "This is the [Command Palette].\nYou can find and execute various Pergamum features by name.\nWhen starting with \">\", it displays the command list, but switching modes lets you access many other functions.\nWhenever you wonder where a feature was, try opening this first.",
@@ -2460,6 +2473,9 @@ export const enTranslations = {
   "usageTour.step.preview.title": "Preview",
   "usageTour.step.preview.body":
     "This is the [Preview].\nYou can see how your Markdown manuscript renders side-by-side with your text.\nToggle preview visibility on and off with this button.\nThe default preview display behavior can be customized in Application Settings.",
+  "usageTour.step.previewArea.title": "Preview area",
+  "usageTour.step.previewArea.body":
+    "This area is the Preview.\nMarkdown supports Mermaid and KaTeX notation.\nYou can use them to include diagrams and mathematical expressions in your manuscript.\nGlossary entries also have their own editor area, where you can record information such as relationship diagrams and other reference material.",
   "usageTour.step.completed.title": "Tour Complete",
   "usageTour.step.completed.body":
     "That concludes the usage tour.\nPergamum includes many more features to assist your creative writing.\nIf you ever want to view this tour again, run it anytime from \"Help\" -> \"Usage Tour\"."

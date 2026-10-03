@@ -88,6 +88,8 @@ export function describeTabContextMenu(
   const isExternalFile = kind === "file";
   // #573: a glossary Description tab has no backing file at all.
   const isGlossaryDescription = kind === "glossaryDescription";
+  // A built-in read-only document (Markdown Cheat Sheet): no file at all.
+  const isBuiltinDocument = kind === "builtinMarkdown";
   const isReadOnlyProject = ctx.projectAccess?.kind === "readOnly";
 
   const index = ctx.allTabs.findIndex((candidate) =>
@@ -148,7 +150,7 @@ export function describeTabContextMenu(
   // --- rename / save as ----------------------------------------------------
   items.push(renameItem(isProjectDocument, isReadOnlyProject, tab.isDirty));
   items.push(
-    isGlossaryDescription
+    isGlossaryDescription || isBuiltinDocument || tab.isImageViewer
       ? disabledItem(
           "saveAs",
           "tabs.contextMenu.saveAs",
@@ -231,7 +233,7 @@ export function describeTabContextMenu(
         )
   );
   items.push(
-    isGlossaryDescription
+    isGlossaryDescription || isBuiltinDocument
       ? disabledItem(
           "copyFileName",
           "tabs.contextMenu.copyFileName",
@@ -311,6 +313,7 @@ export function resolveTabCopyText(
     case "untitled":
       return { absolute: null, relative: null, fileName: tab.title || null };
     case "glossaryDescription":
+    case "builtinMarkdown":
       return { absolute: null, relative: null, fileName: null };
   }
 }

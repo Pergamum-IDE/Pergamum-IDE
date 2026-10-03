@@ -1,5 +1,7 @@
+import type { BuiltinMarkdownId } from "../shared/builtinMarkdown";
 import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
 import {
+  createBuiltinMarkdownEditorId,
   createFileEditorIdForPath,
   createGlossaryDescriptionEditorId,
   createProjectDocumentEditorId,
@@ -7,6 +9,7 @@ import {
   type EditorId
 } from "../shared/editorId";
 import {
+  displayName,
   currentDocumentTitle,
   currentProjectRelativePath,
   isCurrentDocumentDirty,
@@ -65,9 +68,40 @@ export interface GlossaryDescriptionRecoveryConflict {
   readonly currentUpdatedAt: string;
 }
 
+/**
+ * A built-in, read-only Markdown document (e.g. the Markdown Cheat Sheet).
+ * Not file-backed and not project-scoped: it has no `CurrentDocument`, so
+ * every file-backed feature gated on `markdownDocumentForEditor()` skips it
+ * (dirty, Save, Recovery, linters, outline, glossary, ...). Its text is
+ * derived from the built-in id and the display language at render time.
+ */
+export interface BuiltinMarkdownCurrentEditor {
+  kind: "builtinMarkdown";
+  builtinId: BuiltinMarkdownId;
+}
+
+/**
+ * A read-only viewer tab for a project image file. It is file-backed (it
+ * reuses the project-document EditorId, so rename / move / duplicate-open
+ * follow the same path identity as a document) but it holds NO content: the
+ * image bytes are never read into the renderer as text; the Preview side
+ * loads them through the `pergamum-asset://` protocol. It has no
+ * `CurrentDocument`, so every Markdown / text feature gated on
+ * `markdownDocumentForEditor()` (dirty, Save, Recovery, linters, outline,
+ * glossary, ...) skips it.
+ */
+export interface ProjectImageCurrentEditor {
+  kind: "projectImage";
+  /** Project-root-relative path as shown by the File Explorer (real case). */
+  relativePath: string;
+  name: string;
+}
+
 export type CurrentEditor =
   | MarkdownCurrentEditor
-  | GlossaryDescriptionCurrentEditor;
+  | GlossaryDescriptionCurrentEditor
+  | BuiltinMarkdownCurrentEditor
+  | ProjectImageCurrentEditor;
 
 const glossaryDescriptionTitlePrefix = "語彙";
 
@@ -77,6 +111,22 @@ export function createMarkdownCurrentEditor(
   return {
     kind: "markdown",
     document
+  };
+}
+
+export function createBuiltinMarkdownCurrentEditor(
+  builtinId: BuiltinMarkdownId
+): BuiltinMarkdownCurrentEditor {
+  return { kind: "builtinMarkdown", builtinId };
+}
+
+export function createProjectImageCurrentEditor(
+  relativePath: string
+): ProjectImageCurrentEditor {
+  return {
+    kind: "projectImage",
+    relativePath,
+    name: displayName(relativePath)
   };
 }
 
@@ -203,6 +253,12 @@ export function currentEditorTitle(editor: CurrentEditor): string {
       return currentDocumentTitle(editor.document);
     case "glossaryDescription":
       return glossaryDescriptionEditorTitle(editor.representativeSurface);
+    case "builtinMarkdown":
+      // The localized tab label is applied by the host (it owns `translate`);
+      // this is only a stable, non-localized fallback.
+      return editor.builtinId;
+    case "projectImage":
+      return editor.name;
   }
 }
 
@@ -212,15 +268,26 @@ export function isCurrentEditorDirty(editor: CurrentEditor): boolean {
       return isCurrentDocumentDirty(editor.document);
     case "glossaryDescription":
       return isGlossaryEntryDraftDirty(editor.draft);
+    case "builtinMarkdown":
+      // Read-only: can never hold unsaved changes.
+    case "projectImage":
+      // Viewer only: an image tab can never hold unsaved changes.
+      return false;
   }
 }
 
 export function currentEditorProjectRelativePath(
   editor: CurrentEditor
 ): string | null {
-  return editor.kind === "markdown"
-    ? currentProjectRelativePath(editor.document)
-    : null;
+  switch (editor.kind) {
+    case "markdown":
+      return currentProjectRelativePath(editor.document);
+    case "projectImage":
+      return editor.relativePath;
+    case "glossaryDescription":
+    case "builtinMarkdown":
+      return null;
+  }
 }
 
 export function editorIdForCurrentEditor(
@@ -229,6 +296,17 @@ export function editorIdForCurrentEditor(
 ): EditorId | null {
   if (editor.kind === "glossaryDescription") {
     return createGlossaryDescriptionEditorId(editor.entryId);
+  }
+
+  if (editor.kind === "builtinMarkdown") {
+    return createBuiltinMarkdownEditorId(editor.builtinId);
+  }
+
+  if (editor.kind === "projectImage") {
+    return createProjectDocumentEditorId(
+      editor.relativePath,
+      activeProjectContext
+    );
   }
 
   switch (editor.document.kind) {
@@ -253,6 +331,17 @@ export function isCurrentEditorIdentityCompatible(
       editorId.kind === "glossaryDescription" &&
       editorId.entryId === editor.entryId
     );
+  }
+
+  if (editor.kind === "builtinMarkdown") {
+    return (
+      editorId.kind === "builtinMarkdown" &&
+      editorId.builtinId === editor.builtinId
+    );
+  }
+
+  if (editor.kind === "projectImage") {
+    return editorId.kind === "projectDocument";
   }
 
   switch (editor.document.kind) {

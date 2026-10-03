@@ -4,7 +4,13 @@ import type { AppPlatform } from "../../shared/platform";
 // Icon (#182 D-3 / D-4 / D-5 / D-6)
 // ---------------------------------------------------------------------------
 
-export type AppDialogIconKind = "info" | "warning" | "error" | "question";
+export type AppDialogIconKind =
+  | "info"
+  | "warning"
+  | "error"
+  | "question"
+  /** Opening an external site (a neutral, informational confirmation). */
+  | "externalLink";
 
 /**
  * Nullable and explicit (D-4): `null` means the dialog intentionally has no

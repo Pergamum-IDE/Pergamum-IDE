@@ -30,6 +30,7 @@ import { installApplicationMenu, registerApplicationMenuIpc } from "./menu";
 import { hideNativeMenuBar } from "./nativeMenuBarVisibility";
 import { registerApplicationMenuNativeRoleIpc } from "./applicationMenuNativeRole";
 import { installReloadShortcutGuard } from "./reloadGuard";
+import { installExternalNavigationGuard } from "./externalNavigationGuard";
 import { registerKeybindingsIpc } from "./keybindingsIpc";
 import {
   ensureKeybindingsDirectory,
@@ -230,6 +231,11 @@ async function createMainWindow(isColdStartWindow: boolean): Promise<void> {
   // #663: the Renderer menu bar is the visible menu on Windows / Linux (the
   // native menu stays installed as the accelerator backend).
   hideNativeMenuBar([mainWindow]);
+
+  // Pergamum itself never navigates to an external page or opens another
+  // window; external http(s) links go through the confirmed, validated
+  // `appInfo.openExternalUrl` path only.
+  installExternalNavigationGuard(mainWindow.webContents);
 
   // #644: swallow Chromium's reload / forceReload keys that no renderer
   // command uses (plain Mod-R is left alone: it is Ruby insertion).

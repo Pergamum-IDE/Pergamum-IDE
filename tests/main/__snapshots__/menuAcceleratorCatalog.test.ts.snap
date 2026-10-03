@@ -308,6 +308,10 @@ exports[`application menu accelerators come from the catalog (#642) > darwin: me
         "label": "Usage Tour",
       },
       {
+        "id": "help.markdownCheatSheet",
+        "label": "Markdown Cheat Sheet",
+      },
+      {
         "type": "separator",
       },
       {
@@ -568,6 +572,10 @@ exports[`application menu accelerators come from the catalog (#642) > linux: men
         "label": "Usage Tour",
       },
       {
+        "id": "help.markdownCheatSheet",
+        "label": "Markdown Cheat Sheet",
+      },
+      {
         "type": "separator",
       },
       {
@@ -826,6 +834,10 @@ exports[`application menu accelerators come from the catalog (#642) > win32: men
       {
         "id": "help.usageTour",
         "label": "Usage Tour",
+      },
+      {
+        "id": "help.markdownCheatSheet",
+        "label": "Markdown Cheat Sheet",
       },
       {
         "type": "separator",

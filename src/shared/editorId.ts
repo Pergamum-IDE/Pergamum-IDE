@@ -1,3 +1,4 @@
+import { isBuiltinMarkdownId, type BuiltinMarkdownId } from "./builtinMarkdown";
 import {
   validateGlossaryEntryId,
   type GlossaryEntryId
@@ -35,6 +36,15 @@ type GlossaryDescriptionEditorId = {
   readonly entryId: GlossaryEntryId;
 } & EditorIdBrand;
 
+/**
+ * A built-in, read-only Markdown document (e.g. the Markdown Cheat Sheet). It
+ * is not file-backed and not project-scoped: identity is its built-in id.
+ */
+type BuiltinMarkdownEditorId = {
+  readonly kind: "builtinMarkdown";
+  readonly builtinId: BuiltinMarkdownId;
+} & EditorIdBrand;
+
 type UnbrandedEditorId =
   | {
       readonly kind: "file";
@@ -51,13 +61,18 @@ type UnbrandedEditorId =
   | {
       readonly kind: "glossaryDescription";
       readonly entryId: GlossaryEntryId;
+    }
+  | {
+      readonly kind: "builtinMarkdown";
+      readonly builtinId: BuiltinMarkdownId;
     };
 
 export type EditorId =
   | FileEditorId
   | ProjectDocumentEditorId
   | UntitledEditorId
-  | GlossaryDescriptionEditorId;
+  | GlossaryDescriptionEditorId
+  | BuiltinMarkdownEditorId;
 
 export type SerializedEditorId = string & {
   readonly [serializedEditorIdBrand]: "SerializedEditorId";
@@ -330,6 +345,16 @@ export function createGlossaryDescriptionEditorId(
   });
 }
 
+export function createBuiltinMarkdownEditorId(
+  builtinId: BuiltinMarkdownId
+): EditorId {
+  if (!isBuiltinMarkdownId(builtinId)) {
+    throw new Error("Unknown built-in Markdown document id.");
+  }
+
+  return createEditorId({ kind: "builtinMarkdown", builtinId });
+}
+
 export function createUntitledEditorId(sessionId: number): EditorId {
   if (!Number.isSafeInteger(sessionId) || sessionId <= 0) {
     throw new Error("Untitled EditorId session ID must be a positive integer.");
@@ -362,6 +387,11 @@ export function serializeEditorId(editorId: EditorId): SerializedEditorId {
       return JSON.stringify({
         kind: "glossaryDescription",
         entryId: editorId.entryId
+      }) as SerializedEditorId;
+    case "builtinMarkdown":
+      return JSON.stringify({
+        kind: "builtinMarkdown",
+        builtinId: editorId.builtinId
       }) as SerializedEditorId;
   }
 }
@@ -451,6 +481,16 @@ function deserializeCanonicalEditorId(
       }
 
       return createGlossaryDescriptionEditorId(value.entryId);
+    case "builtinMarkdown":
+      assertSerializedEditorIdKeys(value, ["kind", "builtinId"]);
+
+      if (!isBuiltinMarkdownId(value.builtinId)) {
+        throw new Error(
+          "Serialized builtinMarkdown EditorId must include a known builtinId."
+        );
+      }
+
+      return createBuiltinMarkdownEditorId(value.builtinId);
     default:
       throw new Error("Serialized EditorId kind is not supported.");
   }
@@ -489,6 +529,10 @@ export function editorIdEquals(left: EditorId, right: EditorId): boolean {
     case "glossaryDescription":
       return (
         right.kind === "glossaryDescription" && left.entryId === right.entryId
+      );
+    case "builtinMarkdown":
+      return (
+        right.kind === "builtinMarkdown" && left.builtinId === right.builtinId
       );
   }
 }

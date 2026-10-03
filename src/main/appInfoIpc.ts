@@ -7,6 +7,7 @@ import {
   APP_INFO_EXTERNAL_LINKS,
   type PergamumAppInfo
 } from "../shared/api";
+import { parseExternalHttpUrl } from "../shared/externalHttpUrl";
 
 export const pergamumRepositoryUrl = APP_INFO_EXTERNAL_LINKS.repository;
 export const thirdPartyNoticesUrl =
@@ -123,9 +124,14 @@ export function registerAppInfoIpc(options: {
     openFixedExternalLink(externalLinkOpener, thirdPartyNoticesUrl)
   );
   ipcMain.handle(APP_INFO_CHANNELS.openExternalUrl, (_event, url: unknown) => {
-    if (typeof url !== "string" || !url.startsWith("https://")) {
-      throw new Error("Only https URLs are allowed.");
+    // The renderer classifies too, but main never trusts that: parse and
+    // allow only absolute http(s) URLs, and open the canonical form.
+    const externalUrl = parseExternalHttpUrl(url);
+
+    if (externalUrl === null) {
+      throw new Error("Only http and https URLs are allowed.");
     }
-    return openFixedExternalLink(externalLinkOpener, url);
+
+    return openFixedExternalLink(externalLinkOpener, externalUrl);
   });
 }

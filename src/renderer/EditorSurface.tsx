@@ -36,13 +36,19 @@ import type { BuiltInThemeKind } from "../shared/colorTheme";
 import type { Translate } from "../shared/i18n";
 import {
   markdownDocumentForEditor,
-  type CurrentEditor
+  type BuiltinMarkdownCurrentEditor,
+  type CurrentEditor,
+  type GlossaryDescriptionCurrentEditor,
+  type MarkdownCurrentEditor
 } from "./currentEditor";
+import { ImageViewerSurface } from "./ImageViewerSurface";
 import { GlossaryDescriptionMetadataPanel } from "./GlossaryDescriptionMetadataPanel";
+import { USAGE_TOUR_TARGETS } from "./usageTour/usageTourTypes";
 import type { GlossaryEntryDraft } from "./glossaryEntryDraft";
 import type { GlossaryTag } from "../shared/glossary";
 import {
   createCurrentDocumentMarkdownSurfaceSource,
+  createBuiltinMarkdownSurfaceSource,
   createGlossaryDescriptionMarkdownSurfaceSource,
   type MarkdownSurfaceSource
 } from "./markdownSurfaceSource";
@@ -478,6 +484,12 @@ interface EditorSurfaceProps {
   /** #573 Slice 5: omitted = no metadata panel on glossary tabs. */
   glossaryDescriptionMetadata?: GlossaryDescriptionMetadataConfig;
   /**
+   * The Markdown source of the active built-in read-only document (e.g. the
+   * Markdown Cheat Sheet), already resolved for the display language. Used
+   * only when `editor.kind === "builtinMarkdown"`.
+   */
+  builtinMarkdownText?: string;
+  /**
    * #505 Phase 0: gates the (high-frequency, per-scroll-event)
    * `preview.scrollSync.scrollEvent.classified` diagnostic's layout reads —
    * see that effect for why this needs an actual flag rather than emitting
@@ -705,9 +717,42 @@ interface EditorSurfaceProps {
   }) => void;
 }
 
-export function EditorSurface({
+/**
+ * An image viewer tab has no text document at all, so it is routed to its own
+ * read-only surface before any Markdown / glossary editor machinery (preview
+ * render, linters, Find, CodeMirror) is set up. Switching between a text tab
+ * and an image tab therefore swaps surfaces, like any other tab switch.
+ */
+export function EditorSurface(props: EditorSurfaceProps): JSX.Element {
+  const isNarrow = useIsNarrowMarkdownWorkspace();
+  const { editor } = props;
+
+  if (editor.kind === "projectImage") {
+    return (
+      <ImageViewerSurface
+        relativePath={editor.relativePath}
+        name={editor.name}
+        translate={props.translate}
+        ratio={props.markdownEditorPreviewRatio}
+        isNarrow={isNarrow}
+      />
+    );
+  }
+
+  return <TextEditorSurface {...props} editor={editor} />;
+}
+
+type TextEditorSurfaceProps = Omit<EditorSurfaceProps, "editor"> & {
+  editor:
+    | MarkdownCurrentEditor
+    | GlossaryDescriptionCurrentEditor
+    | BuiltinMarkdownCurrentEditor;
+};
+
+function TextEditorSurface({
   editor,
   glossaryDescriptionMetadata,
+  builtinMarkdownText,
   isDebugModeEnabled,
   isSyncScrollEditorToPreviewEnabled,
   isSyncScrollPreviewToEditorEnabled,
@@ -782,7 +827,7 @@ export function EditorSurface({
   onDocumentOpenPreviewFrameObserved,
   onViewportChanged,
   onPreviewScrollSyncEvent
-}: EditorSurfaceProps): JSX.Element {
+}: TextEditorSurfaceProps): JSX.Element {
   // #573 Slice 2: re-derived only when the document object itself changes
   // (the same cadence the surface's effects previously keyed on). Slice 3: a
   // glossary Description tab is re-derived when its editor (draft) changes.
@@ -792,11 +837,18 @@ export function EditorSurface({
     () =>
       editor.kind === "markdown"
         ? createCurrentDocumentMarkdownSurfaceSource(editor.document)
-        : createGlossaryDescriptionMarkdownSurfaceSource(editor),
+        : editor.kind === "builtinMarkdown"
+          ? createBuiltinMarkdownSurfaceSource(builtinMarkdownText ?? "")
+          : createGlossaryDescriptionMarkdownSurfaceSource(editor),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [markdownSurfaceSourceKey]
+    [markdownSurfaceSourceKey, builtinMarkdownText]
   );
   const isGlossaryDescription = editor.kind === "glossaryDescription";
+  // A built-in document (Markdown Cheat Sheet) uses the very same Editor /
+  // Preview stack, but read-only and with the Preview always shown (the whole
+  // point is comparing source and result), without touching the user's own
+  // Preview preference.
+  const isBuiltinMarkdown = editor.kind === "builtinMarkdown";
 
   // #573 Slice 5: session-local (not persisted), shared by every glossary
   // Description tab; collapsed by default so the Description stays primary.
@@ -847,7 +899,11 @@ export function EditorSurface({
           documentStates={documentStates}
           // #573 Slice 3: glossary Description always previews as plain
           // (horizontal) Markdown.
-          previewRenderer={isGlossaryDescription ? "markdown" : previewRenderer}
+          previewRenderer={
+            isGlossaryDescription || isBuiltinMarkdown
+              ? "markdown"
+              : previewRenderer
+          }
           isPreviewRendererSwitching={isPreviewRendererSwitching}
           narouMarkText={narouMarkText}
           previewUpdateDelayMs={previewUpdateDelayMs}
@@ -869,7 +925,7 @@ export function EditorSurface({
           translate={translate}
           soundFeedback={soundFeedback}
           soundSettings={soundSettings}
-          readOnly={isProjectOwnedReadOnly}
+          readOnly={isProjectOwnedReadOnly || isBuiltinMarkdown}
           onChangeMarkdownContent={onChangeMarkdownContent}
           onGlossarySelectionShortcut={onGlossarySelectionShortcut}
           onEmphasisMarkShortcut={onEmphasisMarkShortcut}
@@ -905,7 +961,7 @@ export function EditorSurface({
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
           ratio={markdownEditorPreviewRatio}
           onChangeRatio={onChangeMarkdownEditorPreviewRatio}
-          previewVisible={previewVisible}
+          previewVisible={previewVisible || isBuiltinMarkdown}
           documentOpenId={documentOpenId}
           onDocumentOpenPreviewRenderStarted={
             onDocumentOpenPreviewRenderStarted
@@ -3437,6 +3493,7 @@ function MarkdownEditorSurface({
         className="pane"
         aria-label={translate("workspace.markdownEditor")}
         ref={editorPaneRef}
+        data-usage-tour-target={USAGE_TOUR_TARGETS.editorSurface}
       >
         <div className="paneHeader">
           {translate("workspace.editor")}
@@ -3566,6 +3623,7 @@ function MarkdownEditorSurface({
           aria-label={translate("workspace.markdownPreview")}
           ref={previewPaneRef}
           aria-busy={isPreviewRendererSwitching ? "true" : undefined}
+          data-usage-tour-target={USAGE_TOUR_TARGETS.previewSurface}
         >
           <div className="paneHeader">
             {translate("workspace.preview")}

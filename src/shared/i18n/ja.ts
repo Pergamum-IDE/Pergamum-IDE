@@ -26,6 +26,9 @@ export const jaTranslations = {
   "command.app.about.open.description": "Pergamum のバージョン、ライセンス、リポジトリ情報を表示します。",
   "command.help.usageTour": "使い方ツアー",
   "command.help.usageTour.description": "使い方ツアーを表示します。",
+  "command.help.markdownCheatSheet": "Markdown チートシート",
+  "command.help.markdownCheatSheet.description":
+    "Markdown記法とプレビュー結果を見比べられるチートシートを開きます。",
   "command.app.zoom.in": "拡大",
   "command.app.zoom.in.description": "画面全体を拡大表示します。",
   "command.app.zoom.out": "縮小",
@@ -319,6 +322,9 @@ export const jaTranslations = {
   "dialog.textFileEncodingChange.message": "文字エンコーディングを {encodingLabel} に変更しようとしています。\n\nこの設定は、平文テキストファイル（.txt）の読み書きに影響します。\n意味を理解しないまま変更すると、文字化けや保存時の意図しない文字変換が発生する可能性があります。\n\nこの意味を理解した上で設定を変更しますか？",
   "dialog.textFileEncodingChange.confirm": "変更する",
   "dialog.textFileEncodingChange.cancel": "キャンセル",
+  "dialog.externalLink.title": "外部サイトを開く",
+  "dialog.externalLink.message": "外部サイトを開きます。\n\nURL: {url}",
+  "dialog.icon.externalLink": "外部リンク",
   "dialog.icon.error": "エラー",
   "dialog.icon.info": "情報",
   "dialog.icon.question": "確認",
@@ -1403,6 +1409,8 @@ export const jaTranslations = {
   "menu.help": "ヘルプ",
   "menu.showResumeHub": "作業再開画面を表示",
   "menu.usageTour": "使い方ツアー",
+  "menu.markdownCheatSheet": "Markdown チートシート",
+  "markdownCheatSheet.tabTitle": "Markdown チートシート",
   "menu.hide": "{appName}を隠す",
   "menu.hideOthers": "ほかを隠す",
   "menu.minimize": "最小化",
@@ -2413,6 +2421,8 @@ export const jaTranslations = {
   "preview.mermaid.errorHint": "構文を確認してください。",
   "preview.mermaid.showDetails": "詳細を表示",
   "preview.switchingRenderer": "プレビューを切り替えています…",
+  "imageViewer.editorNotice": "画像ファイルは編集できません",
+  "imageViewer.loadFailed": "画像を表示できません",
   "workspace.editor": "エディタ",
   "workspace.markdownEditor": "Markdownエディタ",
   "workspace.markdownPreview": "Markdownプレビュー",
@@ -2441,6 +2451,9 @@ export const jaTranslations = {
   "usageTour.step.documentMetrics.title": "文書メトリクス",
   "usageTour.step.documentMetrics.body":
     "これは【文書メトリクス】です。\n文書の文字数など、現在の文書に関する情報を確認できます。\n原稿の分量や文章の状態を把握したいときに利用してください。",
+  "usageTour.step.editor.title": "エディタ",
+  "usageTour.step.editor.body":
+    "この領域が【エディタ】です。\n文書ファイルは、初期設定ではMarkdown形式に対応しています。\nテキストファイルを編集する場合は、アプリケーション設定からテキストファイルへの対応を有効にしてください。\n「ファイルのインポート」を使うことで、既存のテキストファイルをプロジェクトへ取り込むこともできます。",
   "usageTour.step.commandPalette.title": "コマンドパレット",
   "usageTour.step.commandPalette.body":
     "これは【コマンドパレット】です。\nPergamumのさまざまな機能を、名前から探して実行できます。\n「>」で始まるときはコマンド一覧を表示しますが、モードを切り替えることで、さまざまな機能を利用できます。\n「あの機能はどこにあったかな？」というときは、まずここを開いてみてください。",
@@ -2459,6 +2472,9 @@ export const jaTranslations = {
   "usageTour.step.preview.title": "プレビュー",
   "usageTour.step.preview.body":
     "これは【プレビュー】です。\nMarkdownで書いた原稿がどのように表示されるか、本文と並べて確認できます。\nこのボタンでプレビューの表示・非表示を切り替えられます。\nプレビューの既定の表示方法は、アプリケーション設定から変更できます。",
+  "usageTour.step.previewArea.title": "プレビュー領域",
+  "usageTour.step.previewArea.body":
+    "この領域が【プレビュー】です。\nMarkdown形式では、Mermaid記法とKaTeX記法に対応しています。\nチャートや数式を原稿内に記述できます。\nまた、語彙ごとにも専用のエディタ領域があるため、相関図など、さまざまな情報を記載することができます。",
   "usageTour.step.completed.title": "ツアー完了",
   "usageTour.step.completed.body":
     "使い方ツアーは以上です。\nPergamumには、このほかにも執筆を支援するさまざまな機能があります。\n本ツアーを再度見たくなったときは、「ヘルプ」→「使い方ツアー」から実行できます。"

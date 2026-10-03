@@ -5,6 +5,7 @@ import type {
 import type { ActiveProjectContext, EditorId } from "../shared/editorId";
 import type { EditorResolveResult } from "./editorNavigation";
 import {
+  createBuiltinMarkdownCurrentEditor,
   createMarkdownCurrentEditor,
   type CurrentEditor
 } from "./currentEditor";
@@ -49,6 +50,12 @@ export async function resolveCurrentEditor(
     // in-memory GlossaryEntry (never resolved by id alone yet).
     case "glossaryDescription":
       return { kind: "notFound" };
+    // A built-in document needs no file: it is created from its id.
+    case "builtinMarkdown":
+      return {
+        kind: "resolved",
+        editor: createBuiltinMarkdownCurrentEditor(editorId.builtinId)
+      };
   }
 }
 

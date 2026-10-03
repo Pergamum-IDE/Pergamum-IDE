@@ -15,6 +15,7 @@ export interface ApplicationCommandController {
   zoomOut(): void | Promise<void>;
   resetZoom(): void | Promise<void>;
   openUsageTour(): void | Promise<void>;
+  openMarkdownCheatSheet(): void | Promise<void>;
 }
 
 export interface ApplicationCommandTitles {
@@ -22,6 +23,8 @@ export interface ApplicationCommandTitles {
   openAboutDescription: string;
   openUsageTour: string;
   openUsageTourDescription: string;
+  openMarkdownCheatSheet: string;
+  openMarkdownCheatSheetDescription: string;
   quitApplication: string;
   quitApplicationDescription: string;
   createProject: string;
@@ -50,6 +53,10 @@ export function createApplicationCommandTitles(
     openAboutDescription: translate("command.app.about.open.description"),
     openUsageTour: translate("command.help.usageTour"),
     openUsageTourDescription: translate("command.help.usageTour.description"),
+    openMarkdownCheatSheet: translate("command.help.markdownCheatSheet"),
+    openMarkdownCheatSheetDescription: translate(
+      "command.help.markdownCheatSheet.description"
+    ),
     quitApplication: translate("command.app.quit"),
     quitApplicationDescription: translate("command.app.quit.description"),
     createProject: translate("command.workspace.project.create"),
@@ -99,6 +106,14 @@ export function createApplicationCommands(
       category: "help",
       paletteOrder: 15,
       execute: () => controller.openUsageTour()
+    },
+    {
+      id: applicationCommandIds.openMarkdownCheatSheet,
+      title: titles.openMarkdownCheatSheet,
+      description: titles.openMarkdownCheatSheetDescription,
+      category: "help",
+      paletteOrder: 16,
+      execute: () => controller.openMarkdownCheatSheet()
     },
     {
       id: applicationCommandIds.quitApplication,

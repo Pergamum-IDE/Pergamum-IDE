@@ -7,7 +7,11 @@ import {
   type CurrentDocument
 } from "./currentDocument";
 import type { GlossaryDescriptionCurrentEditor } from "./currentEditor";
-import type { LineEndingBreakSet } from "./editorLineEndingField";
+import {
+  buildLineEndingBreakSet,
+  type LineEndingBreakSet
+} from "./editorLineEndingField";
+import { analyzeLineEndings } from "./lineEndingTracking";
 import { isGlossaryEntryDraftDirty } from "./glossaryEntryDraft";
 
 /**
@@ -85,6 +89,24 @@ export function createCurrentDocumentMarkdownSurfaceSource(
     isMarkdownDocument: isMarkdownCurrentDocument(document),
     imageResolution: currentDocumentImageResolution(document),
     aozoraSourceText: currentDocumentAozoraSourceText(document)
+  };
+}
+
+/**
+ * Adapts a built-in read-only Markdown document: fixed text, never dirty,
+ * always Markdown, no project-local image anchoring and no Aozora source. It
+ * goes through the same editor / preview stack as any Markdown document.
+ */
+export function createBuiltinMarkdownSurfaceSource(
+  text: string
+): MarkdownSurfaceSource {
+  return {
+    text,
+    lineEndingBreaks: buildLineEndingBreakSet(analyzeLineEndings(text)),
+    isDirty: false,
+    isMarkdownDocument: true,
+    imageResolution: { kind: "none" },
+    aozoraSourceText: null
   };
 }
 

@@ -42,6 +42,13 @@ export const USAGE_TOUR_STEPS: readonly UsageTourStep[] = [
     preferredPlacement: "right"
   },
   {
+    id: "editor",
+    titleKey: "usageTour.step.editor.title",
+    bodyKey: "usageTour.step.editor.body",
+    targetId: USAGE_TOUR_TARGETS.editorSurface,
+    preferredPlacement: "right"
+  },
+  {
     id: "commandPalette",
     titleKey: "usageTour.step.commandPalette.title",
     bodyKey: "usageTour.step.commandPalette.body",
@@ -82,6 +89,13 @@ export const USAGE_TOUR_STEPS: readonly UsageTourStep[] = [
     bodyKey: "usageTour.step.preview.body",
     targetId: USAGE_TOUR_TARGETS.toolbarPreview,
     preferredPlacement: "bottom"
+  },
+  {
+    id: "previewArea",
+    titleKey: "usageTour.step.previewArea.title",
+    bodyKey: "usageTour.step.previewArea.body",
+    targetId: USAGE_TOUR_TARGETS.previewSurface,
+    preferredPlacement: "left"
   },
   {
     id: "completed",

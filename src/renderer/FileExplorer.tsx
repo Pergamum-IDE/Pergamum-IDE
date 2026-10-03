@@ -16,7 +16,6 @@ import { MaskedIcon } from "./MaskedIcon";
 import pergamumProjectIconUrl from "../../assets/icons/file-associations/pergamum/pergamum-scroll-file-icon.svg?url";
 import filePlusIconUrl from "../../assets/icons/feather/explorer/file-plus.svg?url";
 import folderPlusIconUrl from "../../assets/icons/feather/explorer/folder-plus.svg?url";
-import moveIconUrl from "../../assets/icons/feather/explorer/move.svg?url";
 // #409: per-file-type icons for Markdown documents, Pergamum-recognized image
 // files, and plain-text files. Every other file keeps the generic document
 // icon below.
@@ -237,9 +236,12 @@ interface FileExplorerProps {
   /** #338: after a successful Move, the old → new project-relative paths for
    *  every file that actually moved. The host follows open editor identity
    *  (tab label, save target, active/highlighted path, session snapshot) and
-   *  its Recovery bookkeeping along these. A non-open old path is a no-op. */
+   *  its Recovery bookkeeping along these. A non-open old path is a no-op.
+   *  `movedFolders` lists the folders that moved / were renamed, so open image
+   *  viewer tabs inside them (not reported in `relocations`) follow too. */
   onProjectDocumentsMoved?: (
-    relocations: readonly ProjectDocumentPathRelocation[]
+    relocations: readonly ProjectDocumentPathRelocation[],
+    movedFolders?: readonly { readonly from: string; readonly to: string }[]
   ) => void;
   /**
    * #413: called BEFORE a Move, with every EXPLICITLY-selected Markdown file
@@ -443,12 +445,6 @@ interface FileExplorerViewProps {
   highlightedRelativePath: string | null;
   visibilityOptions?: FileExplorerVisibilityOptions;
   canCreate: boolean;
-  /** #327: whether the current multi-selection can be moved (same rule as the
-   *  context-menu `Move…`). */
-  canMove?: boolean;
-  /** #327: localized reason the move is unavailable — shown as the toolbar
-   *  button's `title` when disabled. */
-  moveDisabledReasonLabel?: string;
   /** #328: project-relative paths of the pending Cut sources — the rows are
    *  rendered muted (`data-file-explorer-cut="true"`) while still visible. */
   cutRelativePaths?: ReadonlySet<string>;
@@ -478,9 +474,6 @@ interface FileExplorerViewProps {
   onReload: () => void;
   onNewFile: () => void;
   onNewFolder: () => void;
-  /** #327: the primary Move route — opens the destination picker for the
-   *  current selection. */
-  onMove?: () => void;
   onToggleDirectory: (relativePath: string) => void;
   onSelectRoot: () => void;
   /** Plain click / Space / plain Arrow — replace the selection with this
@@ -757,9 +750,11 @@ function isOpenableFileExplorerEntry(
   entry: FileExplorerEntry,
   options: FileExplorerVisibilityOptions
 ): boolean {
+  // A supported image opens a read-only image viewer tab.
   return (
     entry.kind === "file" &&
-    isProjectDocumentPath(entry.relativePath, options)
+    (isProjectDocumentPath(entry.relativePath, options) ||
+      isSupportedProjectImageFileName(entry.name))
   );
 }
 
@@ -2288,6 +2283,13 @@ export function FileExplorer({
         if (isProjectMarkdownRelativePath(result.newEntry.relativePath)) {
           onProjectDocumentRenamed?.(result.oldRelativePath, result.newEntry);
         } else if (isSupportedProjectImageFileName(result.newEntry.name)) {
+          // An open image viewer tab follows the renamed file.
+          onProjectDocumentsMoved?.([
+            {
+              oldRelativePath: result.oldRelativePath,
+              newRelativePath: result.newEntry.relativePath
+            }
+          ]);
           // #414 (C2): a supported image-file rename — apply any staged
           // reference-rewrite batch to the documents that point at it.
           onApplyMoveImageRewrites?.({
@@ -2300,8 +2302,12 @@ export function FileExplorer({
             ]
           });
         }
-      } else if ((result.movedProjectDocuments ?? []).length > 0) {
-        onProjectDocumentsMoved?.(result.movedProjectDocuments ?? []);
+      } else {
+        // Folder rename: its Markdown documents, plus any open image viewer
+        // tab inside the renamed folder (located by path prefix).
+        onProjectDocumentsMoved?.(result.movedProjectDocuments ?? [], [
+          { from: result.oldRelativePath, to: result.newEntry.relativePath }
+        ]);
       }
 
       return { ok: true };
@@ -2783,7 +2789,20 @@ export function FileExplorer({
       // folder, every registered document in its subtree. The host no-ops
       // for any old path that is not open.
       const relocations = collectMovedProjectDocumentRelocations(result);
-      if (relocations.length > 0) {
+      // Open image viewer tabs inside a moved folder follow it too (the
+      // folder entry only reports its Markdown documents).
+      const movedFoldersForHost = result.results
+        .filter(
+          (entry): entry is Extract<typeof entry, { status: "moved" }> =>
+            entry.status === "moved" && entry.isDirectory
+        )
+        .map((entry) => ({
+          from: entry.sourceRelativePath,
+          to: entry.destinationRelativePath
+        }));
+      if (movedFoldersForHost.length > 0) {
+        onProjectDocumentsMoved?.(relocations, movedFoldersForHost);
+      } else if (relocations.length > 0) {
         onProjectDocumentsMoved?.(relocations);
       }
 
@@ -3944,12 +3963,6 @@ export function FileExplorer({
         highlightedRelativePath={project ? highlightedRelativePath : null}
         visibilityOptions={visibilityOptions}
         canCreate={canCreate}
-        canMove={canMoveSelection}
-        moveDisabledReasonLabel={
-          moveDisabledReason
-            ? translate(MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason])
-            : undefined
-        }
         cutRelativePaths={cutRelativePaths}
         draggingRelativePaths={draggingRelativePaths}
         isProjectDocumentDirty={isProjectDocumentDirty}
@@ -3962,7 +3975,6 @@ export function FileExplorer({
         onReload={reloadCurrentExplorerContext}
         onNewFile={() => openCreateDialog("file")}
         onNewFolder={() => openCreateDialog("folder")}
-        onMove={() => setMoveDialogOpen(true)}
         onToggleDirectory={toggleDirectory}
         onSelectRoot={selectRoot}
         onSelectEntry={selectSingleEntry}
@@ -4603,8 +4615,6 @@ export function FileExplorerView({
   highlightedRelativePath,
   visibilityOptions = { enablePlainTextDocuments: false },
   canCreate,
-  canMove = false,
-  moveDisabledReasonLabel,
   cutRelativePaths = EMPTY_SELECTED_PATHS,
   draggingRelativePaths = EMPTY_SELECTED_PATHS,
   isProjectDocumentDirty = () => false,
@@ -4617,7 +4627,6 @@ export function FileExplorerView({
   onReload,
   onNewFile,
   onNewFolder,
-  onMove,
   onToggleDirectory,
   onSelectRoot,
   onSelectEntry,
@@ -4859,26 +4868,6 @@ export function FileExplorerView({
           >
             <MaskedIcon
               url={folderPlusIconUrl}
-              className="fileExplorerToolbarIcon"
-            />
-          </button>
-          <button
-            type="button"
-            className="fileExplorerToolbarButton"
-            data-file-explorer-toolbar-command="move"
-            title={
-              canMove
-                ? translate("explorer.contextMenu.move")
-                : (moveDisabledReasonLabel ??
-                  translate("explorer.contextMenu.move"))
-            }
-            aria-label={translate("explorer.contextMenu.move")}
-            disabled={!canMove}
-            aria-disabled={!canMove}
-            onClick={() => onMove?.()}
-          >
-            <MaskedIcon
-              url={moveIconUrl}
               className="fileExplorerToolbarIcon"
             />
           </button>

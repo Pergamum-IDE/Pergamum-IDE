@@ -296,6 +296,7 @@ async function restore(
       Promise.resolve(`# ${relativePath}\n`),
     readMarkdownFile: () => Promise.reject(new Error("unused")) as Promise<MarkdownFile>,
     registerProjectDocumentPath: () => Promise.resolve(null),
+    isProjectImageAvailable: () => Promise.resolve(true),
     getGlossaryEntryById: getById,
     applyRestoredEnvironment: (env) => applied.push(env),
     adoptSessionId: () => undefined,

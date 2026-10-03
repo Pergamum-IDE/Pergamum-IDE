@@ -5,14 +5,9 @@ import {
 } from "../shared/editorId";
 import type { DocumentTab } from "./openDocuments";
 
-export type SpecialTabId =
-  | "settings"
-  | "keyboardShortcuts"
-  | "projectSettings"
-  | "glossaryTagManager"
-  | "glossaryEntryManager"
-  | "debugLog"
-  | "resumeHub";
+import type { SpecialTabId } from "../shared/specialTab";
+
+export type { SpecialTabId };
 
 export interface SpecialWorkspaceTab {
   readonly kind: "special";

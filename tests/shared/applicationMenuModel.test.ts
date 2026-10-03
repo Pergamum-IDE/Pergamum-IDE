@@ -210,12 +210,13 @@ describe("canonical application menu model (#662)", () => {
       ]);
     });
 
-    it("Help is the native help submenu: Resume Hub, Usage Tour, then About", () => {
+    it("Help is the native help submenu: Resume Hub, Usage Tour, Markdown Cheat Sheet, then About", () => {
       const help = topLevel("win32", "menu.help");
       expect(help.role).toBe("help");
       expect(outline(help.items)).toEqual([
         `command:${workspaceCommandIds.showResumeHub}`,
         `command:${applicationCommandIds.openUsageTour}`,
+        `command:${applicationCommandIds.openMarkdownCheatSheet}`,
         "---",
         `command:${applicationCommandIds.openAbout}`
       ]);

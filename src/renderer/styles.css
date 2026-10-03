@@ -7662,6 +7662,45 @@ label.settingsItemHeader {
   background: var(--pg-color-focus-ring);
 }
 
+/* Image viewer tab: a quiet, read-only editor notice and the image Preview. */
+.imageViewerEditorNotice {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  overflow: auto;
+  color: var(--pg-color-surface-muted);
+  background: var(--pg-color-surface-background);
+  font-size: 14px;
+  line-height: 1.6;
+  user-select: text;
+}
+
+.imageViewerPreview {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+  background: var(--pg-color-preview-background);
+}
+
+.imageViewerImage {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  /* A small image keeps its natural size; it is never scaled up. */
+  flex: 0 0 auto;
+}
+
+.imageViewerLoadFailed {
+  margin: 0;
+  color: var(--pg-color-preview-muted);
+  font-size: 14px;
+}
+
 .paneHeader {
   min-height: 34px;
   padding: 8px 12px;
@@ -8578,6 +8617,19 @@ label.settingsItemHeader {
 .preview .hljs-deletion {
   color: var(--pg-color-preview-syntax-deletion);
   background-color: var(--pg-color-preview-syntax-deletion-background);
+}
+
+/*
+ * Mermaid generates an empty `.mermaidTooltip` directly under `document.body`
+ * even when interaction is disabled (securityLevel: "strict", htmlLabels: false).
+ * This tooltip box extends the document scrollHeight and creates an unwanted
+ * window-level vertical scrollbar across the entire application. Pergamum does
+ * not currently support Mermaid tooltips or interactions, so we suppress this
+ * body-level tooltip. Re-evaluate this rule if formal support for Mermaid
+ * tooltips/interactions is introduced in the future.
+ */
+body > .mermaidTooltip {
+  display: none !important;
 }
 
 /* #564: Mermaid diagram blocks — Markdown horizontal preview only. No theme
@@ -10991,8 +11043,13 @@ label.settingsItemHeader {
   color: var(--app-dialog-icon-error);
 }
 
+
 .appDialogIcon-question {
   color: var(--app-dialog-icon-question);
+}
+
+.appDialogIcon-externalLink {
+  color: var(--app-dialog-icon-info);
 }
 
 .appDialogBody {
