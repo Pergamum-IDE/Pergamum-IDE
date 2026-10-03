@@ -230,17 +230,18 @@ describe("Settings UI Catalog Schema (#226)", () => {
       );
     });
 
-    it("covers every user-facing key registered in settingsCatalog.ts across generic and project-specific UI catalogs, leaving only compatibility-only legacy single-font keys out", () => {
+    it("covers every user-facing key registered in settingsCatalog.ts across generic and project-specific UI catalogs, leaving only compatibility-only legacy single-font keys and internal settings out", () => {
       const allUiKeys = [
         ...settingCatalogItems.map((item) => item.key),
         ...projectSpecificSettingCatalogItems.map((item) => item.key)
       ];
-      const compatibilityOnlyKeys = new Set([
+      const nonUiKeys = new Set([
         "workbench.fontFamily",
-        "editor.fontFamily"
+        "editor.fontFamily",
+        "workbench.usageTourAutoShowDisabled"
       ]);
       const expectedUiKeys = Object.keys(settingsCatalog).filter(
-        (key) => !compatibilityOnlyKeys.has(key)
+        (key) => !nonUiKeys.has(key)
       );
       expect(allUiKeys.sort()).toEqual(expectedUiKeys.sort());
     });

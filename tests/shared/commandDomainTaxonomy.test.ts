@@ -45,6 +45,7 @@ function buildCoreCommandRegistry(): CommandRegistry {
     registry,
     {
       openAbout: () => undefined,
+      openUsageTour: () => undefined,
       quitApplication: () => undefined,
       createProject: () => undefined,
       openProject: () => undefined,
@@ -58,6 +59,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openAbout: "About Pergamum",
       openAboutDescription:
         "Show Pergamum version, license, and repository information.",
+      openUsageTour: "Usage Tour",
+      openUsageTourDescription: "Show the usage tour.",
       quitApplication: "Quit Pergamum",
       quitApplicationDescription: "Quit Pergamum",
       createProject: "Create Project",

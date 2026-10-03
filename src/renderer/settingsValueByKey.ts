@@ -56,6 +56,11 @@ export function readSettingValue(
         settings.workbench.normalizeUnicodeToNfc ??
         getCatalogDefaultValue("workbench.normalizeUnicodeToNfc")
       );
+    case "workbench.usageTourAutoShowDisabled":
+      return (
+        settings.workbench.usageTourAutoShowDisabled ??
+        getCatalogDefaultValue("workbench.usageTourAutoShowDisabled")
+      );
     case "workbench.sound.enabled":
       return settings.workbench.sound.enabled;
     case "workbench.sound.dialog.enabled":

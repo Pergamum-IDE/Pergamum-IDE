@@ -24,6 +24,7 @@ import {
 } from "../toolbarCommandBoxModes";
 import type { QuickAccessPrefix } from "../quickAccessInputParser";
 import { normalizeCommandPaletteLaunchAnimationDurationMs } from "../../shared/commandPaletteLaunchAnimationSettings";
+import { USAGE_TOUR_TARGETS } from "../usageTour/usageTourTypes";
 
 const COMMAND_PALETTE_LAUNCH_ANIMATION_EASING = "ease-out";
 
@@ -293,7 +294,11 @@ export const ToolbarCommandBox: FC<ToolbarCommandBoxProps> = ({
 
   return (
     <div className="toolbarCommandBoxGroup">
-      <div className="toolbarCommandBox" data-testid="toolbarCommandBox">
+      <div
+        className="toolbarCommandBox"
+        data-testid="toolbarCommandBox"
+        data-usage-tour-target={USAGE_TOUR_TARGETS.toolbarCommandPalette}
+      >
         {/* Prefix / mode cycle button */}
         <button
           type="button"

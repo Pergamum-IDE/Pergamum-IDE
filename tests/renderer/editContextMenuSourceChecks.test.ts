@@ -176,6 +176,10 @@ function allSourceText(): string {
  * accelerator nor a dedicated renderer shortcut runs, through the Command
  * Registry (which decides enablement). It names no command and is unrelated to
  * the native-edit-command delegation.
+ *
+ * UsageTour.tsx (#714) is the same dialog-local exception as ConfirmDialog /
+ * InfoDialog: Escape dismisses the tour and Tab stays inside the modal focus
+ * trap; it does not implement app/global shortcut suppression.
  */
 const onKeyDownExemptFileNames = new Set([
   "commandKeybindingDispatcher.ts",
@@ -183,6 +187,7 @@ const onKeyDownExemptFileNames = new Set([
   "ChoiceDialog.tsx",
   "ConfirmDialog.tsx",
   "InfoDialog.tsx",
+  "UsageTour.tsx",
   "DocumentTabBar.tsx",
   "FileExplorer.tsx",
   "GlossaryEntryMetadataFields.tsx",

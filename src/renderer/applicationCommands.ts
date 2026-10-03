@@ -14,11 +14,14 @@ export interface ApplicationCommandController {
   zoomIn(): void | Promise<void>;
   zoomOut(): void | Promise<void>;
   resetZoom(): void | Promise<void>;
+  openUsageTour(): void | Promise<void>;
 }
 
 export interface ApplicationCommandTitles {
   openAbout: string;
   openAboutDescription: string;
+  openUsageTour: string;
+  openUsageTourDescription: string;
   quitApplication: string;
   quitApplicationDescription: string;
   createProject: string;
@@ -45,6 +48,8 @@ export function createApplicationCommandTitles(
   return {
     openAbout: translate("command.app.about.open"),
     openAboutDescription: translate("command.app.about.open.description"),
+    openUsageTour: translate("command.help.usageTour"),
+    openUsageTourDescription: translate("command.help.usageTour.description"),
     quitApplication: translate("command.app.quit"),
     quitApplicationDescription: translate("command.app.quit.description"),
     createProject: translate("command.workspace.project.create"),
@@ -86,6 +91,14 @@ export function createApplicationCommands(
       category: "help",
       paletteOrder: 20,
       execute: () => controller.openAbout()
+    },
+    {
+      id: applicationCommandIds.openUsageTour,
+      title: titles.openUsageTour,
+      description: titles.openUsageTourDescription,
+      category: "help",
+      paletteOrder: 15,
+      execute: () => controller.openUsageTour()
     },
     {
       id: applicationCommandIds.quitApplication,

@@ -21,6 +21,7 @@ describe("application menu command registration", () => {
       registry,
       {
         openAbout: () => undefined,
+        openUsageTour: () => undefined,
         quitApplication: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
@@ -34,6 +35,8 @@ describe("application menu command registration", () => {
         openAbout: "About Pergamum",
         openAboutDescription:
           "Show Pergamum version, license, and repository information.",
+        openUsageTour: "Usage Tour",
+        openUsageTourDescription: "Show the usage tour.",
         quitApplication: "Quit Pergamum",
         quitApplicationDescription: "Quit Pergamum",
         createProject: "Create Project",

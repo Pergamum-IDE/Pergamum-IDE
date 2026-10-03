@@ -620,6 +620,7 @@ import {
 import { WelcomeScreen } from "./WelcomeScreen";
 import { ResumeHub } from "./ResumeHub";
 import { KeyboardShortcutsScreen } from "./KeyboardShortcutsScreen";
+import { UsageTour } from "./usageTour/UsageTour";
 import {
   shouldShowFullScreenWelcomeSurface,
   shouldShowWelcomeSurface
@@ -1762,6 +1763,11 @@ export function App(): JSX.Element {
     setCommandPaletteMarkdownFocusRestorePending
   ] = useState(false);
   const nextMarkdownEditorFocusRequestIdRef = useRef(1);
+  // #714: Usage Tour states and command ref
+  const autoShowUsageTourAttemptedRef = useRef(false);
+  const [isUsageTourOpen, setIsUsageTourOpen] = useState(false);
+  const [isUsageTourManual, setIsUsageTourManual] = useState(false);
+  const openUsageTourCommandRef = useRef<() => void>(() => undefined);
   const openAboutDialogCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -2644,6 +2650,7 @@ export function App(): JSX.Element {
   // image prompts, export dialogs, ...), so the Renderer menu never reacts to
   // Alt behind them and closes (without taking focus back) when one opens.
   const isApplicationMenuKeyboardBlocked =
+    isUsageTourOpen ||
     isAppModalSurfacePendingOrOpen ||
     isGlossaryExportWizardOpen ||
     documentMapPngExportSnapshot !== null ||
@@ -4142,6 +4149,7 @@ export function App(): JSX.Element {
       registry,
       {
         openAbout: () => openAboutDialogCommandRef.current(),
+        openUsageTour: () => openUsageTourCommandRef.current(),
         quitApplication: () => quitApplicationCommandRef.current(),
         createProject: () => createProjectCommandRef.current(),
         openProject: () => openProjectCommandRef.current(),
@@ -10129,6 +10137,65 @@ export function App(): JSX.Element {
   closeProjectCommandRef.current = closeProject;
   quitApplicationCommandRef.current = quitApplication;
   openAboutDialogCommandRef.current = openAboutDialog;
+  openUsageTourCommandRef.current = () => {
+    setIsUsageTourManual(true);
+    setIsUsageTourOpen(true);
+  };
+
+  const handleCloseUsageTour = useCallback(() => {
+    setIsUsageTourOpen(false);
+  }, []);
+
+  const handleDismissAutoShowUsageTour = useCallback(() => {
+    setIsUsageTourOpen(false);
+    if (!isUsageTourManual) {
+      const current = settingsRef.current;
+      void changeSettingsRef.current({
+        ...current,
+        workbench: {
+          ...current.workbench,
+          usageTourAutoShowDisabled: true
+        }
+      });
+    }
+  }, [isUsageTourManual]);
+
+  const handleCompleteUsageTour = useCallback(() => {
+    setIsUsageTourOpen(false);
+    if (!isUsageTourManual) {
+      const current = settingsRef.current;
+      void changeSettingsRef.current({
+        ...current,
+        workbench: {
+          ...current.workbench,
+          usageTourAutoShowDisabled: true
+        }
+      });
+    }
+  }, [isUsageTourManual]);
+
+  // #714: auto-show once upon persistent settings load completed
+  useEffect(() => {
+    if (
+      isSettingsLoading ||
+      settingsError !== null ||
+      autoShowUsageTourAttemptedRef.current
+    ) {
+      return;
+    }
+
+    autoShowUsageTourAttemptedRef.current = true;
+
+    if (!settings.workbench.usageTourAutoShowDisabled) {
+      setIsUsageTourManual(false);
+      setIsUsageTourOpen(true);
+    }
+  }, [
+    isSettingsLoading,
+    settingsError,
+    settings.workbench.usageTourAutoShowDisabled
+  ]);
+
   openBulkTextImportDialogCommandRef.current = openBulkTextImportDialog;
   handleLifecycleWindowCloseRequestRef.current =
     handleLifecycleWindowCloseRequest;
@@ -14259,6 +14326,15 @@ export function App(): JSX.Element {
         outputEnabled={notificationOutputEnabled}
         isActionEnabled={isNotificationActionEnabled}
         onExecuteAction={executeNotificationAction}
+      />
+
+      <UsageTour
+        isOpen={isUsageTourOpen}
+        isManual={isUsageTourManual}
+        translate={translate}
+        onClose={handleCloseUsageTour}
+        onDismissAutoShow={handleDismissAutoShowUsageTour}
+        onComplete={handleCompleteUsageTour}
       />
     </main>
   );

@@ -7,6 +7,7 @@ import { HeadingLevelPopover } from "./HeadingLevelPopover";
 import { ToolbarCommandBox } from "./ToolbarCommandBox";
 import { PreviewRendererDropdown } from "./PreviewRendererDropdown";
 import { CalloutInsertDropdown } from "./CalloutInsertDropdown";
+import { USAGE_TOUR_TARGETS } from "../usageTour/usageTourTypes";
 import type { MarkdownCalloutType } from "../../shared/markdownCalloutMarkup";
 import type { PreviewRendererId } from "../../shared/settings";
 import type { QuickAccessPrefix } from "../quickAccessInputParser";
@@ -484,6 +485,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             onClick={handleImageButtonClick}
             aria-label={translate("toolbar.insertImage")}
             title={translate("toolbar.insertImage")}
+            data-usage-tour-target={USAGE_TOUR_TARGETS.toolbarImage}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -521,6 +523,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canInsertCallout}
             onInsertCallout={onInsertCallout}
             translate={translate}
+            dataUsageTourTarget={USAGE_TOUR_TARGETS.toolbarCallout}
           />
         </div>
       </div>
@@ -573,6 +576,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             onClick={onToggleMarkdownSyntaxChecker}
             aria-label={translate("toolbar.markdownSyntaxChecker")}
             title={translate("toolbar.markdownSyntaxChecker")}
+            data-usage-tour-target={USAGE_TOUR_TARGETS.toolbarMarkdownLinter}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -589,6 +593,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             onClick={onToggleJapaneseLint}
             aria-label={translate("toolbar.japaneseLint")}
             title={translate("toolbar.japaneseLint")}
+            data-usage-tour-target={USAGE_TOUR_TARGETS.toolbarJapaneseLinter}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -610,6 +615,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             onClick={onTogglePreview}
             aria-label={translate("toolbar.togglePreview")}
             title={translate("toolbar.togglePreview")}
+            data-usage-tour-target={USAGE_TOUR_TARGETS.toolbarPreview}
           >
             <span
               className="editorToolbarButtonIcon"

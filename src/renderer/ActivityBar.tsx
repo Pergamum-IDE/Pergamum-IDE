@@ -1,5 +1,6 @@
 import type { Translate } from "../shared/i18n";
 import type { SidebarMode } from "./sidebarMode";
+import { USAGE_TOUR_TARGETS } from "./usageTour/usageTourTypes";
 import fileIcon from "../../assets/icons/feather/activity-bar/file.svg?raw";
 import glossaryIcon from "../../assets/icons/feather/activity-bar/glossary.svg?raw";
 import searchIcon from "../../assets/icons/feather/activity-bar/search.svg?raw";
@@ -81,6 +82,7 @@ export function ActivityBar({
           aria-pressed={activeMode === "files"}
           title={filesLabel}
           onClick={() => onSelectMode("files")}
+          data-usage-tour-target={USAGE_TOUR_TARGETS.activityFiles}
         >
           <ActivityBarIcon label={filesLabel} svg={fileIcon} />
         </button>
@@ -95,6 +97,7 @@ export function ActivityBar({
           aria-pressed={activeMode === "search"}
           title={searchLabel}
           onClick={() => onSelectMode("search")}
+          data-usage-tour-target={USAGE_TOUR_TARGETS.activitySearch}
         >
           <ActivityBarIcon label={searchLabel} svg={searchIcon} />
         </button>
@@ -109,6 +112,7 @@ export function ActivityBar({
           aria-pressed={activeMode === "glossary"}
           title={glossaryLabel}
           onClick={() => onSelectMode("glossary")}
+          data-usage-tour-target={USAGE_TOUR_TARGETS.activityGlossary}
         >
           <ActivityBarIcon label={glossaryLabel} svg={glossaryIcon} />
         </button>
@@ -123,6 +127,7 @@ export function ActivityBar({
           aria-pressed={activeMode === "documentMap"}
           title={documentMapLabel}
           onClick={() => onSelectMode("documentMap")}
+          data-usage-tour-target={USAGE_TOUR_TARGETS.activityDocumentMap}
         >
           <ActivityBarIcon label={documentMapLabel} svg={documentMapIcon} />
         </button>
@@ -137,6 +142,7 @@ export function ActivityBar({
           aria-pressed={activeMode === "documentMetrics"}
           title={documentMetricsLabel}
           onClick={() => onSelectMode("documentMetrics")}
+          data-usage-tour-target={USAGE_TOUR_TARGETS.activityDocumentMetrics}
         >
           <ActivityBarIcon
             label={documentMetricsLabel}

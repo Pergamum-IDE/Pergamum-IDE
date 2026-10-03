@@ -414,6 +414,7 @@ const helpMenu: ApplicationMenuTopLevelItem = submenu(
   "menu.help",
   [
     command(workspaceCommandIds.showResumeHub, "menu.showResumeHub"),
+    command(applicationCommandIds.openUsageTour, "menu.usageTour"),
     separator,
     command(applicationCommandIds.openAbout, "menu.aboutPergamum")
   ],

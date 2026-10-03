@@ -14,7 +14,8 @@ export const applicationCommandIds = {
   ),
   zoomIn: defineCommandId("app.zoom.in"),
   zoomOut: defineCommandId("app.zoom.out"),
-  resetZoom: defineCommandId("app.zoom.reset")
+  resetZoom: defineCommandId("app.zoom.reset"),
+  openUsageTour: defineCommandId("help.usageTour")
 } as const;
 
 export const workspaceCommandIds = {
@@ -175,6 +176,7 @@ export const applicationMenuCommandIds = [
   workspaceCommandIds.openKeyboardShortcuts,
   workspaceCommandIds.openApplicationSettings,
   workspaceCommandIds.showResumeHub,
+  applicationCommandIds.openUsageTour,
   editorCommandIds.undo,
   editorCommandIds.redo,
   editorCommandIds.cutSelection,

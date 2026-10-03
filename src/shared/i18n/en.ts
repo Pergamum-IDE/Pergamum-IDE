@@ -26,6 +26,8 @@ export const enTranslations = {
   "common.save": "Save",
   "command.app.about.open": "About Pergamum",
   "command.app.about.open.description": "Show Pergamum version, license, and repository information.",
+  "command.help.usageTour": "Usage Tour",
+  "command.help.usageTour.description": "Show the usage tour.",
   "command.app.zoom.in": "Zoom In",
   "command.app.zoom.in.description": "Zoom in the window.",
   "command.app.zoom.out": "Zoom Out",
@@ -1405,6 +1407,7 @@ export const enTranslations = {
   "menu.file.import.bulkTextFiles": "Bulk Import Text Files...",
   "menu.help": "Help",
   "menu.showResumeHub": "Show Resume Hub",
+  "menu.usageTour": "Usage Tour",
   "menu.hide": "Hide {appName}",
   "menu.hideOthers": "Hide Others",
   "menu.minimize": "Minimize",
@@ -1957,6 +1960,8 @@ export const enTranslations = {
   "settings.workbench.language.option.en.label": "English",
   "settings.workbench.normalizeUnicodeToNfc.label": "Normalize Unicode text to NFC",
   "settings.workbench.normalizeUnicodeToNfc.description": "Normalizes Unicode text from external input and saved data to NFC, making visually identical strings easier to treat consistently. Usually keep this enabled.",
+  "settings.workbench.usageTourAutoShowDisabled.label": "Disable usage tour on startup",
+  "settings.workbench.usageTourAutoShowDisabled.description": "Do not show the usage tour automatically when the application starts.",
   "settings.notification.output.enabled.description": "Show lightweight notifications such as operation results in the bottom-right corner of Pergamum. Warnings and errors may still be shown in dialogs regardless of this setting.",
   "settings.notification.output.enabled.label": "Show in-app notifications",
   "settings.workbench.notification.durationMs.description": "Base display time before an information notification (NotificationToast) disappears automatically. Set 0 to keep notifications until dismissed. Positive values are adjusted by priority and clamped from 3000 ms to 30000 ms. Warnings and errors are not shown as these notifications.",
@@ -2413,5 +2418,49 @@ export const enTranslations = {
   "workspace.markdownEditor": "Markdown editor",
   "workspace.markdownPreview": "Markdown preview",
   "workspace.markdownWorkspace": "Markdown workspace",
-  "workspace.preview": "Preview"
+  "workspace.preview": "Preview",
+  "usageTour.action.back": "Back",
+  "usageTour.action.dismissAutoShow": "Don't show again",
+  "usageTour.action.next": "Next",
+  "usageTour.action.complete": "Finish",
+  "usageTour.stepBadge.ariaLabel": "Step {current} of {total}",
+  "usageTour.step.welcome.title": "Welcome",
+  "usageTour.step.welcome.body":
+    "Welcome to Pergamum.\nThis application is an editor specialized for writing prose with Markdown and plain text files.\nLet's take a quick look at the main features of Pergamum.",
+  "usageTour.step.fileExplorer.title": "File Explorer",
+  "usageTour.step.fileExplorer.body":
+    "This is the [File Explorer].\nIn Pergamum, sets of document files are managed together in units called [Projects].\nIn the File Explorer, you can view and manage files and folders within your project.",
+  "usageTour.step.search.title": "Search",
+  "usageTour.step.search.body":
+    "This is [Search].\nYou can search across all documents in your project at once.\nUse this to find where specific words appear or to verify usage across multiple documents.",
+  "usageTour.step.glossary.title": "Glossary",
+  "usageTour.step.glossary.body":
+    "This is the [Glossary].\nYou can register information you want to reference while writing, such as characters, place names, and terms.\nRegistered entries can be reviewed as you write or used to assist input.\nYou can freely add terms and organize them with tags. How you use it is up to you.",
+  "usageTour.step.documentMap.title": "Document Map",
+  "usageTour.step.documentMap.body":
+    "This is the [Document Map].\nIt gives you a bird's-eye view of your entire document, showing which part you are currently viewing and editing.\nIt visualizes document structure using narrative text, dialogue, and colors associated with glossary tags.\nUse it as a helpful guide for navigating long documents and gauging the distribution of dialogue.",
+  "usageTour.step.documentMetrics.title": "Document Metrics",
+  "usageTour.step.documentMetrics.body":
+    "This is [Document Metrics].\nYou can check information about the active document, including character count.\nUse this when you want to track manuscript volume and document status.",
+  "usageTour.step.commandPalette.title": "Command Palette",
+  "usageTour.step.commandPalette.body":
+    "This is the [Command Palette].\nYou can find and execute various Pergamum features by name.\nWhen starting with \">\", it displays the command list, but switching modes lets you access many other functions.\nWhenever you wonder where a feature was, try opening this first.",
+  "usageTour.step.insertImage.title": "Insert Image",
+  "usageTour.step.insertImage.body":
+    "This is [Insert Image].\nUse this to insert images into your Markdown document.\nPlace your cursor where you want the image and select a file with this button.\nPasting images directly from the clipboard is also supported.",
+  "usageTour.step.callout.title": "Callouts",
+  "usageTour.step.callout.body":
+    "This is [Callouts].\nYou can insert eye-catching block containers into your text, such as Notes, Tips, and Warnings.\nUse this when you want notes or caveats to stand out from the narrative prose.\nSince callouts are a Markdown dialect syntax, they may not render as intended depending on external environments.",
+  "usageTour.step.markdownLinter.title": "Markdown Linter",
+  "usageTour.step.markdownLinter.body":
+    "This is the [Markdown Linter].\nThis feature checks Markdown formatting and syntax to help identify problematic areas.\nUse this when you want to ensure your document conforms to proper Markdown syntax.",
+  "usageTour.step.japaneseLinter.title": "Japanese Linter",
+  "usageTour.step.japaneseLinter.body":
+    "This is the [Japanese Linter].\nThis feature analyzes Japanese prose to identify issues in notation and phrasing.\nBecause it performs checks without using generative AI, CPU load increases with text volume.\nUse this as an automated proofreading check when reviewing your manuscript.",
+  "usageTour.step.preview.title": "Preview",
+  "usageTour.step.preview.body":
+    "This is the [Preview].\nYou can see how your Markdown manuscript renders side-by-side with your text.\nToggle preview visibility on and off with this button.\nThe default preview display behavior can be customized in Application Settings.",
+  "usageTour.step.completed.title": "Tour Complete",
+  "usageTour.step.completed.body":
+    "That concludes the usage tour.\nPergamum includes many more features to assist your creative writing.\nIf you ever want to view this tour again, run it anytime from \"Help\" -> \"Usage Tour\"."
 } satisfies TranslationDictionary;
