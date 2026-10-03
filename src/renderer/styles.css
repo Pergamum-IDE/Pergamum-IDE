@@ -5051,7 +5051,7 @@ label.settingsItemHeader {
 .markdownOutlinePaneEmpty {
   margin: 0;
   padding: 6px 12px;
-  color: var(--workspace-sidebar-muted, rgba(127, 127, 127, 0.9));
+  color: var(--workspace-sidebar-muted-foreground);
   font-size: 0.85rem;
 }
 
@@ -6215,13 +6215,13 @@ label.settingsItemHeader {
 }
 
 .documentMetricsChartTypeButton:hover {
-  background: var(--workspace-sidebar-hover-background, rgba(255, 255, 255, 0.05));
-  color: var(--workspace-sidebar-foreground);
+  background: var(--workspace-sidebar-hover);
+  color: var(--workspace-sidebar-item-foreground);
 }
 
 .documentMetricsChartTypeButton[data-selected="true"] {
-  background: var(--workspace-sidebar-selected-background, rgba(255, 255, 255, 0.12));
-  color: var(--workspace-sidebar-foreground);
+  background: var(--workspace-sidebar-active-background);
+  color: var(--workspace-sidebar-active-foreground);
 }
 
 .documentMetricsChartTypeIcon {
@@ -6309,7 +6309,7 @@ label.settingsItemHeader {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--workspace-sidebar-foreground);
+  color: var(--workspace-sidebar-item-foreground);
 }
 
 .documentMetricsBarTrack {
@@ -6596,10 +6596,10 @@ label.settingsItemHeader {
   font-family: inherit;
   font-size: 13px;
   padding: 4px 8px;
-  border: 1px solid var(--color-border, #ccc);
+  border: 1px solid var(--pg-color-input-border);
   border-radius: 4px;
-  background-color: var(--color-bg-input, #fff);
-  color: var(--color-text-main, #333);
+  background-color: var(--pg-color-input-background);
+  color: var(--pg-color-input-foreground);
 }
 
 .glossaryExportInput:disabled {
@@ -6613,7 +6613,7 @@ label.settingsItemHeader {
 .glossaryExportFieldError,
 .glossaryExportError {
   font-size: 12px;
-  color: var(--color-text-danger, #d9534f);
+  color: var(--pg-color-status-error-text);
 }
 
 .documentMapPngExportDialogBody {
@@ -6645,10 +6645,10 @@ label.settingsItemHeader {
   font-family: inherit;
   font-size: 13px;
   padding: 4px 8px;
-  border: 1px solid var(--color-border, #ccc);
+  border: 1px solid var(--pg-color-input-border);
   border-radius: 4px;
-  background-color: var(--color-bg-input, #fff);
-  color: var(--color-text-main, #333);
+  background-color: var(--pg-color-input-background);
+  color: var(--pg-color-input-foreground);
 }
 
 .documentMapPngExportInput:disabled {
@@ -6657,7 +6657,7 @@ label.settingsItemHeader {
 
 .documentMapPngExportFieldError {
   font-size: 12px;
-  color: var(--color-text-danger, #d9534f);
+  color: var(--pg-color-status-error-text);
 }
 
 .documentMapPngExportPlannedOutput {
@@ -6705,7 +6705,7 @@ label.settingsItemHeader {
 }
 
 .documentMapPngExportError {
-  color: var(--color-text-danger, #d9534f);
+  color: var(--pg-color-status-error-text);
 }
 
 /* #537 follow-up: toggle sliders for the planned-output header/row controls,
@@ -7332,11 +7332,11 @@ label.settingsItemHeader {
 }
 
 .documentTab[data-tab-drop-indicator="before"] {
-  box-shadow: inset 2px 0 0 0 var(--focus-ring, #3b82f6);
+  box-shadow: inset 2px 0 0 0 var(--pg-color-focus-ring);
 }
 
 .documentTab[data-tab-drop-indicator="after"] {
-  box-shadow: inset -2px 0 0 0 var(--focus-ring, #3b82f6);
+  box-shadow: inset -2px 0 0 0 var(--pg-color-focus-ring);
 }
 
 .moveDestinationDialogDescription {
@@ -8488,8 +8488,8 @@ label.settingsItemHeader {
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  background: var(--color-bg-input, #fff);
-  border: 1px solid var(--app-dialog-border, #cbd5df);
+  background: var(--pg-color-preview-code-block-background);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 4px;
 }
 
@@ -8863,7 +8863,7 @@ label.settingsItemHeader {
 
 .preview--aozora-horizontal .aozora-page-break {
   border: none;
-  border-top: 1px dashed var(--border-color, #a0a8b0);
+  border-top: 1px dashed var(--pg-color-preview-border);
   margin-top: 2em;
   margin-bottom: 2em;
 }
@@ -8884,7 +8884,7 @@ label.settingsItemHeader {
 
 .preview--aozora-vertical .aozora-page-break {
   border: none;
-  border-right: 1px dashed var(--border-color, #a0a8b0);
+  border-right: 1px dashed var(--pg-color-preview-border);
   margin-right: 2em;
   margin-left: 2em;
 }
@@ -10004,8 +10004,8 @@ label.settingsItemHeader {
   gap: 6px;
   border: 1px solid var(--app-dialog-border, #d0d7de);
   border-radius: 6px;
-  background: var(--app-dialog-button-bg, #f6f8fa);
-  color: var(--app-dialog-text, #24292f);
+  background: var(--app-dialog-button-background);
+  color: var(--app-dialog-button-foreground);
   padding: 6px 14px;
   font-weight: 600;
   cursor: pointer;
@@ -10027,7 +10027,7 @@ label.settingsItemHeader {
 }
 
 .glossaryEntryManagerExportAllButton:hover:not(:disabled) {
-  background: var(--app-dialog-button-hover-bg, #f3f4f6);
+  background: var(--pg-color-button-hover-background);
 }
 
 .glossaryEntryManagerEmpty {
@@ -10984,7 +10984,7 @@ label.settingsItemHeader {
 
 .nameInputDialogDescription {
   margin: 0;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
   font-size: 0.85rem;
   line-height: 1.4;
 }
@@ -10996,13 +10996,13 @@ label.settingsItemHeader {
   margin: 0;
   padding: 8px 10px;
   border-radius: 4px;
-  background: var(--app-dialog-inset-background, rgba(37, 99, 168, 0.08));
+  background: var(--pg-color-surface-inset);
   font-size: 0.8rem;
   line-height: 1.4;
 }
 
 .nameInputDialogContextLabel {
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
   font-weight: 600;
 }
 
@@ -11115,13 +11115,13 @@ label.settingsItemHeader {
   padding-block: 4px;
   padding-inline: 8px;
   border-radius: 4px;
-  background: var(--app-dialog-inset-background, rgba(0, 0, 0, 0.05));
+  background: var(--pg-color-surface-inset);
   color: inherit;
   word-break: break-all;
 }
 
 .settingsSaveDestinationPath-unconfigured {
-  color: var(--app-dialog-secondary-foreground, #666);
+  color: var(--pg-color-surface-muted);
   font-style: italic;
   font-family: inherit;
 }
@@ -11139,8 +11139,8 @@ label.settingsItemHeader {
 }
 
 .settingsSaveDestinationEditButton:hover:not(:disabled) {
-  background: var(--app-dialog-button-hover-background, #f6f8fa);
-  border-color: var(--app-dialog-button-border-hover, #bcc6d2);
+  background: var(--pg-color-button-hover-background);
+  border-color: var(--app-dialog-button-border);
 }
 
 .settingsSaveDestinationEditButton:disabled {
@@ -11160,8 +11160,8 @@ label.settingsItemHeader {
   margin: 0;
   padding: 8px 10px;
   border-radius: 4px;
-  background: var(--app-dialog-inset-background, rgba(37, 99, 168, 0.08));
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  background: var(--pg-color-surface-inset);
+  color: var(--pg-color-surface-muted);
   font-size: 0.85rem;
   line-height: 1.4;
   white-space: pre-line;
@@ -11201,7 +11201,7 @@ label.settingsItemHeader {
 
 .saveDestinationDialogRiskyNotice {
   margin: 0;
-  color: var(--app-dialog-warning-foreground, #b25e00);
+  color: var(--pg-color-status-warning-text);
   font-size: 0.82rem;
   line-height: 1.35;
 }
@@ -11907,7 +11907,7 @@ label.settingsItemHeader {
 }
 
 .textImportDestinationPickerName.isSelected {
-  background: var(--app-accent, #2f6fed);
+  background: var(--pg-color-accent-primary);
   color: var(--pg-color-accent-foreground);
 }
 
@@ -11931,7 +11931,7 @@ label.settingsItemHeader {
 .textImportDestinationPickerFailed {
   margin: 4px 0;
   font-size: 0.82rem;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
 }
 
 .appDialogActions {
@@ -12607,7 +12607,7 @@ label.settingsItemHeader {
 
 .exportConfirmationDialogLastExportPath {
   font-size: 12px;
-  color: var(--color-text-muted, #888);
+  color: var(--pg-color-surface-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -12618,15 +12618,15 @@ label.settingsItemHeader {
   font-family: inherit;
   font-size: 13px;
   padding: 4px 8px;
-  border: 1px solid var(--color-border, #ccc);
+  border: 1px solid var(--pg-color-input-border);
   border-radius: 4px;
-  background-color: var(--color-bg-input, #fff);
-  color: var(--color-text-main, #333);
+  background-color: var(--pg-color-input-background);
+  color: var(--pg-color-input-foreground);
 }
 
 .exportConfirmationDialogErrorNote {
   font-size: 12px;
-  color: var(--color-text-danger, #d9534f);
+  color: var(--pg-color-status-error-text);
 }
 
 .exportConfirmationDialogFooter .appDialogActions {
@@ -12698,7 +12698,7 @@ label.settingsItemHeader {
 }
 
 .exportConfirmationDialogRow:hover td {
-  background: var(--app-dialog-button-hover-background, #f6f8fa);
+  background: var(--pg-color-surface-hover);
 }
 
 .exportConfirmationDialogFolderRow:hover td {
@@ -13365,7 +13365,7 @@ label.settingsItemHeader {
 
 .fontPickerFixedWidthToggleInput:checked
   + .fontPickerFixedWidthToggleTrack {
-  background: var(--app-accent, #2f6fed);
+  background: var(--pg-color-accent-primary);
 }
 
 .fontPickerFixedWidthToggleInput:checked
@@ -13376,7 +13376,7 @@ label.settingsItemHeader {
 
 .fontPickerFixedWidthToggleInput:focus-visible
   + .fontPickerFixedWidthToggleTrack {
-  outline: 2px solid var(--app-accent, #2f6fed);
+  outline: 2px solid var(--pg-color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -14688,7 +14688,7 @@ label.settingsItemHeader {
 
 .rubyGraphemeCounter {
   font-size: 12px;
-  color: var(--app-dialog-secondary-foreground, #6b7785);
+  color: var(--pg-color-surface-muted);
 }
 
 .rubySourcePreviewField,
@@ -14853,7 +14853,7 @@ label.settingsItemHeader {
 }
 
 .exportConfirmationDialogReloadButton:hover:not(:disabled) {
-  background: var(--app-dialog-hover, #e9eef4);
+  background: var(--pg-color-button-hover-background);
   border-color: var(--app-dialog-border, #d3dae2);
 }
 
