@@ -15056,6 +15056,7 @@ label.settingsItemHeader {
 }
 
 .glossaryExportWizardContainer {
+  color: var(--app-dialog-foreground);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -15066,7 +15067,7 @@ label.settingsItemHeader {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: var(--app-dialog-text, #24292f);
+  color: var(--app-dialog-foreground);
 }
 
 .glossaryExportWizardStep1Content,
@@ -15081,9 +15082,9 @@ label.settingsItemHeader {
   flex-direction: column;
   gap: 12px;
   padding: 12px 16px;
-  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 6px;
-  background: var(--app-dialog-card-bg, #f6f8fa);
+  background: var(--pg-color-panel-background);
 }
 
 .glossaryExportWizardOptionRow {
@@ -15097,16 +15098,18 @@ label.settingsItemHeader {
   font-weight: 600;
   min-width: 140px;
 
-  color: var(--app-dialog-text, #24292f);
+  color: var(--app-dialog-foreground);
 }
 
 .glossaryExportWizardSelect,
 .glossaryExportWizardTextInput {
   padding: 5px 10px;
-  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 4px;
   font-size: 13px;
-  background: var(--pg-color-surface-background);
+  border-color: var(--pg-color-input-border);
+  background: var(--pg-color-input-background);
+  color: var(--pg-color-input-foreground);
 }
 
 .glossaryExportWizardFormatOptions {
@@ -15114,13 +15117,13 @@ label.settingsItemHeader {
   flex-direction: column;
   gap: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--app-dialog-border, #e1e4e8);
+  border-top: 1px solid var(--pg-color-panel-divider);
 }
 
 .glossaryExportWizardHelpNote {
   margin: 0;
   font-size: 12px;
-  color: #57606a;
+  color: var(--pg-color-surface-muted);
 }
 
 .glossaryExportWizardPdfFontSection,
@@ -15137,9 +15140,11 @@ label.settingsItemHeader {
 }
 
 .glossaryExportWizardEditButton {
-  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 4px;
-  background: var(--pg-color-surface-background);
+  border-color: var(--app-dialog-button-border);
+  background: var(--app-dialog-button-background);
+  color: var(--app-dialog-button-foreground);
   padding: 4px 10px;
   font-size: 12px;
   cursor: pointer;
@@ -15149,13 +15154,13 @@ label.settingsItemHeader {
   margin: 2px 0;
   font-size: 12px;
   font-weight: 500;
-  color: var(--app-dialog-text, #24292f);
+  color: var(--app-dialog-foreground);
 }
 
 .glossaryExportWizardTableSection {
   max-height: 280px;
   overflow-y: auto;
-  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 6px;
 }
 
@@ -15170,7 +15175,7 @@ label.settingsItemHeader {
   grid-template-columns: 40px 1.5fr 2fr 1.2fr 80px;
   align-items: center;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--app-dialog-border, #e1e4e8);
+  border-bottom: 1px solid var(--pg-color-panel-divider);
   font-size: 13px;
 }
 
@@ -15179,7 +15184,8 @@ label.settingsItemHeader {
 }
 
 .glossaryExportWizardTableHead {
-  background: var(--app-dialog-card-bg, #f6f8fa);
+  background: var(--pg-color-panel-header-background);
+  color: var(--app-dialog-foreground);
   font-weight: 600;
   position: sticky;
   top: 0;
@@ -15219,7 +15225,7 @@ label.settingsItemHeader {
 
 .glossaryExportWizardNoTags {
   font-size: 11px;
-  color: #8c959f;
+  color: var(--pg-color-surface-muted);
 }
 
 .glossaryExportWizardColCount,
@@ -15229,7 +15235,7 @@ label.settingsItemHeader {
 }
 
 .glossaryExportWizardCellCount {
-  color: #57606a;
+  color: var(--pg-color-surface-muted);
 }
 
 .glossaryExportWizardColToggle {
@@ -15263,9 +15269,9 @@ label.settingsItemHeader {
   flex-direction: column;
   gap: 8px;
   padding: 16px;
-  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 6px;
-  background: var(--app-dialog-card-bg, #f6f8fa);
+  background: var(--pg-color-panel-background);
 }
 
 .glossaryExportWizardSummaryRow {
@@ -15275,12 +15281,13 @@ label.settingsItemHeader {
 }
 
 .glossaryExportWizardSummaryLabel {
+  color: var(--app-dialog-foreground);
   font-weight: 600;
   min-width: 140px;
 }
 
 .glossaryExportWizardSummaryValue {
-  color: var(--app-dialog-text, #24292f);
+  color: var(--app-dialog-foreground);
 }
 
 .glossaryExportWizardTocRow {
@@ -15315,9 +15322,11 @@ label.settingsItemHeader {
 }
 
 .glossaryExportWizardBrowseButton {
-  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 6px;
-  background: var(--app-dialog-button-bg, #f6f8fa);
+  border-color: var(--app-dialog-button-border);
+  background: var(--app-dialog-button-background);
+  color: var(--app-dialog-button-foreground);
   padding: 5px 12px;
   font-size: 13px;
   cursor: pointer;
@@ -15328,7 +15337,7 @@ label.settingsItemHeader {
   padding: 12px 16px;
   border-radius: 6px;
   background: var(--pg-color-status-warning-background-alt);
-  border: 1px solid #d4a72c;
+  border: 1px solid var(--pg-color-status-warning);
   color: var(--pg-color-status-warning-text-alt);
   font-size: 12px;
 }
@@ -15337,8 +15346,8 @@ label.settingsItemHeader {
   padding: 12px 16px;
   border-radius: 6px;
   background: var(--pg-color-status-success-background);
-  border: 1px solid #1a7f37;
-  color: #1a7f37;
+  border: 1px solid var(--pg-color-status-success);
+  color: var(--pg-color-status-success);
   font-size: 13px;
 }
 
@@ -15346,7 +15355,7 @@ label.settingsItemHeader {
   padding: 12px 16px;
   border-radius: 6px;
   background: var(--pg-color-status-error-background-alt);
-  border: 1px solid #ff8182;
+  border: 1px solid var(--pg-color-status-error);
   color: var(--pg-color-status-error-text-alt-4);
   font-size: 13px;
 }
@@ -15360,9 +15369,11 @@ label.settingsItemHeader {
 
 .glossaryExportWizardCancelButton,
 .glossaryExportWizardBackButton {
-  border: 1px solid var(--app-dialog-border, #d0d7de);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 6px;
-  background: var(--app-dialog-button-bg, #f6f8fa);
+  border-color: var(--app-dialog-button-border);
+  background: var(--app-dialog-button-background);
+  color: var(--app-dialog-button-foreground);
   padding: 6px 16px;
   font-size: 13px;
   font-weight: 600;

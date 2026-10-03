@@ -1,8 +1,9 @@
 import type { ExportImageAssetCopyItem } from "../../shared/api";
+import type { GlossaryTag } from "../../shared/glossary";
 import {
-  representativeGlossaryAtom,
-  type GlossaryEntry
-} from "../../shared/glossary";
+  glossaryExportEntryTitle,
+  type GlossaryExportEntry
+} from "../../shared/glossaryExportEntry";
 import {
   escapeHtmlAttr,
   escapeHtmlText
@@ -89,7 +90,7 @@ export interface GlossaryExportDocumentLabels {
 }
 
 export interface BuildGlossaryEntryExportHtmlInput {
-  readonly entry: GlossaryEntry;
+  readonly entry: GlossaryExportEntry;
   readonly content: GlossaryExportContentOptions;
   readonly occurrences: GlossaryEntryOccurrenceCounts | null;
   readonly description: RenderedGlossaryDescription | null;
@@ -101,13 +102,17 @@ export interface BuildGlossaryEntryExportHtmlInput {
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null): string {
+  if (iso === null) {
+    return "";
+  }
+
   const date = new Date(iso);
 
   return Number.isNaN(date.getTime()) ? iso : date.toISOString().slice(0, 10);
 }
 
-function tagChipHtml(tag: GlossaryEntry["tags"][number]): string {
+function tagChipHtml(tag: GlossaryTag): string {
   const style =
     HEX_COLOR.test(tag.backgroundRgb) && HEX_COLOR.test(tag.foregroundRgb)
       ? ` style="background-color: ${tag.backgroundRgb}; color: ${tag.foregroundRgb};"`
@@ -117,10 +122,10 @@ function tagChipHtml(tag: GlossaryEntry["tags"][number]): string {
 }
 
 function infoSectionHtml(
-  entry: GlossaryEntry,
+  entry: GlossaryExportEntry,
   labels: GlossaryExportDocumentLabels
 ): string {
-  const representative = representativeGlossaryAtom(entry)?.value ?? "";
+  const representative = glossaryExportEntryTitle(entry);
   const atomValues = [...entry.atoms]
     .sort((left, right) => left.sortOrder - right.sortOrder)
     .map((atom) => atom.value)
@@ -306,7 +311,7 @@ const baseCss = [
 export function buildGlossaryEntryExportHtml(
   input: BuildGlossaryEntryExportHtmlInput
 ): string {
-  const title = representativeGlossaryAtom(input.entry)?.value ?? input.entry.id;
+  const title = glossaryExportEntryTitle(input.entry);
   const sections: string[] = [];
 
   if (input.content.includeGlossaryInfo) {
@@ -355,7 +360,7 @@ export function buildGlossaryEntryExportHtml(
 }
 
 export interface CombinedGlossaryEntrySectionInput {
-  readonly entry: GlossaryEntry;
+  readonly entry: GlossaryExportEntry;
   readonly occurrences: GlossaryEntryOccurrenceCounts | null;
   readonly description: RenderedGlossaryDescription | null;
 }
@@ -379,7 +384,7 @@ export function renderGlossaryEntrySectionHtml(
   content: GlossaryExportContentOptions,
   labels: GlossaryExportDocumentLabels
 ): string {
-  const title = representativeGlossaryAtom(input.entry)?.value ?? input.entry.id;
+  const title = glossaryExportEntryTitle(input.entry);
   const sections: string[] = [];
 
   if (content.includeGlossaryInfo) {
@@ -410,7 +415,7 @@ function renderTocNavHtml(
   tocNavLabel: string = "語彙目次"
 ): string {
   const items = sections.map((item) => {
-    const title = representativeGlossaryAtom(item.entry)?.value ?? item.entry.id;
+    const title = glossaryExportEntryTitle(item.entry);
     const anchorId = `glossary-entry-${item.entry.id}`;
     return `<li><a href="#${escapeHtmlAttr(anchorId)}">${escapeHtmlText(title)}</a></li>`;
   });

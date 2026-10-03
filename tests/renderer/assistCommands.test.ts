@@ -253,6 +253,18 @@ describe("assist commands (#252)", () => {
 
 describe("explicit-target dialog commands (#684)", () => {
   const origin = { kind: "file", filePath: "chapters/01.md" } as const;
+  const projectTarget = { kind: "project", origin } as const;
+  const glossaryTarget = {
+    kind: "glossaryDescription",
+    snapshot: {
+      id: "description-draft-x",
+      description: "d",
+      atoms: [],
+      tags: [],
+      createdAt: null,
+      updatedAt: null
+    }
+  } as const;
   const target = {
     kind: "projectFile",
     relativePath: "chapters/01.md",
@@ -270,7 +282,7 @@ describe("explicit-target dialog commands (#684)", () => {
       canOpenExportDialog: (o: unknown) => {
         calls.push(["canExport", o]);
 
-        return o === origin;
+        return o === projectTarget || o === glossaryTarget;
       },
       openJapaneseMachineCheckDialog: (t?: unknown) =>
         void calls.push(["check", t]),
@@ -304,17 +316,20 @@ describe("explicit-target dialog commands (#684)", () => {
     expect(calls).toEqual([["export", undefined]]);
   });
 
-  it("Export with an explicit origin passes it on and is judged on it", async () => {
+  it("Export with an explicit project target passes it on and is judged on it", async () => {
     const { registry, calls } = setup();
 
     expect(
       registry.isEnabledForContext(assistCommandIds.openExportDialog, context, {
-        origin
+        target: projectTarget
       })
     ).toBe(true);
     expect(
       registry.isEnabledForContext(assistCommandIds.openExportDialog, context, {
-        origin: { kind: "file", filePath: "other.md" }
+        target: {
+          kind: "project",
+          origin: { kind: "file", filePath: "other.md" }
+        }
       })
     ).toBe(false);
 
@@ -322,10 +337,29 @@ describe("explicit-target dialog commands (#684)", () => {
     await registry.execute(
       assistCommandIds.openExportDialog,
       { source: "documentTabBar" },
-      { origin }
+      { target: projectTarget }
     );
 
-    expect(calls.at(-1)).toEqual(["export", origin]);
+    expect(calls.at(-1)).toEqual(["export", projectTarget]);
+  });
+
+  it("Export with a glossary Description target passes the snapshot on (#695)", async () => {
+    const { registry, calls } = setup();
+
+    expect(
+      registry.isEnabledForContext(assistCommandIds.openExportDialog, context, {
+        target: glossaryTarget
+      })
+    ).toBe(true);
+
+    calls.length = 0;
+    await registry.execute(
+      assistCommandIds.openExportDialog,
+      { source: "documentTabBar" },
+      { target: glossaryTarget }
+    );
+
+    expect(calls.at(-1)).toEqual(["export", glossaryTarget]);
   });
 
   it("Japanese Style Check with no argument keeps the active-editor semantics", async () => {

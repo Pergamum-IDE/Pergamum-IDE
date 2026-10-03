@@ -217,7 +217,7 @@ describe("App wiring (#684)", () => {
     expect(block).toContain("assistCommandIds.openExportDialog");
     expect(block).toContain("assistCommandIds.openJapaneseMachineCheckDialog");
     expect(block).toContain('{ source: "documentTabBar" }');
-    expect(block).toContain('{ origin: { kind: "file", filePath: relativePath } }');
+    expect(block).toContain("{ target }");
     expect(block).toContain("{ target }");
     expect(block).not.toContain("handleFileExplorerExport");
     expect(block).not.toContain("setJapaneseMachineCheckTarget");
@@ -236,7 +236,7 @@ describe("App wiring (#684)", () => {
 
   it("keeps the zero-argument commands as they were", () => {
     expect(app).toContain(
-      "void handleFileExplorerExport(origin ?? { kind: \"projectRoot\" });"
+      "void handleFileExplorerExport(target?.origin ?? { kind: \"projectRoot\" });"
     );
     expect(app).toContain(
       "explicitTarget ?? resolveJapaneseMachineCheckTargetRef.current()"
