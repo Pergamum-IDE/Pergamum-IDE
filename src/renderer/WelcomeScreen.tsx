@@ -1,13 +1,11 @@
 import { useState, type JSX } from "react";
 import type { RecentProject } from "../shared/api";
 import type { Language, Translate } from "../shared/i18n";
-import type { AppPlatform } from "../shared/platform";
 import {
   getEnabledWelcomeTips,
   getNextTipIndex,
   getPreviousTipIndex,
   getWelcomeTipText,
-  resolveWelcomeTipTextTokens,
   type WelcomeTip
 } from "../shared/welcomeTips";
 import {
@@ -23,7 +21,6 @@ interface WelcomeScreenProps {
   recentProjects: RecentProject[];
   translate: Translate;
   language?: Language;
-  platform?: AppPlatform;
   onCreateProject: () => void;
   onOpenProject: () => void;
   onOpenRecentProject: (projectFilePath: string) => void;
@@ -45,7 +42,6 @@ export function WelcomeScreen({
   recentProjects,
   translate,
   language = "ja",
-  platform = "windows",
   onCreateProject,
   onOpenProject,
   onOpenRecentProject,
@@ -114,18 +110,12 @@ export function WelcomeScreen({
                   }}
                 />
                 <h3 className="welcomeTipTitle">
-                  {resolveWelcomeTipTextTokens(
-                    getWelcomeTipText(currentTip, language).title,
-                    platform
-                  )}
+                  {getWelcomeTipText(currentTip, language).title}
                 </h3>
               </div>
 
               <p className="welcomeTipBody">
-                {resolveWelcomeTipTextTokens(
-                  getWelcomeTipText(currentTip, language).body,
-                  platform
-                )}
+                {getWelcomeTipText(currentTip, language).body}
               </p>
 
               {currentTip.link !== null &&
