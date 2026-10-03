@@ -116,7 +116,8 @@ function render(overrides: RenderOverrides = {}) {
           ? (tab: DocumentTab) =>
               describeTabContextMenu(tab, {
                 allTabs: tabs,
-                projectAccess: { kind: "readWrite" }
+                projectAccess: { kind: "readWrite" },
+                enablePlainTextDocuments: true
               })
           : undefined,
         onReorderWorkspaceTabs: (overrides.withReorder ?? true)
@@ -216,14 +217,16 @@ describe("DocumentTabBar context menu (#354)", () => {
       "select-in-file-explorer",
       "rename-file",
       "save-as",
+      "export",
+      "japanese-machine-check",
       "copy-absolute-path",
       "copy-relative-path",
       "copy-file-name"
     ]);
-    // separators before select / rename / copy groups
+    // separators before select / rename / export / copy groups
     expect(
       container.querySelectorAll(".documentTabContextMenuSeparator")
-    ).toHaveLength(3);
+    ).toHaveLength(4);
   });
 
   it("does not show a menu for a special tab", () => {
@@ -743,5 +746,97 @@ describe("Document Tab context menu shortcut column", () => {
       t("ja", "tabs.contextMenu.close")
     );
     expect(menuCommands()[0]).toBe("close");
+  });
+});
+
+// #684: Export / Japanese Style Check items in the real tab menu.
+describe("Document Tab context menu: Export / Japanese Style Check (#684)", () => {
+  const COMMAND = "assist.japaneseMachineCheck.openDialog";
+
+  function shortcutOf(command: string): string | null {
+    return (
+      menuItem(command)?.querySelector(".contextMenuItemShortcut")
+        ?.textContent ?? null
+    );
+  }
+
+  async function withUserBinding<T>(run: () => T | Promise<T>): Promise<T> {
+    const store = await import(
+      "../../src/renderer/keybindings/effectiveKeybindingStore"
+    );
+    const { resolveDefaultKeybindings } = await import(
+      "../../src/shared/keybindings/resolve"
+    );
+    const rows = resolveDefaultKeybindings("linux");
+
+    act(() =>
+      store.setEffectiveKeybindings("linux", [
+        ...rows,
+        { ...rows[0], command: COMMAND, key: "Mod-Shift-9" }
+      ])
+    );
+
+    try {
+      return await run();
+    } finally {
+      store.resetEffectiveKeybindings();
+    }
+  }
+
+  it("both items sit between Save As and the copy group and are enabled for a project .md", () => {
+    render();
+    rightClick(documentTabEls()[0]);
+
+    const commands = menuCommands();
+
+    expect(commands.indexOf("export")).toBe(commands.indexOf("save-as") + 1);
+    expect(commands.indexOf("japanese-machine-check")).toBe(
+      commands.indexOf("export") + 1
+    );
+    expect(menuItem("export")?.disabled).toBe(false);
+    expect(menuItem("japanese-machine-check")?.disabled).toBe(false);
+    expect(menuItem("export")?.textContent).toContain("エクスポート...");
+    expect(menuItem("japanese-machine-check")?.textContent).toContain(
+      "日本語表現チェック..."
+    );
+  });
+
+  it("calls onTabAction with the RIGHT-CLICKED tab, not the active one, and activates nothing", () => {
+    const onTabAction = vi.fn();
+    const onSelectDocument = vi.fn();
+    const { tabs } = render({ onTabAction, onSelectDocument });
+
+    // tabs[0] is active; click the menu of tabs[2].
+    rightClick(documentTabEls()[2]);
+    act(() => menuItem("japanese-machine-check")!.click());
+    expect(onTabAction).toHaveBeenLastCalledWith("japaneseMachineCheck", tabs[2]);
+
+    rightClick(documentTabEls()[2]);
+    act(() => menuItem("export")!.click());
+    expect(onTabAction).toHaveBeenLastCalledWith("export", tabs[2]);
+    expect(onSelectDocument).not.toHaveBeenCalled();
+  });
+
+  it("Export never shows a shortcut; the check shows its effective one only on the active tab", async () => {
+    await withUserBinding(() => {
+      render();
+      const [active, inactive] = documentTabEls();
+
+      rightClick(active);
+      expect(shortcutOf("export")).toBeNull();
+      expect(shortcutOf("japanese-machine-check")).toBeTruthy();
+
+      act(() => backdrop().click());
+      rightClick(inactive);
+      expect(shortcutOf("export")).toBeNull();
+      expect(shortcutOf("japanese-machine-check")).toBeNull();
+    });
+  });
+
+  it("an unbound command shows no shortcut even on the active tab", () => {
+    render();
+    rightClick(documentTabEls()[0]);
+
+    expect(shortcutOf("japanese-machine-check")).toBeNull();
   });
 });

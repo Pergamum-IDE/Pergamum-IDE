@@ -4,10 +4,9 @@ import type {
 } from "../shared/api";
 import { getProjectDocumentKind } from "../shared/projectDocumentKind";
 
-export type ExportOrigin =
-  | { readonly kind: "projectRoot" }
-  | { readonly kind: "folder"; readonly folderPath: string }
-  | { readonly kind: "file"; readonly filePath: string };
+import type { ExportOrigin } from "../shared/exportOrigin";
+
+export type { ExportOrigin };
 
 export type ExportDocumentKind = "markdown" | "text";
 

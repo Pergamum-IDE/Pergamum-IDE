@@ -1,7 +1,9 @@
 import type { Command, CommandRegistry } from "../shared/commandRegistry";
 import type { CommandEnablementExpression } from "../shared/commandEnablement";
 import { assistCommandIds } from "../shared/commandIds";
+import type { ExportOrigin } from "../shared/exportOrigin";
 import type { Translate } from "../shared/i18n";
+import type { JapaneseMachineCheckTarget } from "../shared/japaneseMachineCheck";
 import { projectOwnedWriteAllowedCommandWhen } from "./editorCommands";
 
 export { assistCommandIds };
@@ -29,9 +31,22 @@ export interface AssistCommandController {
   showLineEndingDistribution(): void;
   insertParagraphIndent(): void;
   removeParagraphIndent(): void;
-  openExportDialog?(): void;
-  openJapaneseMachineCheckDialog?(): void;
-  canRunJapaneseMachineCheck?(): boolean;
+  /** No `origin`: the whole project. */
+  openExportDialog?(origin?: ExportOrigin): void;
+  /** Only asked when an explicit `origin` is given (a clicked file). */
+  canOpenExportDialog?(origin: ExportOrigin): boolean;
+  /** No `target`: the active editor's target. */
+  openJapaneseMachineCheckDialog?(target?: JapaneseMachineCheckTarget): void;
+  /** No `target`: whether the active editor has one. */
+  canRunJapaneseMachineCheck?(target?: JapaneseMachineCheckTarget): boolean;
+}
+
+/** The optional explicit-target options of the two dialog commands (#684). */
+interface ExportCommandOptions {
+  readonly origin?: ExportOrigin;
+}
+interface JapaneseMachineCheckCommandOptions {
+  readonly target?: JapaneseMachineCheckTarget;
 }
 
 export interface AssistCommandTitles {
@@ -48,6 +63,11 @@ export interface AssistCommandTitles {
 }
 
 type AssistCommand = Command<readonly [], void>;
+type OptionsCommand<TOptions> = Command<readonly [TOptions?], void>;
+type AssistCommandEntry =
+  | AssistCommand
+  | OptionsCommand<ExportCommandOptions>
+  | OptionsCommand<JapaneseMachineCheckCommandOptions>;
 
 export function createAssistCommandTitles(
   translate: Translate
@@ -83,7 +103,7 @@ export function createAssistCommandTitles(
 export function createAssistCommands(
   controller: AssistCommandController,
   titles: AssistCommandTitles
-): readonly AssistCommand[] {
+): readonly AssistCommandEntry[] {
   return [
     {
       id: assistCommandIds.showLineEndingDistribution,
@@ -112,15 +132,26 @@ export function createAssistCommands(
       paletteOrder: 30,
       execute: () => controller.removeParagraphIndent()
     },
+    // With no argument these behave exactly as before #684. An explicit
+    // origin / target (a document tab's context menu) is judged and used as
+    // given - never the active editor's.
     {
       id: assistCommandIds.openExportDialog,
       title: titles.openExportDialog ?? "Export Project...",
       description: titles.openExportDialogDescription ?? "",
       when: { key: "project.isOpen" },
+      ...(controller.canOpenExportDialog === undefined
+        ? {}
+        : {
+            isEnabled: (options?: ExportCommandOptions) =>
+              options?.origin === undefined ||
+              controller.canOpenExportDialog!(options.origin)
+          }),
       category: "assist",
       paletteOrder: 40,
-      execute: () => controller.openExportDialog?.()
-    },
+      execute: (options?: ExportCommandOptions) =>
+        controller.openExportDialog?.(options?.origin)
+    } as unknown as OptionsCommand<ExportCommandOptions>,
     {
       id: assistCommandIds.openJapaneseMachineCheckDialog,
       title: titles.openJapaneseMachineCheckDialog ?? "Japanese Style Check...",
@@ -128,11 +159,15 @@ export function createAssistCommands(
       when: { key: "project.isOpen" },
       ...(controller.canRunJapaneseMachineCheck === undefined
         ? {}
-        : { isEnabled: () => controller.canRunJapaneseMachineCheck!() }),
+        : {
+            isEnabled: (options?: JapaneseMachineCheckCommandOptions) =>
+              controller.canRunJapaneseMachineCheck!(options?.target)
+          }),
       category: "assist",
       paletteOrder: 50,
-      execute: () => controller.openJapaneseMachineCheckDialog?.()
-    }
+      execute: (options?: JapaneseMachineCheckCommandOptions) =>
+        controller.openJapaneseMachineCheckDialog?.(options?.target)
+    } as unknown as OptionsCommand<JapaneseMachineCheckCommandOptions>
   ];
 }
 
@@ -142,6 +177,6 @@ export function registerAssistCommands(
   titles: AssistCommandTitles
 ): void {
   for (const command of createAssistCommands(controller, titles)) {
-    registry.register(command);
+    registry.register(command as AssistCommand);
   }
 }

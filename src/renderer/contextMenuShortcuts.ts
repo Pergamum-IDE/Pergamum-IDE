@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useSyncExternalStore } from "react";
-import { editorCommandIds } from "../shared/commandIds";
+import { assistCommandIds, editorCommandIds } from "../shared/commandIds";
 import {
   formatKeybindingLabel,
   type PergamumPlatform,
@@ -117,8 +117,11 @@ export const fileExplorerContextMenuShortcutCommandIds: Readonly<
  *  - saveAs  -> editor.saveAs     (saves the active document under a new path)
  *  - rename  -> F2 on the focused active project-document tab (the menu closes
  *               with focus returned to that tab)
- * Close Others / Left / Right, Select in File Explorer and the path copies have
- * no keybinding command, so they are unmapped.
+ *  - japaneseMachineCheck -> assist.japaneseMachineCheck.openDialog
+ * Export is never mapped: its key (if any) exports the whole project, the item
+ * exports the clicked file. Close Others / Left / Right, Select in File
+ * Explorer and the path copies have no keybinding command, so they are
+ * unmapped.
  */
 export function documentTabContextMenuShortcutCommandId(
   action: TabContextMenuAction,
@@ -137,6 +140,10 @@ export function documentTabContextMenuShortcutCommandId(
       return tab.isProjectDocument
         ? rendererShortcutCommandIds.filesRename
         : null;
+    case "japaneseMachineCheck":
+      // The key checks the active editor's target; this item checks the
+      // clicked tab's. Same thing only when the clicked tab is the active one.
+      return assistCommandIds.openJapaneseMachineCheckDialog;
     default:
       return null;
   }

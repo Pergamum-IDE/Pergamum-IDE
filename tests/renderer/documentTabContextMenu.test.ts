@@ -9,6 +9,7 @@ import type { DocumentTab } from "../../src/renderer/openDocuments";
 import type { ProjectAccessMode } from "../../src/shared/api";
 import {
   createFileEditorIdForPath,
+  createGlossaryDescriptionEditorId,
   createProjectDocumentEditorId,
   createUntitledEditorId,
   type ActiveProjectContext
@@ -37,6 +38,13 @@ const untitledTab: DocumentTab = {
   isExternalMarkdownFile: false
 };
 
+const glossaryTab: DocumentTab = {
+  id: createGlossaryDescriptionEditorId("0190b6a1-1c2d-7e3f-8a4b-0000000000e1"),
+  title: "語彙: アリス",
+  isDirty: false,
+  isExternalMarkdownFile: false
+};
+
 const readWrite: ProjectAccessMode = { kind: "readWrite" };
 const readOnly: ProjectAccessMode = {
   kind: "readOnly",
@@ -48,11 +56,13 @@ function menu(
   overrides: {
     allTabs?: DocumentTab[];
     projectAccess?: ProjectAccessMode | null;
+    enablePlainTextDocuments?: boolean;
   } = {}
 ) {
   const { items } = describeTabContextMenu(tab, {
     allTabs: overrides.allTabs ?? [tab],
-    projectAccess: overrides.projectAccess ?? readWrite
+    projectAccess: overrides.projectAccess ?? readWrite,
+    enablePlainTextDocuments: overrides.enablePlainTextDocuments ?? true
   });
   const byId = new Map(items.map((item) => [item.id, item]));
   return {
@@ -66,7 +76,7 @@ function menu(
 }
 
 describe("describeTabContextMenu (#354)", () => {
-  it("lists all ten commands in issue order with three separators", () => {
+  it("lists all twelve commands in order with four separators (#684)", () => {
     const m = menu(projectTab("a.md"));
     expect(m.ids).toEqual([
       "close",
@@ -76,14 +86,19 @@ describe("describeTabContextMenu (#354)", () => {
       "selectInFileExplorer",
       "renameFile",
       "saveAs",
+      "export",
+      "japaneseMachineCheck",
       "copyAbsolutePath",
       "copyRelativePath",
       "copyFileName"
     ]);
     expect(m.separatorBefore("selectInFileExplorer")).toBe(true);
     expect(m.separatorBefore("renameFile")).toBe(true);
+    // One new separator, before Export; Japanese Style Check joins it.
+    expect(m.separatorBefore("export")).toBe(true);
+    expect(m.separatorBefore("japaneseMachineCheck")).toBe(false);
     expect(m.separatorBefore("copyAbsolutePath")).toBe(true);
-    expect(m.items.filter((item) => item.separatorBefore)).toHaveLength(3);
+    expect(m.items.filter((item) => item.separatorBefore)).toHaveLength(4);
   });
 
   it("project document tab (read-write, clean) — full capability", () => {
@@ -99,6 +114,85 @@ describe("describeTabContextMenu (#354)", () => {
     expect(m.enabled("copyAbsolutePath")).toBe(true);
     expect(m.enabled("copyRelativePath")).toBe(true);
     expect(m.enabled("copyFileName")).toBe(true);
+  });
+
+  describe("Export / Japanese Style Check (#684)", () => {
+    const enabledFor = (
+      tab: DocumentTab,
+      overrides: Parameters<typeof menu>[1] = {}
+    ) => {
+      const m = menu(tab, overrides);
+
+      return {
+        export: m.enabled("export"),
+        check: m.enabled("japaneseMachineCheck"),
+        exportReason: m.reason("export"),
+        checkReason: m.reason("japaneseMachineCheck")
+      };
+    };
+
+    it("project .md / .markdown: both enabled", () => {
+      for (const path of ["a.md", "Drafts/b.markdown"]) {
+        expect(enabledFor(projectTab(path)), path).toMatchObject({
+          export: true,
+          check: true
+        });
+      }
+    });
+
+    it("project .txt: the check is enabled; Export follows enablePlainTextDocuments", () => {
+      expect(
+        enabledFor(projectTab("n.txt"), { enablePlainTextDocuments: true })
+      ).toMatchObject({ export: true, check: true });
+      expect(
+        enabledFor(projectTab("n.txt"), { enablePlainTextDocuments: false })
+      ).toMatchObject({
+        export: false,
+        exportReason: "tabs.contextMenu.disabled.unsupportedForTab",
+        check: true
+      });
+    });
+
+    it("an unsupported project document: both disabled", () => {
+      expect(enabledFor(projectTab("data.json"))).toMatchObject({
+        export: false,
+        check: false,
+        exportReason: "tabs.contextMenu.disabled.unsupportedForTab",
+        checkReason: "tabs.contextMenu.disabled.unsupportedForTab"
+      });
+    });
+
+    it("external file and untitled: both disabled", () => {
+      for (const tab of [externalTab, untitledTab]) {
+        expect(enabledFor(tab), tab.title).toMatchObject({
+          export: false,
+          check: false
+        });
+      }
+    });
+
+    it("glossary Description: the check is enabled, Export is not", () => {
+      expect(enabledFor(glossaryTab)).toMatchObject({
+        export: false,
+        exportReason: "tabs.contextMenu.disabled.unsupportedForTab",
+        check: true
+      });
+    });
+
+    it("reuses the existing command titles as labels", () => {
+      const labels = Object.fromEntries(
+        describeTabContextMenu(projectTab("a.md"), {
+          allTabs: [projectTab("a.md")],
+          projectAccess: readWrite,
+          enablePlainTextDocuments: true
+        }).items.map((item) => [item.id, item.labelKey])
+      );
+
+      expect(labels.export).toBe("command.assist.export.openDialog");
+      expect(labels.japaneseMachineCheck).toBe(
+        "command.assist.japaneseMachineCheck.openDialog"
+      );
+    });
   });
 
   it("external file tab — no reveal, no rename, no relative path", () => {
