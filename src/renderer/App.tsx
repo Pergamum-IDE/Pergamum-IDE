@@ -648,6 +648,12 @@ import type {
   FileExplorerRevealRequest
 } from "./FileExplorer";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import type {
+  AssistExportTarget,
+  GlossaryExportEntry
+} from "../shared/glossaryExportEntry";
+import { resolveTabExportTarget } from "./glossaryExport/tabExportTarget";
+import type { GlossaryExportWizardSession } from "./glossaryExport/glossaryExportWizardSession";
 import {
   collectExportCandidatesFromOrigin,
   isExportableDocumentForExport,
@@ -1616,7 +1622,25 @@ export function App(): JSX.Element {
     useState<DocumentMapPngExportSnapshot | null>(null);
 
   // #581 Slice 1: the Glossary Export Wizard Dialog open state & occurrences map
-  const [isGlossaryExportWizardOpen, setIsGlossaryExportWizardOpen] = useState(false);
+  // #695: the Glossary Export Wizard session: all entries (the Glossary Entry
+  // Manager) or one Description draft's snapshot (a document tab's Export).
+  // The snapshot is taken when the Wizard opens and is not refreshed.
+  const [glossaryExportWizardSession, setGlossaryExportWizardSession] =
+    useState<GlossaryExportWizardSession | null>(null);
+  const isGlossaryExportWizardOpen = glossaryExportWizardSession !== null;
+  const glossaryExportWizardSingleSnapshot =
+    glossaryExportWizardSession?.kind === "single"
+      ? glossaryExportWizardSession.snapshot
+      : null;
+  // The Wizard's entries: every entry, or the one snapshot (a stable array, so
+  // the open Wizard is not reset while the app re-renders).
+  const glossaryExportWizardEntries = useMemo<readonly GlossaryExportEntry[]>(
+    () =>
+      glossaryExportWizardSingleSnapshot
+        ? [glossaryExportWizardSingleSnapshot]
+        : glossaryEntries,
+    [glossaryExportWizardSingleSnapshot, glossaryEntries]
+  );
   // #625 P2a: the Japanese machine check wizard, opened from a File Explorer
   // file's context menu. The target (incl. `isDirty`) is frozen when it opens
   // and is handed unchanged to the dialog's prepare and run (#688).
@@ -1630,11 +1654,11 @@ export function App(): JSX.Element {
   >(() => null);
   // #684: the export dialog command. No origin = the whole project; a document
   // tab's context menu passes its clicked file. Re-pointed every render.
-  const openExportDialogCommandRef = useRef<(origin?: ExportOrigin) => void>(
-    () => undefined
-  );
+  const openExportDialogCommandRef = useRef<
+    (target?: AssistExportTarget) => void
+  >(() => undefined);
   const canOpenExportDialogCommandRef = useRef<
-    (origin: ExportOrigin) => boolean
+    (target: AssistExportTarget) => boolean
   >(() => false);
   const [
     glossaryExportWizardOccurrenceCounts,
@@ -4209,9 +4233,9 @@ export function App(): JSX.Element {
           showLineEndingDistributionCommandRef.current(),
         insertParagraphIndent: () => insertParagraphIndentCommandRef.current(),
         removeParagraphIndent: () => removeParagraphIndentCommandRef.current(),
-        openExportDialog: (origin) => openExportDialogCommandRef.current(origin),
-        canOpenExportDialog: (origin) =>
-          canOpenExportDialogCommandRef.current(origin),
+        openExportDialog: (target) => openExportDialogCommandRef.current(target),
+        canOpenExportDialog: (target) =>
+          canOpenExportDialogCommandRef.current(target),
         openJapaneseMachineCheckDialog: (explicitTarget) => {
           // The snapshot is taken here, once; the dialog keeps this object.
           // An explicit target (a clicked tab) wins over the active editor's.
@@ -4987,11 +5011,22 @@ export function App(): JSX.Element {
 
   // #581 Slice 1: open the Glossary Export Wizard for multi-entry export
   function handleOpenGlossaryExportWizard(): void {
+    startGlossaryExportWizard({ kind: "all" });
+  }
+
+  // #695: open the Wizard for every entry, or for one Description snapshot.
+  // Only the entries of the session are counted (a single export counts one).
+  function startGlossaryExportWizard(
+    session: GlossaryExportWizardSession
+  ): void {
     const runId = ++exportWizardRunIdRef.current;
-    setIsGlossaryExportWizardOpen(true);
+    const entriesToCount: readonly GlossaryExportEntry[] =
+      session.kind === "single" ? [session.snapshot] : glossaryEntries;
+
+    setGlossaryExportWizardSession(session);
 
     const initialMap = new Map<string, OccurrenceCountValue>();
-    for (const entry of glossaryEntries) {
+    for (const entry of entriesToCount) {
       initialMap.set(entry.id, { status: "loading" });
     }
     setGlossaryExportWizardOccurrenceCounts(initialMap);
@@ -5003,9 +5038,9 @@ export function App(): JSX.Element {
         const activeProject = project;
         const activeContext = activeProjectContext;
         const docs = activeProject?.documents ?? [];
-        if (docs.length === 0 || glossaryEntries.length === 0) {
+        if (docs.length === 0 || entriesToCount.length === 0) {
           const finishedMap = new Map<string, OccurrenceCountValue>();
-          for (const entry of glossaryEntries) {
+          for (const entry of entriesToCount) {
             finishedMap.set(entry.id, {
               status: "ready",
               count: 0,
@@ -5037,7 +5072,7 @@ export function App(): JSX.Element {
 
         const currentMap = new Map<string, OccurrenceCountValue>(initialMap);
 
-        for (const entry of glossaryEntries) {
+        for (const entry of entriesToCount) {
           if (exportWizardRunIdRef.current !== runId) return;
 
           try {
@@ -5063,7 +5098,7 @@ export function App(): JSX.Element {
 
   function handleCloseGlossaryExportWizard(): void {
     exportWizardRunIdRef.current++;
-    setIsGlossaryExportWizardOpen(false);
+    setGlossaryExportWizardSession(null);
   }
 
   async function exportCombinedGlossary(
@@ -6809,6 +6844,17 @@ export function App(): JSX.Element {
     );
   }
 
+  /** #684 / #695: the right-clicked tab's own Export target (see the helper). */
+  function exportTargetForTab(tab: DocumentTab): AssistExportTarget | null {
+    return resolveTabExportTarget(tab, {
+      projectDocumentRelativePath: openProjectDocumentRelativePath,
+      openEditor: (editorId) =>
+        findOpenDocument(openDocumentsStateRef.current, editorId)?.editor ??
+        null,
+      projectTags: glossaryTags
+    });
+  }
+
   /**
    * #684: what "日本語表現チェック..." checks for the right-clicked tab, read from
    * that tab itself - a project document's path (on-disk case) and unsaved
@@ -6887,15 +6933,15 @@ export function App(): JSX.Element {
         void saveFile({ editorId: tab.id, forceSaveAs: true });
         return;
       case "export": {
-        // The CLICKED document, through the existing command (no activation).
-        const relativePath = openProjectDocumentRelativePath(tab.id);
-        if (relativePath === null) {
+        // The CLICKED tab, through the existing command (no activation).
+        const target = exportTargetForTab(tab);
+        if (target === null) {
           return;
         }
         executeUiCommand(
           assistCommandIds.openExportDialog,
           { source: "documentTabBar" },
-          { origin: { kind: "file", filePath: relativePath } }
+          { target }
         );
         return;
       }
@@ -10103,12 +10149,19 @@ export function App(): JSX.Element {
   insertBlockquoteCommandRef.current = () => {
     handleInsertBlockquote();
   };
-  openExportDialogCommandRef.current = (origin) => {
-    void handleFileExplorerExport(origin ?? { kind: "projectRoot" });
+  openExportDialogCommandRef.current = (target) => {
+    if (target?.kind === "glossaryDescription") {
+      startGlossaryExportWizard({ kind: "single", snapshot: target.snapshot });
+      return;
+    }
+
+    // No target: the whole project, as before. A project target: its origin.
+    void handleFileExplorerExport(target?.origin ?? { kind: "projectRoot" });
   };
-  canOpenExportDialogCommandRef.current = (origin) =>
-    origin.kind !== "file" ||
-    isExportableDocumentForExport(origin.filePath, {
+  canOpenExportDialogCommandRef.current = (target) =>
+    target.kind === "glossaryDescription" ||
+    target.origin.kind !== "file" ||
+    isExportableDocumentForExport(target.origin.filePath, {
       enablePlainTextDocuments:
         effectiveSettings.textFiles.enablePlainTextDocuments
     });
@@ -13878,7 +13931,8 @@ export function App(): JSX.Element {
       <GlossaryExportWizardErrorBoundary>
         <GlossaryExportWizardDialog
           isOpen={isGlossaryExportWizardOpen}
-          entries={glossaryEntries}
+          entries={glossaryExportWizardEntries}
+          mode={glossaryExportWizardSession?.kind ?? "all"}
           occurrenceCountsByEntryId={glossaryExportWizardOccurrenceCounts}
           translate={translate}
           uiLanguage={displayLanguage}

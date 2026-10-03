@@ -171,12 +171,14 @@ describe("describeTabContextMenu (#354)", () => {
       }
     });
 
-    it("glossary Description: the check is enabled, Export is not", () => {
+    it("glossary Description: both enabled, saved or not (#695)", () => {
       expect(enabledFor(glossaryTab)).toMatchObject({
-        export: false,
-        exportReason: "tabs.contextMenu.disabled.unsupportedForTab",
+        export: true,
         check: true
       });
+      expect(
+        enabledFor({ ...glossaryTab, isDirty: true })
+      ).toMatchObject({ export: true, check: true });
     });
 
     it("reuses the existing command titles as labels", () => {

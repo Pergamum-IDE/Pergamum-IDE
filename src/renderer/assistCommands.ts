@@ -1,7 +1,7 @@
 import type { Command, CommandRegistry } from "../shared/commandRegistry";
 import type { CommandEnablementExpression } from "../shared/commandEnablement";
 import { assistCommandIds } from "../shared/commandIds";
-import type { ExportOrigin } from "../shared/exportOrigin";
+import type { AssistExportTarget } from "../shared/glossaryExportEntry";
 import type { Translate } from "../shared/i18n";
 import type { JapaneseMachineCheckTarget } from "../shared/japaneseMachineCheck";
 import { projectOwnedWriteAllowedCommandWhen } from "./editorCommands";
@@ -31,10 +31,10 @@ export interface AssistCommandController {
   showLineEndingDistribution(): void;
   insertParagraphIndent(): void;
   removeParagraphIndent(): void;
-  /** No `origin`: the whole project. */
-  openExportDialog?(origin?: ExportOrigin): void;
-  /** Only asked when an explicit `origin` is given (a clicked file). */
-  canOpenExportDialog?(origin: ExportOrigin): boolean;
+  /** No `target`: the whole project. */
+  openExportDialog?(target?: AssistExportTarget): void;
+  /** Only asked when an explicit `target` is given (a clicked tab). */
+  canOpenExportDialog?(target: AssistExportTarget): boolean;
   /** No `target`: the active editor's target. */
   openJapaneseMachineCheckDialog?(target?: JapaneseMachineCheckTarget): void;
   /** No `target`: whether the active editor has one. */
@@ -43,7 +43,7 @@ export interface AssistCommandController {
 
 /** The optional explicit-target options of the two dialog commands (#684). */
 interface ExportCommandOptions {
-  readonly origin?: ExportOrigin;
+  readonly target?: AssistExportTarget;
 }
 interface JapaneseMachineCheckCommandOptions {
   readonly target?: JapaneseMachineCheckTarget;
@@ -133,7 +133,7 @@ export function createAssistCommands(
       execute: () => controller.removeParagraphIndent()
     },
     // With no argument these behave exactly as before #684. An explicit
-    // origin / target (a document tab's context menu) is judged and used as
+    // target (a document tab's context menu) is judged and used as
     // given - never the active editor's.
     {
       id: assistCommandIds.openExportDialog,
@@ -144,13 +144,13 @@ export function createAssistCommands(
         ? {}
         : {
             isEnabled: (options?: ExportCommandOptions) =>
-              options?.origin === undefined ||
-              controller.canOpenExportDialog!(options.origin)
+              options?.target === undefined ||
+              controller.canOpenExportDialog!(options.target)
           }),
       category: "assist",
       paletteOrder: 40,
       execute: (options?: ExportCommandOptions) =>
-        controller.openExportDialog?.(options?.origin)
+        controller.openExportDialog?.(options?.target)
     } as unknown as OptionsCommand<ExportCommandOptions>,
     {
       id: assistCommandIds.openJapaneseMachineCheckDialog,

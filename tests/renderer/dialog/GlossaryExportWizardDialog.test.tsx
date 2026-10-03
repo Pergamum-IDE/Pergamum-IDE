@@ -670,3 +670,161 @@ describe("GlossaryExportWizardDialog (#581 Slice 1 blocker fix)", () => {
   });
 });
 
+
+// #695: a single export of one glossary Description's draft snapshot.
+describe("GlossaryExportWizardDialog single mode (#695)", () => {
+  function snapshot(
+    value: string,
+    description = "現在の説明。"
+  ): import("../../../src/shared/glossaryExportEntry").GlossaryExportEntry {
+    return {
+      id: `description-draft-${value}`,
+      description,
+      atoms: [{ id: "local:1", value, matchFlags: 0, sortOrder: 0 }],
+      tags: [tag("tag-b", "Tag B")],
+      createdAt: null,
+      updatedAt: null,
+      fallbackTitle: "新しい語彙"
+    };
+  }
+
+  const ready = (id: string): Map<string, OccurrenceCountValue> =>
+    new Map<string, OccurrenceCountValue>([[id, 3]]);
+
+  function goToStep2(): void {
+    act(() => {
+      Array.from(container.querySelectorAll("button"))
+        .find((b) => b.textContent === "glossaryExportWizard.nextButton")!
+        .click();
+    });
+  }
+
+  function setValue(input: HTMLInputElement, value: string): void {
+    const setter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    )!.set!;
+
+    act(() => {
+      setter.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  async function runExport(onExportCombined: ReturnType<typeof vi.fn>) {
+    goToStep2();
+
+    const inputs = Array.from(
+      container.querySelectorAll<HTMLInputElement>("input.glossaryExportWizardTextInput")
+    );
+
+    setValue(
+      inputs.find((input) => input.id.endsWith("-output-folder")) ?? inputs[0],
+      "/out"
+    );
+
+    await act(async () => {
+      Array.from(container.querySelectorAll("button"))
+        .find((b) => b.textContent === "export.wizard.executeExport")!
+        .click();
+    });
+
+    return onExportCombined.mock.calls.at(-1)?.[0];
+  }
+
+  const okResult = { ok: true, outputPath: "/out/x.html", warningCount: 0 };
+
+  it("shows exactly the one entry, with its toggle and drag handle off", () => {
+    const only = snapshot("Alice");
+
+    renderDialog({
+      mode: "single",
+      entries: [only],
+      occurrenceCountsByEntryId: ready(only.id)
+    });
+
+    expect(container.querySelectorAll(".glossaryExportWizardEntryRow")).toHaveLength(1);
+    expect(container.textContent).toContain("Alice");
+    expect(container.textContent).toContain("Tag B");
+    expect(
+      container.querySelector<HTMLInputElement>(".exportConfirmationDialogIncludeInput")!
+        .disabled
+    ).toBe(true);
+    expect(
+      container
+        .querySelector(".glossaryExportWizardDragHandle")!
+        .getAttribute("draggable")
+    ).toBe("false");
+  });
+
+  it("defaults the file name to the entry's name made file-safe, and titles the document with the name as is", async () => {
+    const only = snapshot("AC/DC");
+    const onExportCombined = vi.fn().mockResolvedValue(okResult);
+
+    renderDialog({
+      mode: "single",
+      entries: [only],
+      occurrenceCountsByEntryId: ready(only.id),
+      onExportCombined,
+      onCheckFileExists: vi.fn().mockResolvedValue({ exists: false })
+    });
+
+    const plan = await runExport(onExportCombined);
+
+    expect(plan.fileName).toBe("AC_DC.html");
+    expect(plan.documentTitle).toBe("AC/DC");
+    expect(plan.entries).toEqual([only]);
+    expect(plan.occurrenceCountsByEntryId).toBeDefined();
+  });
+
+  it("all mode keeps its usual default name and title", async () => {
+    const onExportCombined = vi.fn().mockResolvedValue(okResult);
+
+    renderDialog({
+      onExportCombined,
+      onCheckFileExists: vi.fn().mockResolvedValue({ exists: false })
+    });
+
+    const plan = await runExport(onExportCombined);
+
+    expect(plan.fileName).toBe("glossary-export.html");
+    expect(plan.documentTitle).toBe("glossaryExportWizard.tocTitle");
+    expect(plan.entries).toHaveLength(3);
+  });
+
+  it("is fixed when opened: a later change of the source does not alter it; reopening takes the new one", async () => {
+    const first = snapshot("Alice", "説明A");
+    const second = snapshot("Alice", "説明B");
+    const onExportCombined = vi.fn().mockResolvedValue(okResult);
+    const render = (
+      isOpen: boolean,
+      entry: typeof first
+    ): void =>
+      act(() => {
+        root.render(
+          React.createElement(GlossaryExportWizardDialog, {
+            isOpen,
+            mode: "single",
+            entries: [entry],
+            occurrenceCountsByEntryId: ready(entry.id),
+            translate,
+            onClose: vi.fn(),
+            onExportCombined,
+            onCheckFileExists: vi.fn().mockResolvedValue({ exists: false })
+          })
+        );
+      });
+
+    render(true, first);
+    // The source changes while the Wizard is open.
+    render(true, second);
+
+    expect((await runExport(onExportCombined)).entries[0].description).toBe("説明A");
+
+    render(false, second);
+    render(true, second);
+
+    expect((await runExport(onExportCombined)).entries[0].description).toBe("説明B");
+  });
+});

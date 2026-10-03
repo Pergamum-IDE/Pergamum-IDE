@@ -1,6 +1,6 @@
 import { defineCommandId, type CommandId } from "./commandRegistry";
 import type { EditorId } from "./editorId";
-import type { ExportOrigin } from "./exportOrigin";
+import type { AssistExportTarget } from "./glossaryExportEntry";
 import type { JapaneseMachineCheckTarget } from "./japaneseMachineCheck";
 
 export const applicationCommandIds = {
@@ -44,10 +44,11 @@ export const assistCommandIds = {
   removeParagraphIndent: defineCommandId("assist.paragraphIndent.remove"),
   /**
    * No argument: export the whole project (Command Palette, menu). With an
-   * explicit `origin` (e.g. a document tab's context menu): export from there.
+   * explicit `target` (a document tab's context menu): that file, or that
+   * glossary Description's current draft.
    */
   openExportDialog: defineCommandId<
-    readonly [options?: { readonly origin?: ExportOrigin }],
+    readonly [options?: { readonly target?: AssistExportTarget }],
     void
   >("assist.export.openDialog"),
   /**

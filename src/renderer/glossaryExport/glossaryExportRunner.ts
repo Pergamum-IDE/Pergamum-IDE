@@ -7,6 +7,7 @@ import type {
 } from "../../shared/api";
 import { buildFontFamilyCss, type FontFamilySetting } from "../../shared/fontSettings";
 import type { GlossaryEntry, GlossaryEntryId } from "../../shared/glossary";
+import type { GlossaryExportEntry } from "../../shared/glossaryExportEntry";
 import {
   DEFAULT_PDF_PAGE_NUMBER_SETTINGS,
   type PdfPageNumberSettings
@@ -103,7 +104,7 @@ export async function runGlossaryExport(
  */
 export interface CombinedGlossaryExportPlan {
   readonly format?: "html" | "pdf";
-  readonly entries: readonly GlossaryEntry[];
+  readonly entries: readonly GlossaryExportEntry[];
   readonly occurrenceCountsByEntryId?: ReadonlyMap<string, unknown>;
   readonly outputFilePath: string;
   readonly fileName: string;

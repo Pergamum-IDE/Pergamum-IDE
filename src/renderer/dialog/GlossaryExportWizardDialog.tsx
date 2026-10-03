@@ -14,12 +14,11 @@ import type {
   SelectExportFolderRequest,
   SelectExportFolderResult
 } from "../../shared/api";
+import type { GlossaryAtom, GlossaryTag } from "../../shared/glossary";
 import {
-  representativeGlossaryAtom,
-  type GlossaryAtom,
-  type GlossaryEntry,
-  type GlossaryTag
-} from "../../shared/glossary";
+  glossaryExportEntryTitle,
+  type GlossaryExportEntry
+} from "../../shared/glossaryExportEntry";
 import { buildFontFamilyCss, type FontFamilySetting } from "../../shared/fontSettings";
 import {
   formatLocalizedNumber,
@@ -40,7 +39,10 @@ import {
   buildCombinedGlossaryExportHtml,
   type GlossaryExportDocumentLabels
 } from "../glossaryExport/glossaryExportHtml";
-import { defaultGlossaryExportContentOptions } from "../glossaryExport/glossaryExportModel";
+import {
+  defaultGlossaryExportBaseFileName,
+  defaultGlossaryExportContentOptions
+} from "../glossaryExport/glossaryExportModel";
 import type { GlossaryEntryOccurrenceCounts } from "../glossaryExport/glossaryExportOccurrences";
 import {
   runCombinedGlossaryExport,
@@ -66,13 +68,19 @@ export interface GlossaryExportWizardRowState {
   readonly entryId: string;
   readonly representativeSurface: string;
   readonly tags: readonly GlossaryTag[];
-  readonly entry: GlossaryEntry;
+  readonly entry: GlossaryExportEntry;
   readonly enabled: boolean;
 }
 
 export interface GlossaryExportWizardDialogProps {
   readonly isOpen: boolean;
-  readonly entries: readonly GlossaryEntry[];
+  /** All saved entries, or the one snapshot of a single export. */
+  readonly entries: readonly GlossaryExportEntry[];
+  /**
+   * "all": the Glossary Entry Manager's export (select / reorder entries).
+   * "single" (#695): exactly one entry - a snapshot of a Description draft.
+   */
+  readonly mode?: "all" | "single";
   readonly occurrenceCountsByEntryId?: ReadonlyMap<string, OccurrenceCountValue>;
   readonly translate: Translate;
   readonly uiLanguage?: Language;
@@ -120,7 +128,11 @@ export class GlossaryExportWizardErrorBoundary extends Component<
       return (
         <div
           className="glossaryExportWizardErrorFallback"
-          style={{ padding: 20, color: "#cf222e", fontWeight: "bold" }}
+          style={{
+            padding: 20,
+            color: "var(--pg-color-status-error-text)",
+            fontWeight: "bold"
+          }}
         >
           語彙エクスポート表示中にエラーが発生しました。
         </div>
@@ -130,16 +142,16 @@ export class GlossaryExportWizardErrorBoundary extends Component<
   }
 }
 
-function safeRepresentativeSurface(entry: GlossaryEntry): string {
+function safeRepresentativeSurface(entry: GlossaryExportEntry): string {
   if (!entry) return "";
   try {
-    return representativeGlossaryAtom(entry)?.value ?? entry.id ?? "";
+    return glossaryExportEntryTitle(entry);
   } catch {
     return entry.id ?? "";
   }
 }
 
-function safeTags(entry: GlossaryEntry): readonly GlossaryTag[] {
+function safeTags(entry: GlossaryExportEntry): readonly GlossaryTag[] {
   if (!entry || !Array.isArray(entry.tags)) {
     return [];
   }
@@ -163,6 +175,7 @@ function reorderArrayItem<T>(items: readonly T[], fromIndex: number, toIndex: nu
 export function GlossaryExportWizardDialog({
   isOpen,
   entries: initialEntries,
+  mode = "all",
   occurrenceCountsByEntryId,
   translate,
   uiLanguage = "ja",
@@ -204,6 +217,7 @@ export function GlossaryExportWizardDialog({
 
   const dialogId = useId();
   const prevIsOpenRef = useRef(false);
+  const isSingle = mode === "single";
 
   // Reset state on open
   useEffect(() => {
@@ -228,11 +242,20 @@ export function GlossaryExportWizardDialog({
       setIncludeToc(false);
       setTocPosition("front");
       setOutputFolder("");
-      setBaseFileName("glossary-export");
+      // All: the usual name. Single (#695): the entry's own name, made safe for
+      // a file name here only (the title and content keep the name as is).
+      setBaseFileName(
+        isSingle && initialEntries?.[0]
+          ? defaultGlossaryExportBaseFileName(
+              glossaryExportEntryTitle(initialEntries[0])
+            )
+          : "glossary-export"
+      );
       setIsExporting(false);
       setExportResultStatus(null);
     }
     prevIsOpenRef.current = isOpen;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialEntries]);
 
   if (!isOpen) {
@@ -344,7 +367,10 @@ export function GlossaryExportWizardDialog({
         tocPosition,
         pdfFontCandidates,
         pdfPageSettings,
-        documentTitle: translate("glossaryExportWizard.tocTitle")
+        documentTitle:
+          isSingle && selectedRows[0]
+            ? glossaryExportEntryTitle(selectedRows[0].entry)
+            : translate("glossaryExportWizard.tocTitle")
       };
 
       let result: CombinedGlossaryExportRunResult;
@@ -759,8 +785,13 @@ export function GlossaryExportWizardDialog({
                       {/* Gripper / Drag handle */}
                       <span
                         className="glossaryExportWizardDragHandle"
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, index)}
+                        draggable={!isSingle}
+                        aria-disabled={isSingle || undefined}
+                        onDragStart={(e) => {
+                          if (!isSingle) {
+                            handleDragStart(e, index);
+                          }
+                        }}
                         onDragEnd={handleDragEnd}
                         title={translate("glossary.entryManager.dragHandle")}
                         aria-label={translate("glossary.entryManager.dragHandle")}
@@ -810,6 +841,7 @@ export function GlossaryExportWizardDialog({
                             type="checkbox"
                             className="exportConfirmationDialogIncludeInput"
                             checked={row.enabled}
+                            disabled={isSingle}
                             onChange={() => handleToggleRow(row.entryId)}
                           />
                           <span className="exportConfirmationDialogIncludeTrack">

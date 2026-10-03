@@ -1,6 +1,9 @@
 import type { ProjectDocument } from "../../shared/api";
-import type { GlossaryAtomId, GlossaryEntry } from "../../shared/glossary";
-import { representativeGlossaryAtom } from "../../shared/glossary";
+import type { GlossaryAtomId } from "../../shared/glossary";
+import {
+  glossaryExportEntryTitle,
+  type GlossaryExportEntry
+} from "../../shared/glossaryExportEntry";
 import {
   isGlossarySearchMatch,
   type GlossaryAtomSearchTerm
@@ -35,7 +38,8 @@ export interface GlossaryEntryOccurrenceCounts {
 }
 
 export interface CountGlossaryEntryOccurrencesInput {
-  readonly entry: GlossaryEntry;
+  /** A saved entry, or (single export) a snapshot of a Description draft. */
+  readonly entry: GlossaryExportEntry;
   readonly documents: readonly ProjectDocument[];
   readonly readText: ProjectDocumentReader;
 }
@@ -59,8 +63,7 @@ function countSubstring(text: string, needle: string): number {
 export async function countGlossaryEntryOccurrences(
   input: CountGlossaryEntryOccurrencesInput
 ): Promise<GlossaryEntryOccurrenceCounts> {
-  const entryLabel =
-    representativeGlossaryAtom(input.entry)?.value ?? input.entry.id;
+  const entryLabel = glossaryExportEntryTitle(input.entry);
   const atoms = [...input.entry.atoms]
     .sort((left, right) => left.sortOrder - right.sortOrder)
     .filter((atom) => atom.value.trim().length > 0);

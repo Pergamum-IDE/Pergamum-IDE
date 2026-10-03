@@ -164,12 +164,16 @@ export function describeTabContextMenu(
   const projectRelativePath =
     tab.id.kind === "projectDocument" ? tab.id.relativePath : null;
 
+  // #695: a glossary Description exports itself (its current draft), saved
+  // or not, so only its being that kind matters here.
   items.push(
-    projectRelativePath === null
+    isGlossaryDescription
+      ? enabledItem("export", "command.assist.export.openDialog", true)
+      : projectRelativePath === null
       ? disabledItem(
           "export",
           "command.assist.export.openDialog",
-          isGlossaryDescription || kind === "untitled"
+          kind === "untitled"
             ? "tabs.contextMenu.disabled.unsupportedForTab"
             : "tabs.contextMenu.disabled.notProjectDocument",
           true
