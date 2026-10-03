@@ -94,6 +94,7 @@ import {
 import {
   builtInDefaultSettings,
   resolveEffectiveSettings,
+  toSaveApplicationSettingsRequest,
   type EffectiveImageAttachmentSettings,
   type PreviewRendererId,
   type ProjectSettings
@@ -2316,7 +2317,7 @@ export function App(): JSX.Element {
     const toggle = (): void => {
       const current = settingsRef.current;
       void changeSettingsRef.current({
-        ...current,
+        ...toSaveApplicationSettingsRequest(current),
         editor: {
           ...current.editor,
           captureTabInEditor: !current.editor.captureTabInEditor
@@ -10151,7 +10152,7 @@ export function App(): JSX.Element {
     if (!isUsageTourManual) {
       const current = settingsRef.current;
       void changeSettingsRef.current({
-        ...current,
+        ...toSaveApplicationSettingsRequest(current),
         workbench: {
           ...current.workbench,
           usageTourAutoShowDisabled: true
@@ -10165,7 +10166,7 @@ export function App(): JSX.Element {
     if (!isUsageTourManual) {
       const current = settingsRef.current;
       void changeSettingsRef.current({
-        ...current,
+        ...toSaveApplicationSettingsRequest(current),
         workbench: {
           ...current.workbench,
           usageTourAutoShowDisabled: true

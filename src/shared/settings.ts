@@ -410,6 +410,43 @@ export interface SaveApplicationSettingsRequest {
   japaneseLint?: JapaneseLintSettings;
 }
 
+/**
+ * The save request for the CURRENT application settings.
+ *
+ * `ApplicationSettings` carries `recentProjects`, which is not part of a save
+ * request (the main process parses the request strictly and rejects any extra
+ * top-level key). Spreading an `ApplicationSettings` into a request type-checks
+ * (spread is not excess-property checked) but fails at runtime, so callers that
+ * start from the current settings must build the request through this function.
+ * The allowed keys are listed explicitly on purpose; `notification` and
+ * `japaneseLint` stay optional/sparse (omitted when absent).
+ */
+export function toSaveApplicationSettingsRequest(
+  settings: ApplicationSettings
+): SaveApplicationSettingsRequest {
+  const request: SaveApplicationSettingsRequest = {
+    preview: settings.preview,
+    workbench: settings.workbench,
+    commandPalette: settings.commandPalette,
+    editor: settings.editor,
+    search: settings.search,
+    markdownFiles: settings.markdownFiles,
+    textFiles: settings.textFiles,
+    imageAttachment: settings.imageAttachment,
+    documentMap: settings.documentMap
+  };
+
+  if (settings.notification !== undefined) {
+    request.notification = settings.notification;
+  }
+
+  if (settings.japaneseLint !== undefined) {
+    request.japaneseLint = settings.japaneseLint;
+  }
+
+  return request;
+}
+
 export interface ProjectPreviewSettings {
   renderer?: PreviewRendererId;
   fontFamilyList?: FontFamilySetting[];
