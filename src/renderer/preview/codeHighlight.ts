@@ -173,3 +173,25 @@ export function renderHighlightedCodeBlock(
   const langClass = lang !== "" ? ` class="language-${escapeHtmlForCode(lang)}"` : "";
   return `<pre><code${langClass}${sourceLineAttr}>${escapeHtmlForCode(code)}</code></pre>\n`;
 }
+
+/**
+ * #707: Semantic color tokens for Markdown Preview syntax highlighting.
+ * Every built-in theme defines literal color values for these tokens.
+ */
+export const previewSyntaxColorTokens = [
+  "--pg-color-preview-syntax-comment",
+  "--pg-color-preview-syntax-keyword",
+  "--pg-color-preview-syntax-string",
+  "--pg-color-preview-syntax-number",
+  "--pg-color-preview-syntax-title",
+  "--pg-color-preview-syntax-tag",
+  "--pg-color-preview-syntax-attribute",
+  "--pg-color-preview-syntax-meta",
+  "--pg-color-preview-syntax-addition",
+  "--pg-color-preview-syntax-addition-background",
+  "--pg-color-preview-syntax-deletion",
+  "--pg-color-preview-syntax-deletion-background"
+] as const;
+
+export type PreviewSyntaxColorToken = (typeof previewSyntaxColorTokens)[number];
+
