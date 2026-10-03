@@ -13614,8 +13614,17 @@ export function App(): JSX.Element {
                       onOpenDocument={handleOpenResumeHubDocument}
                       onOpenGlossaryEntry={handleOpenResumeHubGlossaryEntry}
                     />
-                  ) : activeDocument ? (
-                    <EditorSurface
+                  ) : null}
+                  <div
+                    className="editorSurfaceHost"
+                    style={
+                      isEditorAreaSpecialTabActive
+                        ? { display: "none" }
+                        : undefined
+                    }
+                  >
+                    {activeDocument ? (
+                      <EditorSurface
                         editor={activeDocument.editor}
                         themeKind={
                           resolveColorTheme(effectiveSettings.workbench.colorTheme).kind
@@ -13816,6 +13825,7 @@ export function App(): JSX.Element {
                        sole control of the side navigation. */
                     welcomeScreen
                   ) : null}
+                  </div>
                   </div>
 
                 </section>
