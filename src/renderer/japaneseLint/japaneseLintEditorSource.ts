@@ -37,6 +37,11 @@ export function resolveJapaneseLintEditorSource(
     return glossaryDescriptionJapaneseLintSource;
   }
 
+  // An image viewer tab has no text to lint.
+  if (currentEditor.kind === "projectImage") {
+    return null;
+  }
+
   const document = currentEditor.document;
 
   if (document.kind === "untitled") {

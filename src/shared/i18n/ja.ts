@@ -2413,6 +2413,8 @@ export const jaTranslations = {
   "preview.mermaid.errorHint": "構文を確認してください。",
   "preview.mermaid.showDetails": "詳細を表示",
   "preview.switchingRenderer": "プレビューを切り替えています…",
+  "imageViewer.editorNotice": "画像ファイルは編集できません",
+  "imageViewer.loadFailed": "画像を表示できません",
   "workspace.editor": "エディタ",
   "workspace.markdownEditor": "Markdownエディタ",
   "workspace.markdownPreview": "Markdownプレビュー",

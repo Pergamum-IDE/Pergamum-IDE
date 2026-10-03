@@ -56,6 +56,12 @@ export interface DocumentTab {
    * comparing raw paths against the project root (#152 dogfood follow-up).
    */
   isExternalMarkdownFile: boolean;
+  /**
+   * True for a read-only project image viewer tab. It keeps the project
+   * document EditorId (so reveal / rename / copy-path work) but has no
+   * document content to Save As / export / check.
+   */
+  isImageViewer?: boolean;
 }
 
 export interface ReplaceOpenDocumentResult {
@@ -238,7 +244,8 @@ export function getDirtyWorkingCopies(
   return state.documents.flatMap((openDocument): DirtyWorkingCopy[] => {
     const { editor } = openDocument;
 
-    if (!isCurrentEditorDirty(editor)) {
+    // An image viewer tab can never be dirty.
+    if (editor.kind === "projectImage" || !isCurrentEditorDirty(editor)) {
       return [];
     }
 
@@ -275,7 +282,10 @@ export function documentTabs(state: OpenDocumentsState): DocumentTab[] {
     id: openDocument.id,
     title: currentEditorTitle(openDocument.editor),
     isDirty: isCurrentEditorDirty(openDocument.editor),
-    isExternalMarkdownFile: isExternalMarkdownFileEditor(openDocument.editor)
+    isExternalMarkdownFile: isExternalMarkdownFileEditor(openDocument.editor),
+    ...(openDocument.editor.kind === "projectImage"
+      ? { isImageViewer: true }
+      : {})
   }));
 }
 
@@ -511,8 +521,10 @@ function isProjectScopedOpenEditor(openDocument: OpenDocument): boolean {
 
   // #573: a glossary Description tab belongs to the project's glossary, so
   // it closes with the project like a project document does.
+  // An image tab is a project file, so it closes with the project too.
   return (
     editor.kind === "glossaryDescription" ||
+    editor.kind === "projectImage" ||
     editor.document.kind === "project"
   );
 }

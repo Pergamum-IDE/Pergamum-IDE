@@ -194,6 +194,7 @@ import {
 import {
   applyGlossaryDescriptionEditorSaveResult,
   createGlossaryDescriptionCurrentEditor,
+  createProjectImageCurrentEditor,
   createMarkdownCurrentEditor,
   createNewGlossaryDescriptionCurrentEditor,
   glossaryDescriptionEditorTitle,
@@ -245,6 +246,7 @@ import {
   documentMayReferenceMovedImage,
   filterImageReferenceUpdatePlansToCompletedMoves,
   imageReferenceSearchPlan,
+  isSupportedProjectImageFileName,
   resolveImageReferenceMoveUpdateChoice,
   type CompletedImageMove,
   type ImageReferenceMoveUpdatePlan,
@@ -8494,6 +8496,11 @@ export function App(): JSX.Element {
       return await saveGlossaryDescriptionEditor(targetOpenDocument.id);
     }
 
+    // An image tab is a read-only viewer: nothing to save, never dirty.
+    if (targetOpenDocument.editor.kind === "projectImage") {
+      return "ignored";
+    }
+
     const targetEditor = targetOpenDocument.editor;
     const targetIsDirty = isCurrentEditorDirty(targetEditor);
     const targetCanSave = true;
@@ -9904,6 +9911,17 @@ export function App(): JSX.Element {
     registerProjectDocumentPath: async (absolutePath) =>
       (await window.pergamum.projects.registerProjectDocumentPath(absolutePath))
         .relativePath,
+    // Restored image viewer tabs reuse the main-process project-local image
+    // validation (exists / file / inside root / supported format).
+    isProjectImageAvailable: async (relativePath) => {
+      const result =
+        await window.pergamum.markdownImageLinkDiagnostics.validate({
+          resolutionContext: { kind: "projectRoot" },
+          links: [{ src: relativePath, from: 0, to: relativePath.length }]
+        });
+
+      return result.ok && result.diagnostics.length === 0;
+    },
     applyRestoredEnvironment: (env) => applyRestoredEnvironment(env),
     adoptSessionId: (sessionId) => {
       setRendererSessionId(sessionId);
@@ -10522,9 +10540,14 @@ export function App(): JSX.Element {
    * relocation is dropped, never applied to the new project.
    */
   function handleFileExplorerProjectDocumentsMoved(
-    relocations: readonly ProjectDocumentPathRelocation[]
+    relocations: readonly ProjectDocumentPathRelocation[],
+    movedFolders: readonly { readonly from: string; readonly to: string }[] = []
   ): void {
-    if (!project || !activeProjectContext || relocations.length === 0) {
+    if (
+      !project ||
+      !activeProjectContext ||
+      (relocations.length === 0 && movedFolders.length === 0)
+    ) {
       return;
     }
 
@@ -10541,6 +10564,7 @@ export function App(): JSX.Element {
       projectSnapshot,
       currentProject: projectRef.current,
       relocations,
+      movedFolders,
       openDocumentsState: openDocumentsStateRef.current,
       context: contextSnapshot,
       recoveryKeyForRelativePath: (relativePath) =>
@@ -11504,16 +11528,21 @@ export function App(): JSX.Element {
 
     for (const openDocument of openDocumentsStateRef.current.documents) {
       const markdownDocument = markdownDocumentForEditor(openDocument.editor);
+      // A deleted file closes its tab — a project document and an image
+      // viewer tab alike.
+      const openRelativePath =
+        markdownDocument?.kind === "project"
+          ? markdownDocument.relativePath
+          : openDocument.editor.kind === "projectImage"
+            ? openDocument.editor.relativePath
+            : null;
 
-      if (
-        markdownDocument?.kind !== "project" ||
-        !isDeleted(markdownDocument.relativePath)
-      ) {
+      if (openRelativePath === null || !isDeleted(openRelativePath)) {
         continue;
       }
 
       const editorId = createProjectDocumentEditorId(
-        markdownDocument.relativePath,
+        openRelativePath,
         contextSnapshot
       );
       nextOpenDocuments = closeOpenEditor(nextOpenDocuments, editorId);
@@ -12461,6 +12490,34 @@ export function App(): JSX.Element {
       openDocumentsStateRef.current,
       documentId
     );
+
+    // A supported project image opens (or re-activates) a read-only image
+    // viewer tab. No file content is read here — the Preview side loads the
+    // image through the project-local `pergamum-asset://` protocol.
+    if (isSupportedProjectImageFileName(relativePath)) {
+      try {
+        const didOpen = await openEditorFromExplicitActivation(documentId, {
+          history: "record",
+          resolvedEditor: createProjectImageCurrentEditor(relativePath)
+        });
+
+        setStatus(
+          didOpen
+            ? {
+                key: "status.openedProjectDocumentOnly",
+                values: { relativePath }
+              }
+            : { key: "status.projectDocumentNotFound" }
+        );
+      } catch (error) {
+        setStatus({
+          key: "status.documentOpenFailed",
+          values: { message: errorMessage(error, translate) }
+        });
+      }
+
+      return;
+    }
 
     if (
       !openDocument &&

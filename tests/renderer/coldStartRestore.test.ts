@@ -116,6 +116,7 @@ function harness(
     readProjectDocumentContent: vi.fn(() => Promise.resolve("body\n")),
     readMarkdownFile: vi.fn(() => Promise.resolve(MD_FILE)),
     registerProjectDocumentPath: vi.fn(() => Promise.resolve(null)),
+    isProjectImageAvailable: vi.fn(() => Promise.resolve(true)),
     getGlossaryEntryById: vi.fn(() => Promise.resolve(null)),
     applyRestoredEnvironment: (env) => {
       // record the adoption order relative to apply
@@ -739,5 +740,83 @@ describe("runColdStartRestore (#274)", () => {
     await runColdStartRestore(h.deps);
     expect(h.restoreUnavailable).toEqual(["unreadable"]);
     expect(h.finished).toEqual([false]);
+  });
+});
+
+describe("runColdStartRestore — project image viewer tabs", () => {
+  function img(relativePath: string, order: number): SessionEditor {
+    return { kind: "projectImage", order, relativePath, viewState: null };
+  }
+
+  it("restores an image tab as an image viewer (never as a text document), in order, and keeps it active", async () => {
+    const isProjectImageAvailable = vi.fn(() => Promise.resolve(true));
+    const readProjectDocumentContent = vi.fn(() => Promise.resolve("body"));
+    const h = harness(
+      okPayload([
+        record({
+          projectContext: withProject,
+          editors: [pm("chapters/one.md", 0), img("art/map.png", 1)],
+          activeEditor: { kind: "projectImage", relativePath: "art/map.png" }
+        })
+      ]),
+      { isProjectImageAvailable, readProjectDocumentContent }
+    );
+    await runColdStartRestore(h.deps);
+
+    const docs = h.applied[0].openDocuments.documents;
+    expect(docs.map((doc) => doc.editor.kind)).toEqual(["markdown", "projectImage"]);
+    expect(docs[1].editor).toMatchObject({
+      kind: "projectImage",
+      relativePath: "art/map.png",
+      name: "map.png"
+    });
+    expect(h.applied[0].openDocuments.activeDocumentId).toEqual(docs[1].id);
+    expect(isProjectImageAvailable).toHaveBeenCalledWith("art/map.png");
+    // The image is never read as a text document.
+    expect(readProjectDocumentContent).toHaveBeenCalledTimes(1);
+    expect(readProjectDocumentContent).toHaveBeenCalledWith("chapters/one.md");
+  });
+
+  it("skips a missing image like a missing document: notice, no tab, others restored", async () => {
+    const h = harness(
+      okPayload([
+        record({
+          projectContext: withProject,
+          editors: [pm("chapters/one.md", 0), img("art/gone.png", 1)]
+        })
+      ]),
+      { isProjectImageAvailable: () => Promise.resolve(false) }
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.skipped).toEqual(["gone.png"]);
+    expect(h.applied[0].openDocuments.documents.map((doc) => doc.editor.kind)).toEqual([
+      "markdown"
+    ]);
+  });
+
+  it("treats a failing availability check as missing", async () => {
+    const h = harness(
+      okPayload([
+        record({ projectContext: withProject, editors: [img("art/x.png", 0)] })
+      ]),
+      { isProjectImageAvailable: () => Promise.reject(new Error("ipc")) }
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.skipped).toEqual(["x.png"]);
+    expect(h.applied[0].openDocuments.documents).toEqual([]);
+  });
+
+  it("does not restore an image tab without its project", async () => {
+    const isProjectImageAvailable = vi.fn(() => Promise.resolve(true));
+    const h = harness(
+      okPayload([record({ editors: [img("art/map.png", 0)] })]),
+      { isProjectImageAvailable }
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(isProjectImageAvailable).not.toHaveBeenCalled();
+    expect(h.applied[0].openDocuments.documents).toEqual([]);
   });
 });

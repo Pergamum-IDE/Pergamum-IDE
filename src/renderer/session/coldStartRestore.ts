@@ -69,6 +69,7 @@ import {
 } from "../../shared/editorId";
 import {
   createGlossaryDescriptionCurrentEditor,
+  createProjectImageCurrentEditor,
   createMarkdownCurrentEditor,
   type CurrentEditor
 } from "../currentEditor";
@@ -119,6 +120,13 @@ export interface ColdStartRestoreDeps {
     relativePath: string
   ) => Promise<string>;
   readonly readMarkdownFile: (filePath: string) => Promise<MarkdownFile>;
+  /**
+   * Whether `relativePath` is still a valid, readable project image (the
+   * main-process project-local image validation: exists, is a file, inside
+   * the project root, supported format). Used to restore an image viewer
+   * tab; nothing is read into the renderer here.
+   */
+  readonly isProjectImageAvailable: (relativePath: string) => Promise<boolean>;
   /**
    * #573 Slice 8: re-read a glossary entry for a restored glossary
    * Description tab. `null` = the entry no longer exists.
@@ -316,6 +324,43 @@ async function buildRestoredEditor(
         fallbackFilename: fallbackFilenameForSessionEditor(editor),
         viewStateKey: serializeEditorId(id),
         viewState: editor.viewState
+      };
+    }
+
+    case "projectImage": {
+      if (!projectRestoreSucceeded || !project || !activeProjectContext) {
+        return null;
+      }
+
+      let isAvailable: boolean;
+
+      try {
+        isAvailable = await deps.isProjectImageAvailable(editor.relativePath);
+      } catch {
+        isAvailable = false;
+      }
+
+      // Same semantics as a missing Markdown document: skip with the shared
+      // "could not restore" notice, no placeholder tab.
+      if (!isAvailable) {
+        deps.notifyEditorSkipped(basename(editor.relativePath));
+        return null;
+      }
+
+      const id = createProjectDocumentEditorId(
+        editor.relativePath,
+        activeProjectContext
+      );
+
+      return {
+        openDocument: {
+          id,
+          editor: createProjectImageCurrentEditor(editor.relativePath)
+        },
+        sessionIdentity: sessionEditorIdentity(editor),
+        fallbackFilename: fallbackFilenameForSessionEditor(editor),
+        viewStateKey: null,
+        viewState: null
       };
     }
 

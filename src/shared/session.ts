@@ -111,7 +111,8 @@ export type SessionEditorKind =
   | "projectMarkdown"
   | "standaloneMarkdown"
   | "untitled"
-  | "glossaryDescription";
+  | "glossaryDescription"
+  | "projectImage";
 
 interface SessionEditorFields {
   /** 0-based tab position. Also kept explicit so a partially-valid list
@@ -158,11 +159,26 @@ export interface SessionGlossaryDescriptionEditor extends SessionEditorFields {
   readonly viewState: SessionEditorViewState | null;
 }
 
+/**
+ * A project image viewer tab. Only the project-relative path is persisted;
+ * the image itself is re-validated and re-read through the project-local
+ * image protocol on restore. No View State (nothing to restore).
+ */
+export interface SessionProjectImageEditor extends SessionEditorFields {
+  readonly kind: "projectImage";
+  /** Reopen locator AND resource identity within the project root. */
+  readonly relativePath: string;
+  /** Always `null` when written: an image has no text selection / scroll
+   *  to restore. Typed like the other editors so the union stays uniform. */
+  readonly viewState: SessionEditorViewState | null;
+}
+
 export type SessionEditor =
   | SessionProjectMarkdownEditor
   | SessionStandaloneMarkdownEditor
   | SessionUntitledEditor
-  | SessionGlossaryDescriptionEditor;
+  | SessionGlossaryDescriptionEditor
+  | SessionProjectImageEditor;
 
 /**
  * Just enough to name which open editor was active — matched by identity
@@ -173,7 +189,8 @@ export type SessionEditorIdentity =
   | { readonly kind: "projectMarkdown"; readonly relativePath: string }
   | { readonly kind: "standaloneMarkdown"; readonly filePath: string }
   | { readonly kind: "untitled"; readonly untitledId: string }
-  | { readonly kind: "glossaryDescription"; readonly entryId: string };
+  | { readonly kind: "glossaryDescription"; readonly entryId: string }
+  | { readonly kind: "projectImage"; readonly relativePath: string };
 
 // ---------------------------------------------------------------------------
 // Project context
@@ -455,6 +472,15 @@ export function parseSessionEditor(value: unknown): SessionEditor | null {
             viewState: parseSessionEditorViewState(value.viewState)
           }
         : null;
+    case "projectImage":
+      return isIdentityString(value.relativePath)
+        ? {
+            kind: "projectImage",
+            order,
+            relativePath: value.relativePath,
+            viewState: null
+          }
+        : null;
     default:
       return null;
   }
@@ -472,6 +498,8 @@ export function sessionEditorIdentity(
       return { kind: "untitled", untitledId: editor.untitledId };
     case "glossaryDescription":
       return { kind: "glossaryDescription", entryId: editor.entryId };
+    case "projectImage":
+      return { kind: "projectImage", relativePath: editor.relativePath };
   }
 }
 
@@ -487,6 +515,8 @@ export function sessionEditorIdentityKey(
       return `untitled ${identity.untitledId}`;
     case "glossaryDescription":
       return `glossaryDescription ${identity.entryId}`;
+    case "projectImage":
+      return `projectImage ${identity.relativePath}`;
   }
 }
 
@@ -520,6 +550,10 @@ export function parseSessionEditorIdentity(
     case "glossaryDescription":
       return isIdentityString(value.entryId)
         ? { kind: "glossaryDescription", entryId: value.entryId }
+        : null;
+    case "projectImage":
+      return isIdentityString(value.relativePath)
+        ? { kind: "projectImage", relativePath: value.relativePath }
         : null;
     default:
       return null;

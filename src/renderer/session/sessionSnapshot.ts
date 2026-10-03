@@ -81,6 +81,21 @@ function sessionEditorFromOpenEditor(
         };
   }
 
+  // A project image viewer tab is recorded by its project-relative path only
+  // (no content, no #273 View State — there is no text selection / scroll to
+  // restore). Restore re-checks the file and reopens it as an image tab.
+  if (editor.kind === "projectImage") {
+    return {
+      editor: {
+        kind: "projectImage",
+        order,
+        relativePath: editor.relativePath,
+        viewState: null
+      },
+      viewStateKey: null
+    };
+  }
+
   switch (editor.document.kind) {
     case "project":
       return {
@@ -174,7 +189,8 @@ export function buildRendererSessionSnapshot(
 ): RendererSessionSnapshot {
   const editors: SessionEditor[] = inputs.editors.map(
     ({ editor, viewStateKey }) => {
-      if (viewStateKey === null) {
+      // An image viewer tab never carries View State.
+      if (viewStateKey === null || editor.kind === "projectImage") {
         return editor;
       }
 

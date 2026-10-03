@@ -148,7 +148,7 @@ export function describeTabContextMenu(
   // --- rename / save as ----------------------------------------------------
   items.push(renameItem(isProjectDocument, isReadOnlyProject, tab.isDirty));
   items.push(
-    isGlossaryDescription
+    isGlossaryDescription || tab.isImageViewer
       ? disabledItem(
           "saveAs",
           "tabs.contextMenu.saveAs",

@@ -6,10 +6,14 @@ import {
   type EditorId
 } from "../shared/editorId";
 import { displayName } from "./currentDocument";
-import { markdownDocumentForEditor } from "./currentEditor";
+import {
+  createProjectImageCurrentEditor,
+  markdownDocumentForEditor
+} from "./currentEditor";
 import {
   findOpenDocument,
   replaceOpenDocument,
+  replaceOpenEditor,
   type OpenDocumentsState
 } from "./openDocuments";
 
@@ -32,6 +36,30 @@ export function isSameProjectInstance(
 export interface RecoveryDocumentKeyRelocation {
   readonly oldKey: string;
   readonly newKey: string;
+}
+
+/** A folder that moved (or was renamed): `from` → `to`, project-relative. */
+export interface MovedProjectFolder {
+  readonly from: string;
+  readonly to: string;
+}
+
+/**
+ * The new path of `relativePath` when it lives inside one of `movedFolders`,
+ * else `null`. Used for open image viewer tabs: a folder move only reports the
+ * registered Markdown documents inside it, never its images.
+ */
+export function relocatedPathInMovedFolders(
+  relativePath: string,
+  movedFolders: readonly MovedProjectFolder[]
+): string | null {
+  for (const { from, to } of movedFolders) {
+    if (relativePath.startsWith(`${from}/`)) {
+      return to === "" ? relativePath.slice(from.length + 1) : `${to}/${relativePath.slice(from.length + 1)}`;
+    }
+  }
+
+  return null;
 }
 
 export interface ProjectDocumentMoveRelocationPlan {
@@ -69,6 +97,9 @@ export function planProjectDocumentMoveRelocation(input: {
   readonly projectSnapshot: PergamumProject;
   readonly currentProject: PergamumProject | null;
   readonly relocations: readonly ProjectDocumentPathRelocation[];
+  /** Folders that moved in the same operation (image viewer tabs inside
+   *  them follow). Optional: omitted ⟹ none. */
+  readonly movedFolders?: readonly MovedProjectFolder[];
   readonly openDocumentsState: OpenDocumentsState;
   readonly context: ActiveProjectContext;
   readonly recoveryKeyForRelativePath: (relativePath: string) => string | null;
@@ -81,8 +112,10 @@ export function planProjectDocumentMoveRelocation(input: {
     recoveryKeyForRelativePath
   } = input;
 
+  const movedFolders = input.movedFolders ?? [];
+
   if (
-    relocations.length === 0 ||
+    (relocations.length === 0 && movedFolders.length === 0) ||
     !currentProject ||
     !isSameProjectInstance(currentProject, projectSnapshot)
   ) {
@@ -100,6 +133,22 @@ export function planProjectDocumentMoveRelocation(input: {
     const currentDocument = openDocument
       ? markdownDocumentForEditor(openDocument.editor)
       : null;
+
+    if (openDocument?.editor.kind === "projectImage") {
+      const replacement = replaceOpenEditor(
+        openDocumentsState,
+        oldEditorId,
+        createProjectImageCurrentEditor(newRelativePath),
+        context
+      );
+
+      if (!replacement.didCollide) {
+        openDocumentsState = replacement.state;
+        openDocumentsChanged = true;
+      }
+
+      invalidatedEditorIds.push(oldEditorId);
+    }
 
     if (currentDocument?.kind === "project") {
       const replacement = replaceOpenDocument(
@@ -126,6 +175,39 @@ export function planProjectDocumentMoveRelocation(input: {
     if (oldKey && newKey && oldKey !== newKey) {
       recoveryKeyRelocations.push({ oldKey, newKey });
     }
+  }
+
+  // Image viewer tabs inside a moved folder (the folder entry reports only
+  // its Markdown documents, so images are located by path prefix).
+  for (const openDocument of [...openDocumentsState.documents]) {
+    const { editor } = openDocument;
+
+    if (editor.kind !== "projectImage") {
+      continue;
+    }
+
+    const newRelativePath = relocatedPathInMovedFolders(
+      editor.relativePath,
+      movedFolders
+    );
+
+    if (newRelativePath === null) {
+      continue;
+    }
+
+    const replacement = replaceOpenEditor(
+      openDocumentsState,
+      openDocument.id,
+      createProjectImageCurrentEditor(newRelativePath),
+      context
+    );
+
+    if (!replacement.didCollide) {
+      openDocumentsState = replacement.state;
+      openDocumentsChanged = true;
+    }
+
+    invalidatedEditorIds.push(openDocument.id);
   }
 
   return {
