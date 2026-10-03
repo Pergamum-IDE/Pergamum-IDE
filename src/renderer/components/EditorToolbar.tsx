@@ -11,6 +11,11 @@ import { USAGE_TOUR_TARGETS } from "../usageTour/usageTourTypes";
 import type { MarkdownCalloutType } from "../../shared/markdownCalloutMarkup";
 import type { PreviewRendererId } from "../../shared/settings";
 import type { QuickAccessPrefix } from "../quickAccessInputParser";
+import { editorCommandIds } from "../../shared/commandIds";
+import {
+  formatCommandTooltip,
+  useCommandShortcutResolver
+} from "../commandShortcuts";
 import headingIconRaw from "../../../assets/icons/pergamum/toolbar/heading.svg?raw";
 import boldIconRaw from "../../../assets/icons/codicons/toolbar/bold.svg?raw";
 import italicIconRaw from "../../../assets/icons/codicons/toolbar/italic.svg?raw";
@@ -166,6 +171,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   onToggleFullscreen,
   translate
 }) => {
+  const resolveShortcut = useCommandShortcutResolver();
   const [internalIsTablePopoverOpen, setInternalIsTablePopoverOpen] = useState<boolean>(false);
   const isTablePopoverOpen = externalIsTablePopoverOpen ?? internalIsTablePopoverOpen;
 
@@ -232,7 +238,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canSaveCurrentDocument}
             onClick={onSaveCurrentDocument}
             aria-label={translate("toolbar.save")}
-            title={translate("toolbar.save")}
+            title={formatCommandTooltip(
+              translate("toolbar.save"),
+              resolveShortcut(editorCommandIds.saveDocument)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -252,7 +261,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={onToggleHeadingSelector}
             aria-label={translate("toolbar.insertHeading")}
-            title={translate("toolbar.insertHeading")}
+            title={formatCommandTooltip(
+              translate("toolbar.insertHeading"),
+              resolveShortcut(editorCommandIds.heading)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -280,7 +292,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={onApplyBold}
             aria-label={translate("toolbar.bold")}
-            title={translate("toolbar.bold")}
+            title={formatCommandTooltip(
+              translate("toolbar.bold"),
+              resolveShortcut(editorCommandIds.bold)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -296,7 +311,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={onApplyItalic}
             aria-label={translate("toolbar.italic")}
-            title={translate("toolbar.italic")}
+            title={formatCommandTooltip(
+              translate("toolbar.italic"),
+              resolveShortcut(editorCommandIds.italic)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -312,7 +330,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={onApplyStrikethrough}
             aria-label={translate("toolbar.strikethrough")}
-            title={translate("toolbar.strikethrough")}
+            title={formatCommandTooltip(
+              translate("toolbar.strikethrough"),
+              resolveShortcut(editorCommandIds.strikethrough)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -332,7 +353,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={() => onApplyList("unordered")}
             aria-label={translate("toolbar.unorderedList")}
-            title={translate("toolbar.unorderedList")}
+            title={formatCommandTooltip(
+              translate("toolbar.unorderedList"),
+              resolveShortcut("editor.markdown.list.unordered")
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -348,7 +372,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={() => onApplyList("ordered")}
             aria-label={translate("toolbar.orderedList")}
-            title={translate("toolbar.orderedList")}
+            title={formatCommandTooltip(
+              translate("toolbar.orderedList"),
+              resolveShortcut("editor.markdown.list.ordered")
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -364,7 +391,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={() => onApplyList("checklist")}
             aria-label={translate("toolbar.checklist")}
-            title={translate("toolbar.checklist")}
+            title={formatCommandTooltip(
+              translate("toolbar.checklist"),
+              resolveShortcut("editor.markdown.list.checklist")
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -380,7 +410,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!(canOutdent ?? hasEditableTextLikeDocument)}
             onClick={onOutdent}
             aria-label={translate("toolbar.outdent")}
-            title={translate("toolbar.outdent")}
+            title={formatCommandTooltip(
+              translate("toolbar.outdent"),
+              resolveShortcut(editorCommandIds.outdent)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -396,7 +429,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!(canIndent ?? hasEditableTextLikeDocument)}
             onClick={onIndent}
             aria-label={translate("toolbar.indent")}
-            title={translate("toolbar.indent")}
+            title={formatCommandTooltip(
+              translate("toolbar.indent"),
+              resolveShortcut(editorCommandIds.indent)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -416,7 +452,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={handleLinkButtonClick}
             aria-label={translate("toolbar.insertLink")}
-            title={translate("toolbar.insertLink")}
+            title={formatCommandTooltip(
+              translate("toolbar.insertLink"),
+              resolveShortcut(editorCommandIds.link)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -436,7 +475,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={onInsertHorizontalRule}
             aria-label={translate("toolbar.horizontalRule")}
-            title={translate("toolbar.horizontalRule")}
+            title={formatCommandTooltip(
+              translate("toolbar.horizontalRule"),
+              resolveShortcut(editorCommandIds.insertHorizontalRule)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -452,7 +494,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={onInsertCodeBlock}
             aria-label={translate("toolbar.codeBlock")}
-            title={translate("toolbar.codeBlock")}
+            title={formatCommandTooltip(
+              translate("toolbar.codeBlock"),
+              resolveShortcut(editorCommandIds.insertCodeBlock)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -468,7 +513,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canUseMarkdownToolbarCommands}
             onClick={onInsertBlockquote}
             aria-label={translate("toolbar.insertBlockquote")}
-            title={translate("toolbar.insertBlockquote")}
+            title={formatCommandTooltip(
+              translate("toolbar.insertBlockquote"),
+              resolveShortcut(editorCommandIds.insertBlockquote)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -484,7 +532,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canInsertImage}
             onClick={handleImageButtonClick}
             aria-label={translate("toolbar.insertImage")}
-            title={translate("toolbar.insertImage")}
+            title={formatCommandTooltip(
+              translate("toolbar.insertImage"),
+              resolveShortcut(editorCommandIds.insertImage)
+            )}
             data-usage-tour-target={USAGE_TOUR_TARGETS.toolbarImage}
           >
             <span
@@ -501,7 +552,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!canInsertTable}
             onClick={handleToggleTablePopover}
             aria-label={translate("toolbar.insertTable")}
-            title={translate("toolbar.insertTable")}
+            title={formatCommandTooltip(
+              translate("toolbar.insertTable"),
+              resolveShortcut(editorCommandIds.insertTable)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -538,7 +592,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!hasEditableTextLikeDocument}
             onClick={handleRubyButtonClick}
             aria-label={translate("toolbar.ruby")}
-            title={translate("toolbar.ruby")}
+            title={formatCommandTooltip(
+              translate("toolbar.ruby"),
+              resolveShortcut(editorCommandIds.insertRuby)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -554,7 +611,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             disabled={!hasEditableTextLikeDocument}
             onClick={handleEmphasisButtonClick}
             aria-label={translate("toolbar.emphasisMark")}
-            title={translate("toolbar.emphasisMark")}
+            title={formatCommandTooltip(
+              translate("toolbar.emphasisMark"),
+              resolveShortcut(editorCommandIds.insertEmphasisMark)
+            )}
           >
             <span
               className="editorToolbarButtonIcon"
@@ -575,7 +635,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             aria-pressed={isMarkdownSyntaxCheckerActive}
             onClick={onToggleMarkdownSyntaxChecker}
             aria-label={translate("toolbar.markdownSyntaxChecker")}
-            title={translate("toolbar.markdownSyntaxChecker")}
+            title={formatCommandTooltip(
+              translate("toolbar.markdownSyntaxChecker"),
+              resolveShortcut(editorCommandIds.toggleSyntaxChecker)
+            )}
             data-usage-tour-target={USAGE_TOUR_TARGETS.toolbarMarkdownLinter}
           >
             <span
@@ -592,7 +655,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             aria-pressed={isJapaneseLintActive}
             onClick={onToggleJapaneseLint}
             aria-label={translate("toolbar.japaneseLint")}
-            title={translate("toolbar.japaneseLint")}
+            title={formatCommandTooltip(
+              translate("toolbar.japaneseLint"),
+              resolveShortcut(editorCommandIds.toggleInstantJapaneseLint)
+            )}
             data-usage-tour-target={USAGE_TOUR_TARGETS.toolbarJapaneseLinter}
           >
             <span
@@ -614,7 +680,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             aria-pressed={isPreviewVisible}
             onClick={onTogglePreview}
             aria-label={translate("toolbar.togglePreview")}
-            title={translate("toolbar.togglePreview")}
+            title={formatCommandTooltip(
+              translate("toolbar.togglePreview"),
+              resolveShortcut(editorCommandIds.togglePreview)
+            )}
             data-usage-tour-target={USAGE_TOUR_TARGETS.toolbarPreview}
           >
             <span
@@ -645,7 +714,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
             aria-pressed={isFullscreen}
             onClick={onToggleFullscreen}
             aria-label={translate("toolbar.toggleFullscreen")}
-            title={translate("toolbar.toggleFullscreen")}
+            title={formatCommandTooltip(
+              translate("toolbar.toggleFullscreen"),
+              resolveShortcut("window.toggleFullscreen")
+            )}
           >
             <span
               className="editorToolbarButtonIcon"

@@ -10,78 +10,20 @@
  * below is that audit; an unmapped item deliberately shows no shortcut.
  */
 
-import { useCallback, useSyncExternalStore } from "react";
 import { assistCommandIds, editorCommandIds } from "../shared/commandIds";
-import {
-  formatKeybindingLabel,
-  type PergamumPlatform,
-  type ResolvedKeybinding
-} from "../shared/keybindings";
 import type { TabContextMenuAction } from "./documentTabContextMenu";
-import {
-  getEffectiveKeybindingRows,
-  getEffectiveKeybindingsRevision,
-  subscribeEffectiveKeybindings
-} from "./keybindings/effectiveKeybindingStore";
-import { getRuntimePlatform } from "./platformModifier";
 import { rendererShortcutCommandIds } from "./keybindings/rendererShortcuts";
+import {
+  createCommandShortcutResolver,
+  useCommandShortcutResolver,
+  type CommandShortcutResolver
+} from "./commandShortcuts";
 
-export type ContextMenuShortcutResolver = (
-  commandId: string | null | undefined
-) => string | undefined;
+export type ContextMenuShortcutResolver = CommandShortcutResolver;
 
-/** The primary (first bound) key of a command, in catalog order. */
-function primaryKey(
-  rows: readonly ResolvedKeybinding[],
-  commandId: string
-): string | undefined {
-  for (const binding of rows) {
-    if (binding.command === commandId && binding.key !== null) {
-      return binding.key;
-    }
-  }
+export const createContextMenuShortcutResolver = createCommandShortcutResolver;
 
-  return undefined;
-}
-
-export function createContextMenuShortcutResolver(
-  platform: PergamumPlatform,
-  rows: readonly ResolvedKeybinding[]
-): ContextMenuShortcutResolver {
-  return (commandId) => {
-    if (!commandId) {
-      return undefined;
-    }
-    const key = primaryKey(rows, commandId);
-
-    return key === undefined ? undefined : formatKeybindingLabel(key, platform);
-  };
-}
-
-/**
- * Resolver bound to the live effective-keybinding store: the returned function
- * changes identity when the store changes, so a menu that is open re-renders.
- */
-export function useContextMenuShortcutResolver(): ContextMenuShortcutResolver {
-  const revision = useSyncExternalStore(
-    subscribeEffectiveKeybindings,
-    getEffectiveKeybindingsRevision,
-    getEffectiveKeybindingsRevision
-  );
-
-  return useCallback(
-    (commandId) => {
-      const platform = getRuntimePlatform();
-
-      return createContextMenuShortcutResolver(
-        platform,
-        getEffectiveKeybindingRows(platform)
-      )(commandId);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [revision]
-  );
-}
+export const useContextMenuShortcutResolver = useCommandShortcutResolver;
 
 /** Edit menu: the items run the same native edit commands the keys do. */
 export const editContextMenuShortcutCommandIds = {

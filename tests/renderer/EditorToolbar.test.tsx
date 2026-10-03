@@ -7,6 +7,8 @@ import {
   EditorToolbar,
   type EditorToolbarProps
 } from "../../src/renderer/components/EditorToolbar";
+import { formatKeybindingLabel } from "../../src/shared/keybindings";
+import { getRuntimePlatform } from "../../src/renderer/platformModifier";
 
 import type { TranslationValues } from "../../src/shared/i18n";
 
@@ -622,6 +624,55 @@ describe("EditorToolbar", () => {
     }
   });
 
+  it("Command Box launcher body title updates dynamically per mode with effective shortcut while prefix button has none", () => {
+    const platform = getRuntimePlatform();
+    renderToolbar();
+
+    const prefixBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxPrefix']"
+    ) as HTMLButtonElement;
+    const bodyBtn = container.querySelector(
+      "[data-testid='toolbarCommandBoxBody']"
+    ) as HTMLButtonElement;
+
+    // 1. commands mode (">") -> commandPalette: Mod-p
+    const cmdShortcut = formatKeybindingLabel("Mod-p", platform);
+    expect(bodyBtn.getAttribute("title")).toContain(`(${cmdShortcut})`);
+    expect(prefixBtn.getAttribute("title")).not.toContain(cmdShortcut);
+
+    // 2. projectFiles mode ("") -> Mod-o
+    act(() => prefixBtn.click());
+    const fileShortcut = formatKeybindingLabel("Mod-o", platform);
+    expect(bodyBtn.getAttribute("title")).toContain(`(${fileShortcut})`);
+    expect(prefixBtn.getAttribute("title")).not.toContain(fileShortcut);
+
+    // 3. headings mode ("#") -> Mod-#
+    act(() => prefixBtn.click());
+    const headingKey = formatKeybindingLabel("Mod-#", platform);
+    if (headingKey) {
+      expect(bodyBtn.getAttribute("title")).toContain(`(${headingKey})`);
+    }
+
+    // 4. glossary mode ("@") -> Mod-@
+    act(() => prefixBtn.click());
+    expect(bodyBtn.getAttribute("title")).toContain(
+      `(${formatKeybindingLabel("Mod-@", platform)})`
+    );
+
+    // 5. lineJump mode (":") -> Mod-:
+    act(() => prefixBtn.click());
+    expect(bodyBtn.getAttribute("title")).toContain(
+      `(${formatKeybindingLabel("Mod-:", platform)})`
+    );
+
+    // 6. projectSearch mode ("%") -> Mod-%
+    act(() => prefixBtn.click());
+    const searchKey = formatKeybindingLabel("Mod-%", platform);
+    if (searchKey) {
+      expect(bodyBtn.getAttribute("title")).toContain(`(${searchKey})`);
+    }
+  });
+
   it("Command Box pointer click animates the launcher before opening the Command Palette", async () => {
     const onOpenCommandPalette = vi.fn();
     let resolveAnimation: () => void = () => undefined;
@@ -765,10 +816,12 @@ describe("EditorToolbar", () => {
   it("every button is icon-only with aria-label and title, no visible text", () => {
     renderToolbar();
     for (const button of toolbarButtons()) {
-      expect(button.getAttribute("aria-label")).toBeTruthy();
-      expect(button.getAttribute("title")).toBe(
-        button.getAttribute("aria-label")
-      );
+      const ariaLabel = button.getAttribute("aria-label");
+      const title = button.getAttribute("title");
+      expect(ariaLabel).toBeTruthy();
+      expect(title).toBeTruthy();
+      expect(title?.startsWith(ariaLabel!)).toBe(true);
+      expect(title).not.toContain("()");
       expect(button.textContent?.trim()).toBe("");
       expect(button.querySelector("svg")).not.toBeNull();
     }
@@ -1019,7 +1072,7 @@ describe("EditorToolbar", () => {
     const table = buttons[15];
     expect(table.disabled).toBe(true);
     expect(table.getAttribute("aria-label")).toBe("表を挿入");
-    expect(table.getAttribute("title")).toBe("表を挿入");
+    expect(table.getAttribute("title")).toBe("表を挿入 (Ctrl+T)");
     expect(table.textContent?.trim()).toBe("");
   });
 
@@ -1212,12 +1265,13 @@ describe("EditorToolbar callout dropdown (#570)", () => {
         canSaveCurrentDocument: true
       });
       const button = container.querySelector(
-        'button[title="保存"]'
+        'button[aria-label="保存"]'
       ) as HTMLButtonElement;
 
       expect(button).not.toBeNull();
       expect(button.disabled).toBe(false);
       expect(button.getAttribute("aria-label")).toBe("保存");
+      expect(button.getAttribute("title")).toBe("保存 (Ctrl+S)");
 
       act(() => clickWithPointer(button));
       expect(onSaveCurrentDocument).toHaveBeenCalledTimes(1);
@@ -1228,11 +1282,12 @@ describe("EditorToolbar callout dropdown (#570)", () => {
         canSaveCurrentDocument: false
       });
       const button = container.querySelector(
-        'button[title="保存"]'
+        'button[aria-label="保存"]'
       ) as HTMLButtonElement;
 
       expect(button).not.toBeNull();
       expect(button.disabled).toBe(true);
+      expect(button.getAttribute("title")).toBe("保存 (Ctrl+S)");
 
       act(() => clickWithPointer(button));
       expect(onSaveCurrentDocument).not.toHaveBeenCalled();
@@ -1243,12 +1298,13 @@ describe("EditorToolbar callout dropdown (#570)", () => {
     it("renders with normal icon and aria-pressed=false when isFullscreen is false", () => {
       const { onToggleFullscreen } = renderToolbar({ isFullscreen: false });
       const button = container.querySelector(
-        'button[title="フルスクリーン切り替え"]'
+        'button[aria-label="フルスクリーン切り替え"]'
       ) as HTMLButtonElement;
 
       expect(button).not.toBeNull();
       expect(button.getAttribute("aria-pressed")).toBe("false");
       expect(button.getAttribute("aria-label")).toBe("フルスクリーン切り替え");
+      expect(button.getAttribute("title")).toBe("フルスクリーン切り替え (F11)");
 
       act(() => clickWithPointer(button));
       expect(onToggleFullscreen).toHaveBeenCalledTimes(1);
@@ -1257,12 +1313,13 @@ describe("EditorToolbar callout dropdown (#570)", () => {
     it("renders with full screen icon and aria-pressed=true when isFullscreen is true", () => {
       const { onToggleFullscreen } = renderToolbar({ isFullscreen: true });
       const button = container.querySelector(
-        'button[title="フルスクリーン切り替え"]'
+        'button[aria-label="フルスクリーン切り替え"]'
       ) as HTMLButtonElement;
 
       expect(button).not.toBeNull();
       expect(button.getAttribute("aria-pressed")).toBe("true");
       expect(button.getAttribute("aria-label")).toBe("フルスクリーン切り替え");
+      expect(button.getAttribute("title")).toBe("フルスクリーン切り替え (F11)");
 
       act(() => clickWithPointer(button));
       expect(onToggleFullscreen).toHaveBeenCalledTimes(1);

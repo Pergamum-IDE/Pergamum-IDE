@@ -314,9 +314,15 @@ describe("workspace navigation", () => {
     );
 
     expect(japaneseMarkup).toContain('aria-label="ファイルエクスプローラー"');
-    expect(japaneseMarkup).toContain('title="ファイルエクスプローラー"');
+    expect(japaneseMarkup).toContain('title="ファイルエクスプローラー (Ctrl+Shift+E)"');
     expect(englishMarkup).toContain('aria-label="File Explorer"');
-    expect(englishMarkup).toContain('title="File Explorer"');
+    expect(englishMarkup).toContain('title="File Explorer (Ctrl+Shift+E)"');
+
+    // #718 special case: Search button displays shortcut from search.project.openFromSelection
+    expect(japaneseMarkup).toContain('aria-label="検索"');
+    expect(japaneseMarkup).toContain('title="検索 (Ctrl+Shift+F)"');
+    expect(englishMarkup).toContain('aria-label="Search"');
+    expect(englishMarkup).toContain('title="Search (Ctrl+Shift+F)"');
   });
 
   it("treats File Explorer, Search, and Glossary as Sidebar mode selectors", () => {

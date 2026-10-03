@@ -20,13 +20,39 @@ import type { Translate } from "../../shared/i18n";
 import {
   TOOLBAR_COMMAND_BOX_DEFAULT_INDEX,
   nextToolbarCommandBoxModeIndex,
-  resolveToolbarCommandBoxModeEntry
+  resolveToolbarCommandBoxModeEntry,
+  type ToolbarCommandBoxMode
 } from "../toolbarCommandBoxModes";
 import type { QuickAccessPrefix } from "../quickAccessInputParser";
 import { normalizeCommandPaletteLaunchAnimationDurationMs } from "../../shared/commandPaletteLaunchAnimationSettings";
 import { USAGE_TOUR_TARGETS } from "../usageTour/usageTourTypes";
+import { commandPaletteCommandIds } from "../../shared/commandIds";
+import { rendererShortcutCommandIds } from "../keybindings/rendererShortcuts";
+import {
+  formatCommandTooltip,
+  useCommandShortcutResolver
+} from "../commandShortcuts";
 
 const COMMAND_PALETTE_LAUNCH_ANIMATION_EASING = "ease-out";
+
+function commandIdForToolbarCommandBoxMode(
+  mode: ToolbarCommandBoxMode
+): string {
+  switch (mode) {
+    case "commands":
+      return commandPaletteCommandIds.open;
+    case "projectFiles":
+      return rendererShortcutCommandIds.commandPaletteFile;
+    case "headings":
+      return rendererShortcutCommandIds.commandPaletteHeading;
+    case "glossary":
+      return rendererShortcutCommandIds.commandPaletteGlossary;
+    case "lineJump":
+      return rendererShortcutCommandIds.commandPaletteLine;
+    case "projectSearch":
+      return rendererShortcutCommandIds.commandPaletteProjectSearch;
+  }
+}
 
 export interface ToolbarCommandBoxProps {
   /**
@@ -242,6 +268,7 @@ export const ToolbarCommandBox: FC<ToolbarCommandBoxProps> = ({
   launchAnimationDurationMs,
   translate
 }) => {
+  const resolveShortcut = useCommandShortcutResolver();
   const [modeIndex, setModeIndex] = useState(TOOLBAR_COMMAND_BOX_DEFAULT_INDEX);
   const isLaunchAnimationPendingRef = useRef(false);
 
@@ -323,7 +350,10 @@ export const ToolbarCommandBox: FC<ToolbarCommandBoxProps> = ({
           className="toolbarCommandBoxBody"
           onClick={handleBodyClick}
           aria-label={translate(modeEntry.launcherLabelKey)}
-          title={translate(modeEntry.launcherLabelKey)}
+          title={formatCommandTooltip(
+            translate(modeEntry.launcherLabelKey),
+            resolveShortcut(commandIdForToolbarCommandBoxMode(modeEntry.mode))
+          )}
           data-testid="toolbarCommandBoxBody"
           data-mode={modeEntry.mode}
         >

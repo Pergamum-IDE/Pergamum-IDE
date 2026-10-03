@@ -1,6 +1,11 @@
 import type { FC } from "react";
 import type { Translate } from "../../shared/i18n";
 import { formatZoomFactorPercent } from "../../shared/zoom";
+import { applicationCommandIds } from "../../shared/commandIds";
+import {
+  formatCommandTooltip,
+  useCommandShortcutResolver
+} from "../commandShortcuts";
 import zoomOutIconRaw from "../../../assets/icons/codicons/general/zoom-out.svg?raw";
 import zoomInIconRaw from "../../../assets/icons/codicons/general/zoom-in.svg?raw";
 
@@ -21,6 +26,7 @@ export const StatusBarZoomControls: FC<StatusBarZoomControlsProps> = ({
   onResetZoom,
   translate
 }) => {
+  const resolveShortcut = useCommandShortcutResolver();
   const formattedPercent = formatZoomFactorPercent(zoomFactor);
   const scale = zoomControlScale ?? (zoomFactor > 0 ? 1 / zoomFactor : 1);
 
@@ -32,7 +38,10 @@ export const StatusBarZoomControls: FC<StatusBarZoomControlsProps> = ({
       <button
         type="button"
         className="statusBarZoomButton"
-        title={translate("statusBar.zoomOut")}
+        title={formatCommandTooltip(
+          translate("statusBar.zoomOut"),
+          resolveShortcut(applicationCommandIds.zoomOut)
+        )}
         aria-label={translate("statusBar.zoomOut")}
         onClick={onZoomOut}
       >
@@ -45,7 +54,10 @@ export const StatusBarZoomControls: FC<StatusBarZoomControlsProps> = ({
       <button
         type="button"
         className="statusBarZoomResetButton"
-        title={translate("statusBar.zoomReset")}
+        title={formatCommandTooltip(
+          translate("statusBar.zoomReset"),
+          resolveShortcut(applicationCommandIds.resetZoom)
+        )}
         aria-label={translate("statusBar.zoomReset")}
         onClick={onResetZoom}
       >
@@ -54,7 +66,10 @@ export const StatusBarZoomControls: FC<StatusBarZoomControlsProps> = ({
       <button
         type="button"
         className="statusBarZoomButton"
-        title={translate("statusBar.zoomIn")}
+        title={formatCommandTooltip(
+          translate("statusBar.zoomIn"),
+          resolveShortcut(applicationCommandIds.zoomIn)
+        )}
         aria-label={translate("statusBar.zoomIn")}
         onClick={onZoomIn}
       >
