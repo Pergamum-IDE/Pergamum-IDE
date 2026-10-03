@@ -5,7 +5,8 @@ import {
   contrastRatio,
   parseColor,
   WCAG_AA_LARGE_TEXT_OR_UI,
-  WCAG_AA_NORMAL_TEXT
+  WCAG_AA_NORMAL_TEXT,
+  WCAG_AAA_NORMAL_TEXT
 } from "../../src/shared/colorContrast";
 
 describe("contrastRatio (WCAG 2.x)", () => {
@@ -288,5 +289,53 @@ describe("built-in theme token contrast (WCAG)", () => {
 
   it("covers every built-in theme (a theme added to the registry is tested automatically)", () => {
     expect(builtInThemes.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("Ginza Night high contrast properties (#703)", () => {
+  const tokens = themeTokens("theme-ginza-night");
+
+  it("satisfies WCAG AAA (>= 7:1) for primary text surfaces", () => {
+    const editorBg = tokens.get("--pg-color-editor-background") ?? "";
+    const surfaceBg = tokens.get("--pg-color-surface-background") ?? "";
+    const appBg = tokens.get("--pg-color-app-background") ?? "";
+
+    expect(
+      contrastRatio(tokens.get("--pg-color-editor-foreground") ?? "", editorBg)
+    ).toBeGreaterThanOrEqual(WCAG_AAA_NORMAL_TEXT);
+    expect(
+      contrastRatio(tokens.get("--pg-color-surface-foreground") ?? "", surfaceBg)
+    ).toBeGreaterThanOrEqual(WCAG_AAA_NORMAL_TEXT);
+    expect(
+      contrastRatio(tokens.get("--pg-color-app-foreground") ?? "", appBg)
+    ).toBeGreaterThanOrEqual(WCAG_AAA_NORMAL_TEXT);
+    expect(
+      contrastRatio(tokens.get("--pg-color-text-body") ?? "", surfaceBg)
+    ).toBeGreaterThanOrEqual(WCAG_AAA_NORMAL_TEXT);
+  });
+
+  it("satisfies WCAG AA (>= 4.5:1) for secondary / muted text and panel text", () => {
+    const surfaceBg = tokens.get("--pg-color-surface-background") ?? "";
+    const panelBg = tokens.get("--pg-color-panel-background") ?? "";
+
+    expect(
+      contrastRatio(tokens.get("--pg-color-surface-muted") ?? "", surfaceBg)
+    ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+    expect(
+      contrastRatio(tokens.get("--pg-color-text-secondary") ?? "", surfaceBg)
+    ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+    expect(
+      contrastRatio(tokens.get("--pg-color-panel-foreground") ?? "", panelBg)
+    ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+  });
+
+  it("has high-visibility accent and focus ring (>= 7:1 against background)", () => {
+    const surfaceBg = tokens.get("--pg-color-surface-background") ?? "";
+    expect(
+      contrastRatio(tokens.get("--pg-color-accent-primary") ?? "", surfaceBg)
+    ).toBeGreaterThanOrEqual(WCAG_AAA_NORMAL_TEXT);
+    expect(
+      contrastRatio(tokens.get("--pg-color-focus-ring") ?? "", surfaceBg)
+    ).toBeGreaterThanOrEqual(WCAG_AAA_NORMAL_TEXT);
   });
 });

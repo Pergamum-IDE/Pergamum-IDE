@@ -530,6 +530,526 @@
   --notification-toast-focus-ring: #5b9bd5;
 }
 
+/* #703: Shine Moon — blue-gray / moonlight dark theme for long writing sessions.
+   Calm, atmospheric, balanced contrast. */
+.theme-shine-moon {
+  /* ---- App / surface ---- */
+  --pg-color-app-background: #131822;
+  --pg-color-app-foreground: #dce5ef;
+  --pg-color-surface-background: #171d27;
+  --pg-color-surface-foreground: #dce5ef;
+  --pg-color-surface-muted: #8fa3b8;
+  --pg-color-surface-hover: #212936;
+  --pg-color-surface-active: #293344;
+  --pg-color-panel-background: #1a212d;
+  --pg-color-panel-foreground: #8fa3b8;
+  --pg-color-panel-header-background: #1e2634;
+  --pg-color-panel-border: #2d3748;
+  --pg-color-panel-divider: #263040;
+  --pg-color-accent-primary: #5ea8f8;
+  --pg-color-accent-secondary: #7bb7fa;
+  --pg-color-status-info: #64b5f6;
+  --pg-color-status-warning: #e5ad67;
+  --pg-color-status-error: #f48086;
+  --pg-color-status-success: #5ec995;
+
+  /* ---- Activity bar ---- */
+  --pg-color-activitybar-background: #141923;
+  --pg-color-activitybar-foreground: #889cb0;
+  --pg-color-activitybar-border: #263040;
+  --pg-color-activitybar-hover-background: #202836;
+  --pg-color-activitybar-hover-foreground: #dce5ef;
+  --pg-color-activitybar-active-background: #171d27;
+  --pg-color-activitybar-active-foreground: #edf3fa;
+  --pg-color-activitybar-active-indicator: #5ea8f8;
+
+  /* ---- Document tabs ---- */
+  --pg-color-tab-bar-background: #141923;
+  --pg-color-tab-background: transparent;
+  --pg-color-tab-hover-background: #202836;
+  --pg-color-tab-active-background: #171d27;
+  --pg-color-tab-foreground: #889cb0;
+  --pg-color-tab-active-foreground: #edf3fa;
+  --pg-color-tab-border: #263040;
+
+  /* ---- Controls ---- */
+  --pg-color-button-background: #232c3b;
+  --pg-color-button-foreground: #dce5ef;
+  --pg-color-button-border: #354359;
+  --pg-color-button-hover-background: #2c374a;
+  --pg-color-button-active-background: #354359;
+  --pg-color-input-background: #12161f;
+  --pg-color-input-foreground: #dce5ef;
+  --pg-color-input-border: #354359;
+
+  /* ---- Role tokens ---- */
+  --pg-color-surface-subtle: #1e2634;
+  --pg-color-surface-inset: #12161f;
+  --pg-color-surface-sunken: #131721;
+  --pg-color-surface-tint: #1e2634;
+  --pg-color-surface-hover-strong: #283344;
+  --pg-color-surface-faint: #7a8fa6;
+  --pg-color-text-body: #dce5ef;
+  --pg-color-text-strong: #edf3fa;
+  --pg-color-text-emphasis: #e5eef7;
+  --pg-color-accent-interactive: #5ea8f8;
+  --pg-color-accent-foreground: #0d1624;
+  --pg-color-link: #72b6fc;
+  --pg-color-status-error-text: #f48086;
+  --pg-color-border-default: #354359;
+  --pg-color-border-soft: #2b3749;
+  --pg-color-focus-ring: #5ea8f8;
+  /* ---- Welcome screen / Tips card (#623 dogfood remediation) ---- */
+  --pg-color-welcome-card-background: #1e2634;
+  --pg-color-welcome-card-foreground: #edf3fa;
+  --pg-color-welcome-card-muted: #9eb2c5;
+  --pg-color-welcome-card-counter: #7a8fa6;
+  --pg-color-welcome-card-border: #2d3748;
+  --pg-color-welcome-card-divider: #263040;
+  --pg-color-welcome-card-button-background: #232c3b;
+  --pg-color-welcome-card-button-foreground: #dce5ef;
+  --pg-color-welcome-card-button-border: #354359;
+  --pg-color-welcome-card-button-hover-background: #2c374a;
+  --pg-color-welcome-card-link: #85c2fd;
+  --pg-color-welcome-card-link-hover: #aed7fe;
+  --pg-color-welcome-tip-icon: #64b5f6;
+  --pg-color-logo-foreground: #edf3fa;
+  --pg-color-preview-callout-foreground: #dce5ef;
+  /* ---- Editor toolbar / icons (#623 dogfood remediation) ---- */
+  --pg-color-toolbar-button-foreground: #dce5ef;
+  --pg-color-toolbar-button-hover-background: #2c374a;
+  --pg-color-toolbar-button-hover-border: #354359;
+  --pg-color-toolbar-button-active-background: #354359;
+  --pg-color-toolbar-button-pressed-background: #243a57;
+  --pg-color-toolbar-button-pressed-hover-background: #2c476c;
+  --pg-color-toolbar-button-pressed-border: #426ea3;
+  --pg-color-toolbar-button-pressed-foreground: #85c2fd;
+  --pg-color-toolbar-button-disabled-foreground: #7a8fa6;
+  --pg-opacity-disabled: 0.85;
+  --pg-color-icon-foreground: #cad7e5;
+  --pg-color-icon-muted: #8fa3b8;
+  --pg-color-icon-disabled: #607489;
+  /* ---- Tail role tokens (#623 dogfood remediation) ---- */
+  --pg-color-surface-hover-soft: #212936;
+  --pg-color-surface-hover-soft-alt: #212936;
+  --pg-color-surface-pressed-alt: #354359;
+  --pg-color-surface-pressed-strong: #3f506a;
+  --pg-color-accent-muted: #456994;
+  --pg-color-surface-selected-strong: #284772;
+  --pg-color-status-error-background: #3a1f23;
+  --pg-color-status-error-background-alt: #3a1f23;
+  --pg-color-status-warning-background: #332617;
+  --pg-color-status-warning-background-alt: #332617;
+  --pg-color-highlight-background: #554117;
+  --pg-color-highlight-background-strong: #765a20;
+  --pg-color-status-info-background: #18293d;
+  --pg-color-status-info-background-alt: #18293d;
+  --pg-color-status-success-background: #162f22;
+  --pg-color-surface-tone-a: #1e2634;
+  --pg-color-surface-tone-b: #1e2634;
+  --pg-color-surface-tone-c: #1e2634;
+  --pg-color-surface-tone-d: #1e2634;
+  --pg-color-surface-tone-e: #1e2634;
+  --pg-color-surface-tone-f: #1e2634;
+  --pg-color-surface-tone-g: #202938;
+  --pg-color-surface-tone-h: #202938;
+  --pg-color-surface-tone-i: #202938;
+  --pg-color-surface-tone-j: #1e2634;
+  --pg-color-surface-tone-k: #1e2634;
+  --pg-color-surface-selected-soft-a: #243a57;
+  --pg-color-surface-selected-soft-b: #243a57;
+  --pg-color-surface-selected-soft-c: #243a57;
+  --pg-color-surface-selected-soft-d: #2d486d;
+  --pg-color-text-neutral-dark: #dce5ef;
+  --pg-color-status-error-text-alt: #f48086;
+  --pg-color-status-error-text-alt-2: #f48086;
+  --pg-color-status-error-text-alt-3: #f48086;
+  --pg-color-status-error-text-alt-4: #ff858b;
+  --pg-color-status-error-text-alt-5: #f48086;
+  --pg-color-status-warning-text: #e5ad67;
+  --pg-color-status-warning-text-alt: #f4dfbf;
+  --pg-color-status-warning-text-alt-2: #f2a97b;
+  --pg-color-accent-text-alt: #85c2fd;
+  --pg-color-accent-text-alt-2: #85c2fd;
+  --pg-color-accent-text-alt-3: #85c2fd;
+  --pg-color-text-strongest-alt: #edf3fa;
+  --pg-color-surface-soft: #1a212d;
+  --pg-color-surface-soft-alt: #1e2634;
+  --pg-color-surface-hover-alt: #283344;
+  --pg-color-surface-hover-alt-2: #283344;
+  --pg-color-surface-selected: #243a57;
+  --pg-color-text-secondary: #adbfd2;
+  --pg-color-text-secondary-alt: #adbfd2;
+  --pg-color-text-tertiary: #9eb2c5;
+  --pg-color-text-tertiary-alt: #9eb2c5;
+  --pg-color-text-strongest: #edf3fa;
+  --pg-color-text-disabled: #607489;
+  --pg-color-text-disabled-alt: #6e8399;
+  --pg-color-text-disabled-alt-2: #607489;
+
+  /* ---- Preview (screen) ---- */
+  --pg-color-preview-background: #171d27;
+  --pg-color-preview-foreground: #dce5ef;
+  --pg-color-preview-muted: #8fa3b8;
+  --pg-color-preview-border: #293344;
+  --pg-color-preview-link: #72b6fc;
+  --pg-color-preview-link-hover: #85c2fd;
+  --pg-color-preview-link-visited: #baa3f2;
+  --pg-color-preview-accent: #5ea8f8;
+  --pg-color-preview-code-background: #212936;
+  --pg-color-preview-code-foreground: #dce5ef;
+  --pg-color-preview-code-block-background: #10141b;
+  --pg-color-preview-code-block-foreground: #dce5ef;
+  --pg-color-preview-blockquote-border: #456994;
+  --pg-color-preview-table-border: #354359;
+  --pg-color-preview-table-header-background: #212936;
+  --pg-color-preview-table-header-foreground: #edf3fa;
+  --pg-color-preview-callout-note-background: #18293d;
+  --pg-color-preview-callout-tip-background: #162f22;
+  --pg-color-preview-callout-important-background: #27203a;
+  --pg-color-preview-callout-warning-background: #332617;
+  --pg-color-preview-callout-caution-background: #382024;
+
+  /* ---- CodeMirror editor surface ---- */
+  --pg-color-editor-background: #171d27;
+  --pg-color-editor-foreground: #dce5ef;
+  --pg-color-editor-caret: #ffffff;
+  --pg-color-editor-selection: #284772;
+  --pg-color-editor-selection-inactive: #233044;
+  --pg-color-editor-selection-match: rgba(94, 168, 248, 0.28);
+  --pg-color-editor-line-highlight: rgba(220, 229, 239, 0.05);
+  --pg-color-editor-gutter-background: #141923;
+  --pg-color-editor-gutter-foreground: #607489;
+  --pg-color-editor-gutter-border: #263040;
+  --pg-color-editor-gutter-marker: #8fa3b8;
+  --pg-color-editor-active-line-gutter-background: #202836;
+  --pg-color-editor-search-match-background: rgba(229, 173, 103, 0.35);
+  --pg-color-editor-search-match-active-background: rgba(229, 173, 103, 0.6);
+  --pg-color-editor-syntax-marker: #93a8be;
+  --pg-color-editor-syntax-link: #72b6fc;
+  --pg-color-editor-syntax-string: #e5ad67;
+  --pg-color-editor-syntax-escape: #f48a94;
+  --pg-color-editor-syntax-tag: #5ec995;
+  --pg-color-editor-syntax-comment: #9cb0c5;
+  --pg-color-editor-search-match-border: #e5ad67;
+  --pg-color-editor-diagnostic-error: #f48086;
+  --pg-color-editor-diagnostic-warning: #e5ad67;
+  --pg-color-editor-diagnostic-info: #7a8fa6;
+  --pg-color-editor-tooltip-background: #212936;
+  --pg-color-editor-tooltip-foreground: #dce5ef;
+  --pg-color-editor-tooltip-border: #354359;
+
+  /* ---- Feature-scoped variables ---- */
+  --markdown-callout-note-accent: #58a6ff;
+  --markdown-callout-tip-accent: #56d364;
+  --markdown-callout-important-accent: #b392f0;
+  --markdown-callout-warning-accent: #e3b341;
+  --markdown-callout-caution-accent: #ff7b72;
+  --workspace-sidebar-background: #181c22;
+  --workspace-sidebar-border: #2a313b;
+  --workspace-sidebar-divider: #2a313b;
+  --workspace-sidebar-header-foreground: #9aa7b5;
+  --workspace-sidebar-item-foreground: #d7dde5;
+  --workspace-sidebar-muted-foreground: #8592a0;
+  --workspace-sidebar-hover: #232932;
+  --workspace-sidebar-active-background: #263a52;
+  --workspace-sidebar-active-foreground: #e8edf3;
+  --workspace-sidebar-focus-ring: #5b9bd5;
+  --app-dialog-backdrop: rgba(0, 0, 0, 0.6);
+  --app-dialog-background: #1e232a;
+  --app-dialog-border: #333b47;
+  --app-dialog-foreground: #d7dde5;
+  --app-dialog-header-background: #232932;
+  --app-dialog-header-foreground: #e8edf3;
+  --app-dialog-warning-header-background: #3a2a1a;
+  --app-dialog-warning-header-foreground: #f0d9b5;
+  --app-dialog-icon-info: #6aa6de;
+  --app-dialog-icon-warning: #e0a458;
+  --app-dialog-icon-error: #f07178;
+  --app-dialog-icon-question: #9aa7b5;
+  --app-dialog-destructive-header-background: #3d2222;
+  --app-dialog-destructive-header-foreground: #f5b5b5;
+  --app-dialog-button-background: #262c35;
+  --app-dialog-button-foreground: #d7dde5;
+  --app-dialog-button-border: #3b4452;
+  --app-dialog-confirm-background: #3f7fbf;
+  --app-dialog-confirm-foreground: #ffffff;
+  --app-dialog-destructive-confirm-background: #c94a4a;
+  --app-dialog-destructive-confirm-foreground: #ffffff;
+  --app-dialog-focus-ring: #5b9bd5;
+  --app-dialog-copy-button-foreground: #9aa7b5;
+  --app-dialog-copy-failure-foreground: #f07178;
+  --color-project-read-only: #6aa6de;
+  --command-palette-status-unavailable: #9aa7b5;
+  --command-palette-status-not-implemented: #9aa7b5;
+  --notification-toast-background: #212936;
+  --notification-toast-foreground: #dce5ef;
+  --notification-toast-border: #354359;
+  --notification-toast-shadow: rgba(0, 0, 0, 0.55);
+  --notification-toast-close-foreground: #8fa3b8;
+  --notification-toast-focus-ring: #5ea8f8;
+}
+
+/* #703: Ginza Night — high-contrast dark theme emphasizing clarity, surface separation,
+   and distinct status/syntax recognition (AAA primary text, >= 4.5:1 syntax/secondary). */
+.theme-ginza-night {
+  /* ---- App / surface ---- */
+  --pg-color-app-background: #07090c;
+  --pg-color-app-foreground: #f4f6fa;
+  --pg-color-surface-background: #0d1015;
+  --pg-color-surface-foreground: #f4f6fa;
+  --pg-color-surface-muted: #abb8c9;
+  --pg-color-surface-hover: #1b222d;
+  --pg-color-surface-active: #242d3c;
+  --pg-color-panel-background: #11151c;
+  --pg-color-panel-foreground: #abb8c9;
+  --pg-color-panel-header-background: #151a23;
+  --pg-color-panel-border: #3a4659;
+  --pg-color-panel-divider: #2a3443;
+  --pg-color-accent-primary: #00d4ff;
+  --pg-color-accent-secondary: #38bdf8;
+  --pg-color-status-info: #38bdf8;
+  --pg-color-status-warning: #ffb703;
+  --pg-color-status-error: #ff5a65;
+  --pg-color-status-success: #34d399;
+
+  /* ---- Activity bar ---- */
+  --pg-color-activitybar-background: #090c10;
+  --pg-color-activitybar-foreground: #9eb0c3;
+  --pg-color-activitybar-border: #2a3443;
+  --pg-color-activitybar-hover-background: #1b222d;
+  --pg-color-activitybar-hover-foreground: #ffffff;
+  --pg-color-activitybar-active-background: #0d1015;
+  --pg-color-activitybar-active-foreground: #ffffff;
+  --pg-color-activitybar-active-indicator: #00d4ff;
+
+  /* ---- Document tabs ---- */
+  --pg-color-tab-bar-background: #090c10;
+  --pg-color-tab-background: transparent;
+  --pg-color-tab-hover-background: #1b222d;
+  --pg-color-tab-active-background: #0d1015;
+  --pg-color-tab-foreground: #9eb0c3;
+  --pg-color-tab-active-foreground: #ffffff;
+  --pg-color-tab-border: #2a3443;
+
+  /* ---- Controls ---- */
+  --pg-color-button-background: #1c232e;
+  --pg-color-button-foreground: #f4f6fa;
+  --pg-color-button-border: #4d5d75;
+  --pg-color-button-hover-background: #26303f;
+  --pg-color-button-active-background: #313d4f;
+  --pg-color-input-background: #07090c;
+  --pg-color-input-foreground: #ffffff;
+  --pg-color-input-border: #4d5d75;
+
+  /* ---- Role tokens ---- */
+  --pg-color-surface-subtle: #151a23;
+  --pg-color-surface-inset: #07090c;
+  --pg-color-surface-sunken: #080a0e;
+  --pg-color-surface-tint: #151a23;
+  --pg-color-surface-hover-strong: #242d3c;
+  --pg-color-surface-faint: #8c9eb3;
+  --pg-color-text-body: #f4f6fa;
+  --pg-color-text-strong: #ffffff;
+  --pg-color-text-emphasis: #ffffff;
+  --pg-color-accent-interactive: #00d4ff;
+  --pg-color-accent-foreground: #040d1a;
+  --pg-color-link: #38bdf8;
+  --pg-color-status-error-text: #ff7582;
+  --pg-color-border-default: #4d5d75;
+  --pg-color-border-soft: #3a4659;
+  --pg-color-focus-ring: #00d4ff;
+  /* ---- Welcome screen / Tips card (#623 dogfood remediation) ---- */
+  --pg-color-welcome-card-background: #151a23;
+  --pg-color-welcome-card-foreground: #ffffff;
+  --pg-color-welcome-card-muted: #b5c3d4;
+  --pg-color-welcome-card-counter: #8c9eb3;
+  --pg-color-welcome-card-border: #3a4659;
+  --pg-color-welcome-card-divider: #2a3443;
+  --pg-color-welcome-card-button-background: #1c232e;
+  --pg-color-welcome-card-button-foreground: #f4f6fa;
+  --pg-color-welcome-card-button-border: #4d5d75;
+  --pg-color-welcome-card-button-hover-background: #26303f;
+  --pg-color-welcome-card-link: #5cd3ff;
+  --pg-color-welcome-card-link-hover: #99e5ff;
+  --pg-color-welcome-tip-icon: #00d4ff;
+  --pg-color-logo-foreground: #ffffff;
+  --pg-color-preview-callout-foreground: #f4f6fa;
+  /* ---- Editor toolbar / icons (#623 dogfood remediation) ---- */
+  --pg-color-toolbar-button-foreground: #f4f6fa;
+  --pg-color-toolbar-button-hover-background: #26303f;
+  --pg-color-toolbar-button-hover-border: #4d5d75;
+  --pg-color-toolbar-button-active-background: #313d4f;
+  --pg-color-toolbar-button-pressed-background: #1e3855;
+  --pg-color-toolbar-button-pressed-hover-background: #254569;
+  --pg-color-toolbar-button-pressed-border: #00d4ff;
+  --pg-color-toolbar-button-pressed-foreground: #5cd3ff;
+  --pg-color-toolbar-button-disabled-foreground: #8c9eb3;
+  --pg-opacity-disabled: 0.85;
+  --pg-color-icon-foreground: #dce5ef;
+  --pg-color-icon-muted: #abb8c9;
+  --pg-color-icon-disabled: #607287;
+  /* ---- Tail role tokens (#623 dogfood remediation) ---- */
+  --pg-color-surface-hover-soft: #1b222d;
+  --pg-color-surface-hover-soft-alt: #1b222d;
+  --pg-color-surface-pressed-alt: #313d4f;
+  --pg-color-surface-pressed-strong: #3c4b60;
+  --pg-color-accent-muted: #1f658c;
+  --pg-color-surface-selected-strong: #174a75;
+  --pg-color-status-error-background: #381014;
+  --pg-color-status-error-background-alt: #381014;
+  --pg-color-status-warning-background: #332400;
+  --pg-color-status-warning-background-alt: #332400;
+  --pg-color-highlight-background: #5c4000;
+  --pg-color-highlight-background-strong: #805900;
+  --pg-color-status-info-background: #0c283d;
+  --pg-color-status-info-background-alt: #0c283d;
+  --pg-color-status-success-background: #092e1f;
+  --pg-color-surface-tone-a: #151a23;
+  --pg-color-surface-tone-b: #151a23;
+  --pg-color-surface-tone-c: #151a23;
+  --pg-color-surface-tone-d: #151a23;
+  --pg-color-surface-tone-e: #151a23;
+  --pg-color-surface-tone-f: #151a23;
+  --pg-color-surface-tone-g: #181e28;
+  --pg-color-surface-tone-h: #181e28;
+  --pg-color-surface-tone-i: #181e28;
+  --pg-color-surface-tone-j: #151a23;
+  --pg-color-surface-tone-k: #151a23;
+  --pg-color-surface-selected-soft-a: #1e3855;
+  --pg-color-surface-selected-soft-b: #1e3855;
+  --pg-color-surface-selected-soft-c: #1e3855;
+  --pg-color-surface-selected-soft-d: #254569;
+  --pg-color-text-neutral-dark: #f4f6fa;
+  --pg-color-status-error-text-alt: #ff7582;
+  --pg-color-status-error-text-alt-2: #ff7582;
+  --pg-color-status-error-text-alt-3: #ff7582;
+  --pg-color-status-error-text-alt-4: #ff8a95;
+  --pg-color-status-error-text-alt-5: #ff7582;
+  --pg-color-status-warning-text: #ffd166;
+  --pg-color-status-warning-text-alt: #fffae6;
+  --pg-color-status-warning-text-alt-2: #ffb070;
+  --pg-color-accent-text-alt: #5cd3ff;
+  --pg-color-accent-text-alt-2: #5cd3ff;
+  --pg-color-accent-text-alt-3: #5cd3ff;
+  --pg-color-text-strongest-alt: #ffffff;
+  --pg-color-surface-soft: #11151c;
+  --pg-color-surface-soft-alt: #151a23;
+  --pg-color-surface-hover-alt: #242d3c;
+  --pg-color-surface-hover-alt-2: #242d3c;
+  --pg-color-surface-selected: #1e3855;
+  --pg-color-text-secondary: #c5d0de;
+  --pg-color-text-secondary-alt: #c5d0de;
+  --pg-color-text-tertiary: #b0bfd2;
+  --pg-color-text-tertiary-alt: #b0bfd2;
+  --pg-color-text-strongest: #ffffff;
+  --pg-color-text-disabled: #6f8096;
+  --pg-color-text-disabled-alt: #7c8eA4;
+  --pg-color-text-disabled-alt-2: #6f8096;
+
+  /* ---- Preview (screen) ---- */
+  --pg-color-preview-background: #0d1015;
+  --pg-color-preview-foreground: #f4f6fa;
+  --pg-color-preview-muted: #abb8c9;
+  --pg-color-preview-border: #3a4659;
+  --pg-color-preview-link: #38bdf8;
+  --pg-color-preview-link-hover: #5cd3ff;
+  --pg-color-preview-link-visited: #c084fc;
+  --pg-color-preview-accent: #00d4ff;
+  --pg-color-preview-code-background: #181e28;
+  --pg-color-preview-code-foreground: #f4f6fa;
+  --pg-color-preview-code-block-background: #07090c;
+  --pg-color-preview-code-block-foreground: #f4f6fa;
+  --pg-color-preview-blockquote-border: #00d4ff;
+  --pg-color-preview-table-border: #4d5d75;
+  --pg-color-preview-table-header-background: #181e28;
+  --pg-color-preview-table-header-foreground: #ffffff;
+  --pg-color-preview-callout-note-background: #0c283d;
+  --pg-color-preview-callout-tip-background: #092e1f;
+  --pg-color-preview-callout-important-background: #251336;
+  --pg-color-preview-callout-warning-background: #332400;
+  --pg-color-preview-callout-caution-background: #381014;
+
+  /* ---- CodeMirror editor surface ---- */
+  --pg-color-editor-background: #0d1015;
+  --pg-color-editor-foreground: #f4f6fa;
+  --pg-color-editor-caret: #00d4ff;
+  --pg-color-editor-selection: #184068;
+  --pg-color-editor-selection-inactive: #1b2a3c;
+  --pg-color-editor-selection-match: rgba(0, 212, 255, 0.28);
+  --pg-color-editor-line-highlight: rgba(255, 255, 255, 0.06);
+  --pg-color-editor-gutter-background: #090c10;
+  --pg-color-editor-gutter-foreground: #75879e;
+  --pg-color-editor-gutter-border: #2a3443;
+  --pg-color-editor-gutter-marker: #abb8c9;
+  --pg-color-editor-active-line-gutter-background: #1b222d;
+  --pg-color-editor-search-match-background: rgba(255, 183, 3, 0.32);
+  --pg-color-editor-search-match-active-background: rgba(180, 110, 0, 0.48);
+  --pg-color-editor-syntax-marker: #b0bfd2;
+  --pg-color-editor-syntax-link: #38bdf8;
+  --pg-color-editor-syntax-string: #ffc44d;
+  --pg-color-editor-syntax-escape: #ff7b90;
+  --pg-color-editor-syntax-tag: #4ee0a8;
+  --pg-color-editor-syntax-comment: #a3b4c8;
+  --pg-color-editor-search-match-border: #ffb703;
+  --pg-color-editor-diagnostic-error: #ff5a65;
+  --pg-color-editor-diagnostic-warning: #ffb703;
+  --pg-color-editor-diagnostic-info: #38bdf8;
+  --pg-color-editor-tooltip-background: #151a23;
+  --pg-color-editor-tooltip-foreground: #ffffff;
+  --pg-color-editor-tooltip-border: #4d5d75;
+
+  /* ---- Feature-scoped variables ---- */
+  --markdown-callout-note-accent: #58a6ff;
+  --markdown-callout-tip-accent: #56d364;
+  --markdown-callout-important-accent: #b392f0;
+  --markdown-callout-warning-accent: #e3b341;
+  --markdown-callout-caution-accent: #ff7b72;
+  --workspace-sidebar-background: #181c22;
+  --workspace-sidebar-border: #2a313b;
+  --workspace-sidebar-divider: #2a313b;
+  --workspace-sidebar-header-foreground: #9aa7b5;
+  --workspace-sidebar-item-foreground: #d7dde5;
+  --workspace-sidebar-muted-foreground: #8592a0;
+  --workspace-sidebar-hover: #232932;
+  --workspace-sidebar-active-background: #263a52;
+  --workspace-sidebar-active-foreground: #e8edf3;
+  --workspace-sidebar-focus-ring: #5b9bd5;
+  --app-dialog-backdrop: rgba(0, 0, 0, 0.6);
+  --app-dialog-background: #1e232a;
+  --app-dialog-border: #333b47;
+  --app-dialog-foreground: #d7dde5;
+  --app-dialog-header-background: #232932;
+  --app-dialog-header-foreground: #e8edf3;
+  --app-dialog-warning-header-background: #3a2a1a;
+  --app-dialog-warning-header-foreground: #f0d9b5;
+  --app-dialog-icon-info: #6aa6de;
+  --app-dialog-icon-warning: #e0a458;
+  --app-dialog-icon-error: #f07178;
+  --app-dialog-icon-question: #9aa7b5;
+  --app-dialog-destructive-header-background: #3d2222;
+  --app-dialog-destructive-header-foreground: #f5b5b5;
+  --app-dialog-button-background: #262c35;
+  --app-dialog-button-foreground: #d7dde5;
+  --app-dialog-button-border: #3b4452;
+  --app-dialog-confirm-background: #3f7fbf;
+  --app-dialog-confirm-foreground: #ffffff;
+  --app-dialog-destructive-confirm-background: #c94a4a;
+  --app-dialog-destructive-confirm-foreground: #ffffff;
+  --app-dialog-focus-ring: #5b9bd5;
+  --app-dialog-copy-button-foreground: #9aa7b5;
+  --app-dialog-copy-failure-foreground: #f07178;
+  --color-project-read-only: #6aa6de;
+  --command-palette-status-unavailable: #9aa7b5;
+  --command-palette-status-not-implemented: #9aa7b5;
+  --notification-toast-background: #151a23;
+  --notification-toast-foreground: #ffffff;
+  --notification-toast-border: #4d5d75;
+  --notification-toast-shadow: rgba(0, 0, 0, 0.7);
+  --notification-toast-close-foreground: #abb8c9;
+  --notification-toast-focus-ring: #00d4ff;
+}
+
 /* #623 Slice 2: Resistance Blue — blue-focused light theme. High-readability
    editing surface with blue chrome, tabs, and accents. */
 .theme-resistance-blue {
@@ -4696,6 +5216,18 @@ label.settingsItemHeader {
 }
 
 :root.theme-night-dark {
+  --pg-color-japanese-lint-info: #ffffff;
+  --pg-color-japanese-lint-warning: #f0c040;
+  --pg-color-japanese-lint-error: #ff6b6b;
+}
+
+:root.theme-shine-moon {
+  --pg-color-japanese-lint-info: #ffffff;
+  --pg-color-japanese-lint-warning: #f0c040;
+  --pg-color-japanese-lint-error: #ff6b6b;
+}
+
+:root.theme-ginza-night {
   --pg-color-japanese-lint-info: #ffffff;
   --pg-color-japanese-lint-warning: #f0c040;
   --pg-color-japanese-lint-error: #ff6b6b;

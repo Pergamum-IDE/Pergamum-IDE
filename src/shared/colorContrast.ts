@@ -104,6 +104,7 @@ export function contrastRatio(foreground: string, background: string): number {
   return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 }
 
-/** WCAG AA thresholds. */
+/** WCAG AA / AAA thresholds. */
 export const WCAG_AA_NORMAL_TEXT = 4.5;
 export const WCAG_AA_LARGE_TEXT_OR_UI = 3;
+export const WCAG_AAA_NORMAL_TEXT = 7;

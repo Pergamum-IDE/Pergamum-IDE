@@ -55,6 +55,8 @@ describe("theme tokens in styles.css (#621, #623)", () => {
     `${newline}}${newline}`
   );
   const nightBlock = blockAt(".theme-night-dark {", `${newline}}${newline}`);
+  const shineMoonBlock = blockAt(".theme-shine-moon {", `${newline}}${newline}`);
+  const ginzaNightBlock = blockAt(".theme-ginza-night {", `${newline}}${newline}`);
   const blueBlock = blockAt(".theme-resistance-blue {", `${newline}}${newline}`);
   const greenBlock = blockAt(".theme-enlightened-green {", `${newline}}${newline}`);
   const bananaBlock = blockAt(".theme-banana-yellow {", `${newline}}${newline}`);
@@ -83,6 +85,8 @@ describe("theme tokens in styles.css (#621, #623)", () => {
     const lightTokens = tokenNames(lightBlock);
     const themeBlocks = [
       { name: "Night Dark", tokens: tokenNames(nightBlock) },
+      { name: "Shine Moon", tokens: tokenNames(shineMoonBlock) },
+      { name: "Ginza Night", tokens: tokenNames(ginzaNightBlock) },
       { name: "Resistance Blue", tokens: tokenNames(blueBlock) },
       { name: "Enlightened Green", tokens: tokenNames(greenBlock) },
       { name: "Banana Yellow", tokens: tokenNames(bananaBlock) },
