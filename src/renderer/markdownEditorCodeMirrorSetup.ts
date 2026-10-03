@@ -67,8 +67,12 @@ import {
 import { searchKeymap } from "@codemirror/search";
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { lintKeymap } from "@codemirror/lint";
-import { EditorState, type Extension } from "@codemirror/state";
-import { createEditorThemeExtension } from "./editorThemeExtension";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
+import {
+  createEditorThemeExtension,
+  createEditorThemeModeExtension,
+  editorThemeModeCompartment
+} from "./editorThemeExtension";
 import { createJapaneseLintExtension } from "./japaneseLint/japaneseLintGutterExtension";
 import { markdownSyntaxHighlightStyle } from "./markdownSyntaxHighlightStyle";
 import {
@@ -130,6 +134,9 @@ export interface MarkdownEditorBaseSetupOptions {
    */
   readonly undoHistoryMinDepth: number;
   readonly fencedCodeIndentUnit?: FencedCodeIndentUnit;
+  /** #708: Compartment for CodeMirror's `EditorView.darkTheme` facet. */
+  readonly themeModeCompartment?: Compartment;
+  readonly isDarkTheme?: boolean;
 }
 
 export function createMarkdownEditorBaseSetup(
@@ -139,6 +146,10 @@ export function createMarkdownEditorBaseSetup(
     fencedCodeIndentUnitFacet.of(options.fencedCodeIndentUnit ?? "spaces4"),
     // #621: editor surface colors from application theme tokens.
     createEditorThemeExtension(),
+    // #708: CodeMirror EditorView.darkTheme facet via Compartment
+    (options.themeModeCompartment ?? editorThemeModeCompartment).of(
+      createEditorThemeModeExtension(options.isDarkTheme ?? false)
+    ),
     // #428: gutter display order is the left-to-right DOM order of the
     // `activeGutters` facet entries, which follows extension order here.
     // `foldGutter()` is listed BEFORE `lineNumbers()` so the marker (fold)

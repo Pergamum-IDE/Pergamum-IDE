@@ -1,5 +1,5 @@
 import { EditorView } from "@codemirror/view";
-import type { Extension } from "@codemirror/state";
+import { Compartment, type Extension } from "@codemirror/state";
 
 /**
  * #621: CodeMirror editor surface colors, read from the application theme's
@@ -51,6 +51,23 @@ export function createEditorThemeExtension(): Extension {
       backgroundColor: "var(--pg-color-editor-tooltip-background)",
       color: "var(--pg-color-editor-tooltip-foreground)",
       borderColor: "var(--pg-color-editor-tooltip-border)"
+    },
+    // #708: fold placeholder pill — overrides CodeMirror's fixed #eee/#ddd/#888 baseTheme
+    ".cm-foldPlaceholder": {
+      backgroundColor: "var(--pg-color-editor-gutter-background)",
+      borderColor: "var(--pg-color-editor-gutter-border)",
+      color: "var(--pg-color-editor-gutter-marker)"
     }
   });
+}
+
+/**
+ * #708: Compartment for CodeMirror's `EditorView.darkTheme` facet.
+ * Reconfigured only on cross-kind theme switch (light <-> dark);
+ * same-kind theme switches trigger no CodeMirror dispatch.
+ */
+export const editorThemeModeCompartment = new Compartment();
+
+export function createEditorThemeModeExtension(isDark: boolean): Extension {
+  return EditorView.darkTheme.of(isDark);
 }

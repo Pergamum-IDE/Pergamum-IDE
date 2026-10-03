@@ -151,6 +151,9 @@ export interface MarkdownEditorDocumentStateOptions {
    *  above — a Settings change reconfigures an already-open `.txt` document. */
   readonly textFileIndentUnitCompartment?: Compartment;
   readonly textFileIndentUnitRef?: LiveRef<TextFilesIndentUnit>;
+  /** #708: Compartment for CodeMirror's `EditorView.darkTheme` facet. */
+  readonly themeModeCompartment?: Compartment;
+  readonly isDarkThemeRef?: LiveRef<boolean>;
   readonly glossaryCompletionRef: LiveRef<MarkdownEditorGlossaryCompletionConfig | null>;
   /**
    * #424 / #425 follow-up: the Ctrl+F / Ctrl+H keymap no longer reads a
@@ -346,7 +349,9 @@ export function createMarkdownEditorDocumentState(
     extensions: [
       ...createMarkdownEditorBaseSetup({
         undoHistoryMinDepth: options.undoHistoryMinDepth,
-        fencedCodeIndentUnit: options.fencedCodeIndentUnitRef?.current
+        fencedCodeIndentUnit: options.fencedCodeIndentUnitRef?.current,
+        themeModeCompartment: options.themeModeCompartment,
+        isDarkTheme: options.isDarkThemeRef?.current
       }),
       markdown(),
       EditorView.lineWrapping,
