@@ -74,6 +74,19 @@
   --pg-color-preview-table-border: #d0d7de;
   --pg-color-preview-table-header-background: #f6f8fa;
   --pg-color-preview-table-header-foreground: #17212b;
+  --pg-color-preview-syntax-comment: #8b9cb3;
+  --pg-color-preview-syntax-keyword: #ff7b72;
+  --pg-color-preview-syntax-string: #a5d6ff;
+  --pg-color-preview-syntax-number: #79c0ff;
+  --pg-color-preview-syntax-title: #d2a8ff;
+  --pg-color-preview-syntax-tag: #7ee787;
+  --pg-color-preview-syntax-attribute: #79c0ff;
+  --pg-color-preview-syntax-meta: #ffa657;
+  --pg-color-preview-syntax-addition: #7ee787;
+  --pg-color-preview-syntax-addition-background: #123824;
+  --pg-color-preview-syntax-deletion: #ff7b72;
+  --pg-color-preview-syntax-deletion-background: #3e1a1e;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #ffffff;
@@ -449,6 +462,19 @@
   --pg-color-preview-callout-important-background: #251f35;
   --pg-color-preview-callout-warning-background: #2f2818;
   --pg-color-preview-callout-caution-background: #33201f;
+  --pg-color-preview-syntax-comment: #8c99a8;
+  --pg-color-preview-syntax-keyword: #ff7b89;
+  --pg-color-preview-syntax-string: #f1b268;
+  --pg-color-preview-syntax-number: #70b8ff;
+  --pg-color-preview-syntax-title: #cb9eff;
+  --pg-color-preview-syntax-tag: #62c984;
+  --pg-color-preview-syntax-attribute: #79c0ff;
+  --pg-color-preview-syntax-meta: #ff9e64;
+  --pg-color-preview-syntax-addition: #62c984;
+  --pg-color-preview-syntax-addition-background: #143522;
+  --pg-color-preview-syntax-deletion: #ff7b89;
+  --pg-color-preview-syntax-deletion-background: #3d171d;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #1a1e25;
@@ -709,6 +735,19 @@
   --pg-color-preview-callout-important-background: #27203a;
   --pg-color-preview-callout-warning-background: #332617;
   --pg-color-preview-callout-caution-background: #382024;
+  --pg-color-preview-syntax-comment: #8ea4ba;
+  --pg-color-preview-syntax-keyword: #89ddff;
+  --pg-color-preview-syntax-string: #e5ad67;
+  --pg-color-preview-syntax-number: #ffc777;
+  --pg-color-preview-syntax-title: #c099ff;
+  --pg-color-preview-syntax-tag: #6ee7b7;
+  --pg-color-preview-syntax-attribute: #93c5fd;
+  --pg-color-preview-syntax-meta: #67e8f9;
+  --pg-color-preview-syntax-addition: #6ee7b7;
+  --pg-color-preview-syntax-addition-background: #113626;
+  --pg-color-preview-syntax-deletion: #f87171;
+  --pg-color-preview-syntax-deletion-background: #3b181b;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #171d27;
@@ -969,6 +1008,19 @@
   --pg-color-preview-callout-important-background: #251336;
   --pg-color-preview-callout-warning-background: #332400;
   --pg-color-preview-callout-caution-background: #381014;
+  --pg-color-preview-syntax-comment: #a3b4c8;
+  --pg-color-preview-syntax-keyword: #ff7b90;
+  --pg-color-preview-syntax-string: #ffc44d;
+  --pg-color-preview-syntax-number: #79c0ff;
+  --pg-color-preview-syntax-title: #d2a8ff;
+  --pg-color-preview-syntax-tag: #4ee0a8;
+  --pg-color-preview-syntax-attribute: #38bdf8;
+  --pg-color-preview-syntax-meta: #ff9e64;
+  --pg-color-preview-syntax-addition: #4ee0a8;
+  --pg-color-preview-syntax-addition-background: #0d3a24;
+  --pg-color-preview-syntax-deletion: #ff7b90;
+  --pg-color-preview-syntax-deletion-background: #421219;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #0d1015;
@@ -1119,6 +1171,19 @@
   --pg-color-preview-table-border: #c4d5e7;
   --pg-color-preview-table-header-background: #eaf2fc;
   --pg-color-preview-table-header-foreground: #101c29;
+  --pg-color-preview-syntax-comment: #889bb4;
+  --pg-color-preview-syntax-keyword: #ff7b82;
+  --pg-color-preview-syntax-string: #8bd4ff;
+  --pg-color-preview-syntax-number: #6ec2ff;
+  --pg-color-preview-syntax-title: #caa6ff;
+  --pg-color-preview-syntax-tag: #6de39c;
+  --pg-color-preview-syntax-attribute: #7cc4ff;
+  --pg-color-preview-syntax-meta: #ffaa60;
+  --pg-color-preview-syntax-addition: #6de39c;
+  --pg-color-preview-syntax-addition-background: #123628;
+  --pg-color-preview-syntax-deletion: #ff7b82;
+  --pg-color-preview-syntax-deletion-background: #3d1820;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #f5f8fc;
@@ -1379,6 +1444,19 @@
   --pg-color-preview-table-border: #c3d7c7;
   --pg-color-preview-table-header-background: #eaf4ec;
   --pg-color-preview-table-header-foreground: #0e1b11;
+  --pg-color-preview-syntax-comment: #8aa390;
+  --pg-color-preview-syntax-keyword: #ff7b85;
+  --pg-color-preview-syntax-string: #94e2a7;
+  --pg-color-preview-syntax-number: #7ed4a6;
+  --pg-color-preview-syntax-title: #d0a6ff;
+  --pg-color-preview-syntax-tag: #5fe28d;
+  --pg-color-preview-syntax-attribute: #88dfb2;
+  --pg-color-preview-syntax-meta: #f5ad62;
+  --pg-color-preview-syntax-addition: #5fe28d;
+  --pg-color-preview-syntax-addition-background: #12381f;
+  --pg-color-preview-syntax-deletion: #ff7b85;
+  --pg-color-preview-syntax-deletion-background: #3c191a;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #f4f8f5;
@@ -1637,6 +1715,19 @@
   --pg-color-preview-table-border: #e1d8b9;
   --pg-color-preview-table-header-background: #fbf5e3;
   --pg-color-preview-table-header-foreground: #1c180d;
+  --pg-color-preview-syntax-comment: #9c9682;
+  --pg-color-preview-syntax-keyword: #ff7e70;
+  --pg-color-preview-syntax-string: #ffd066;
+  --pg-color-preview-syntax-number: #ffe082;
+  --pg-color-preview-syntax-title: #d5a8ff;
+  --pg-color-preview-syntax-tag: #7ee090;
+  --pg-color-preview-syntax-attribute: #f5c862;
+  --pg-color-preview-syntax-meta: #ffad54;
+  --pg-color-preview-syntax-addition: #7ee090;
+  --pg-color-preview-syntax-addition-background: #1f381c;
+  --pg-color-preview-syntax-deletion: #ff7e70;
+  --pg-color-preview-syntax-deletion-background: #3d1a15;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #fbf9f1;
@@ -1895,6 +1986,19 @@
   --pg-color-preview-table-border: #dbbfc7;
   --pg-color-preview-table-header-background: #f8e6eb;
   --pg-color-preview-table-header-foreground: #1b0e12;
+  --pg-color-preview-syntax-comment: #9e878e;
+  --pg-color-preview-syntax-keyword: #ff7895;
+  --pg-color-preview-syntax-string: #f8a5c2;
+  --pg-color-preview-syntax-number: #fca5a5;
+  --pg-color-preview-syntax-title: #e0a6ff;
+  --pg-color-preview-syntax-tag: #72dfa2;
+  --pg-color-preview-syntax-attribute: #f8a2be;
+  --pg-color-preview-syntax-meta: #fca876;
+  --pg-color-preview-syntax-addition: #72dfa2;
+  --pg-color-preview-syntax-addition-background: #183824;
+  --pg-color-preview-syntax-deletion: #ff7895;
+  --pg-color-preview-syntax-deletion-background: #3d151c;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #faf2f4;
@@ -2153,6 +2257,19 @@
   --pg-color-preview-table-border: #d5c8e6;
   --pg-color-preview-table-header-background: #f2eaf8;
   --pg-color-preview-table-header-foreground: #1a1126;
+  --pg-color-preview-syntax-comment: #9c8ea8;
+  --pg-color-preview-syntax-keyword: #ff7aa2;
+  --pg-color-preview-syntax-string: #d8b4fe;
+  --pg-color-preview-syntax-number: #c084fc;
+  --pg-color-preview-syntax-title: #e4a8ff;
+  --pg-color-preview-syntax-tag: #6ee7b7;
+  --pg-color-preview-syntax-attribute: #c4b5fd;
+  --pg-color-preview-syntax-meta: #fba870;
+  --pg-color-preview-syntax-addition: #6ee7b7;
+  --pg-color-preview-syntax-addition-background: #16372b;
+  --pg-color-preview-syntax-deletion: #ff7aa2;
+  --pg-color-preview-syntax-deletion-background: #3d1527;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #fbf9fe;
@@ -2411,6 +2528,19 @@
   --pg-color-preview-table-border: #b9dbe5;
   --pg-color-preview-table-header-background: #e7f6fa;
   --pg-color-preview-table-header-foreground: #0b222c;
+  --pg-color-preview-syntax-comment: #7ea4b2;
+  --pg-color-preview-syntax-keyword: #ff7b82;
+  --pg-color-preview-syntax-string: #6ee7f7;
+  --pg-color-preview-syntax-number: #7dd3fc;
+  --pg-color-preview-syntax-title: #caa6ff;
+  --pg-color-preview-syntax-tag: #5eead4;
+  --pg-color-preview-syntax-attribute: #67e8f9;
+  --pg-color-preview-syntax-meta: #fba766;
+  --pg-color-preview-syntax-addition: #5eead4;
+  --pg-color-preview-syntax-addition-background: #0e3831;
+  --pg-color-preview-syntax-deletion: #ff7b82;
+  --pg-color-preview-syntax-deletion-background: #3d161d;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #f4fbfd;
@@ -2669,6 +2799,19 @@
   --pg-color-preview-table-border: #cdcdaa;
   --pg-color-preview-table-header-background: #e9e9d1;
   --pg-color-preview-table-header-foreground: #1a1a0f;
+  --pg-color-preview-syntax-comment: #99997e;
+  --pg-color-preview-syntax-keyword: #ff7c75;
+  --pg-color-preview-syntax-string: #e6c989;
+  --pg-color-preview-syntax-number: #edd89f;
+  --pg-color-preview-syntax-title: #ccaaff;
+  --pg-color-preview-syntax-tag: #7ddb90;
+  --pg-color-preview-syntax-attribute: #dfce97;
+  --pg-color-preview-syntax-meta: #f5ae67;
+  --pg-color-preview-syntax-addition: #7ddb90;
+  --pg-color-preview-syntax-addition-background: #1e381c;
+  --pg-color-preview-syntax-deletion: #ff7c75;
+  --pg-color-preview-syntax-deletion-background: #3d1a17;
+
 
   /* ---- CodeMirror editor surface ---- */
   --pg-color-editor-background: #ececd6;
@@ -8259,6 +8402,19 @@ label.settingsItemHeader {
     --pg-color-preview-table-border: #d0d7de;
     --pg-color-preview-table-header-background: #f6f8fa;
     --pg-color-preview-table-header-foreground: #17212b;
+    --pg-color-preview-syntax-comment: #8b9cb3;
+    --pg-color-preview-syntax-keyword: #ff7b72;
+    --pg-color-preview-syntax-string: #a5d6ff;
+    --pg-color-preview-syntax-number: #79c0ff;
+    --pg-color-preview-syntax-title: #d2a8ff;
+    --pg-color-preview-syntax-tag: #7ee787;
+    --pg-color-preview-syntax-attribute: #79c0ff;
+    --pg-color-preview-syntax-meta: #ffa657;
+    --pg-color-preview-syntax-addition: #7ee787;
+    --pg-color-preview-syntax-addition-background: #123824;
+    --pg-color-preview-syntax-deletion: #ff7b72;
+    --pg-color-preview-syntax-deletion-background: #3e1a1e;
+
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
     --pg-color-preview-callout-foreground: #17212b;
@@ -8315,119 +8471,102 @@ label.settingsItemHeader {
 }
 
 /*
- * #536: highlight.js syntax highlighting — GitHub light theme.
+ * #536 / #707: highlight.js syntax highlighting — theme-aware colors.
  * Scoped to the Preview pane so it does not affect other surfaces.
- * Source: highlight.js/styles/github.css (BSD 3-Clause License).
+ * Uses Pergamum semantic tokens (--pg-color-preview-syntax-*).
  * Third-party notices: see THIRD_PARTY_NOTICES.md.
  */
 .preview pre code.hljs {
   display: block;
   overflow-x: auto;
-  padding: 1em;
-  background: #ffffff;
-  color: #24292e;
-  border-radius: 4px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 0;
 }
 
 .preview .hljs-doctag,
 .preview .hljs-keyword,
-.preview .hljs-meta .hljs-keyword,
-.preview .hljs-template-tag,
-.preview .hljs-template-variable,
-.preview .hljs-type,
-.preview .hljs-variable.language_ {
-  /* prettylights-syntax-keyword */
-  color: #d73a49;
+.preview .hljs-template-tag {
+  color: var(--pg-color-preview-syntax-keyword);
 }
 
 .preview .hljs-title,
 .preview .hljs-title.class_,
 .preview .hljs-title.class_.inherited__,
-.preview .hljs-title.function_ {
-  /* prettylights-syntax-entity */
-  color: #6f42c1;
+.preview .hljs-title.function_,
+.preview .hljs-type {
+  color: var(--pg-color-preview-syntax-title);
+}
+
+.preview .hljs-literal,
+.preview .hljs-number {
+  color: var(--pg-color-preview-syntax-number);
 }
 
 .preview .hljs-attr,
 .preview .hljs-attribute,
-.preview .hljs-literal,
-.preview .hljs-meta,
-.preview .hljs-number,
-.preview .hljs-operator,
-.preview .hljs-variable,
 .preview .hljs-selector-attr,
 .preview .hljs-selector-class,
 .preview .hljs-selector-id {
-  /* prettylights-syntax-constant */
-  color: #005cc5;
+  color: var(--pg-color-preview-syntax-attribute);
 }
 
 .preview .hljs-regexp,
 .preview .hljs-string,
 .preview .hljs-meta .hljs-string {
-  /* prettylights-syntax-string */
-  color: #032f62;
+  color: var(--pg-color-preview-syntax-string);
 }
 
 .preview .hljs-built_in,
-.preview .hljs-symbol {
-  /* prettylights-syntax-variable */
-  color: #e36209;
+.preview .hljs-symbol,
+.preview .hljs-meta,
+.preview .hljs-meta .hljs-keyword,
+.preview .hljs-template-variable,
+.preview .hljs-variable,
+.preview .hljs-variable.language_,
+.preview .hljs-operator,
+.preview .hljs-section,
+.preview .hljs-bullet {
+  color: var(--pg-color-preview-syntax-meta);
 }
 
 .preview .hljs-comment,
 .preview .hljs-code,
-.preview .hljs-formula {
-  /* prettylights-syntax-comment */
-  color: #6a737d;
+.preview .hljs-formula,
+.preview .hljs-quote {
+  color: var(--pg-color-preview-syntax-comment);
 }
 
 .preview .hljs-name,
-.preview .hljs-quote,
 .preview .hljs-selector-tag,
 .preview .hljs-selector-pseudo {
-  /* prettylights-syntax-entity-tag */
-  color: #22863a;
+  color: var(--pg-color-preview-syntax-tag);
 }
 
-.preview .hljs-subst {
-  /* prettylights-syntax-storage-modifier-import */
-  color: #24292e;
+.preview .hljs-subst,
+.preview .hljs-emphasis,
+.preview .hljs-strong {
+  color: inherit;
 }
 
-.preview .hljs-section {
-  /* prettylights-syntax-markup-heading */
-  color: #005cc5;
+.preview .hljs-section,
+.preview .hljs-strong {
   font-weight: bold;
-}
-
-.preview .hljs-bullet {
-  /* prettylights-syntax-markup-list */
-  color: #735c0f;
 }
 
 .preview .hljs-emphasis {
-  /* prettylights-syntax-markup-italic */
-  color: #24292e;
   font-style: italic;
 }
 
-.preview .hljs-strong {
-  /* prettylights-syntax-markup-bold */
-  color: #24292e;
-  font-weight: bold;
-}
-
 .preview .hljs-addition {
-  /* prettylights-syntax-markup-inserted */
-  color: #22863a;
-  background-color: #f0fff4;
+  color: var(--pg-color-preview-syntax-addition);
+  background-color: var(--pg-color-preview-syntax-addition-background);
 }
 
 .preview .hljs-deletion {
-  /* prettylights-syntax-markup-deleted */
-  color: #b31d28;
-  background-color: #ffeef0;
+  color: var(--pg-color-preview-syntax-deletion);
+  background-color: var(--pg-color-preview-syntax-deletion-background);
 }
 
 /* #564: Mermaid diagram blocks — Markdown horizontal preview only. No theme
