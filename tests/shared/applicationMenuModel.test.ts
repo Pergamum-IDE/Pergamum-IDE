@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  NATIVE_MENU_ACCELERATOR_COMMAND_IDS,
   applicationMenuModel,
   getApplicationMenuModel,
   type ApplicationMenuItem,
@@ -264,27 +265,92 @@ describe("canonical application menu model (#662)", () => {
   describe("item semantics", () => {
     const everyItem = allItems(applicationMenuModel);
 
-    it("shortcut / alias semantics are explicit, not strings", () => {
-      const byCommand = (id: string) =>
-        everyItem.find(
-          (item) => item.type === "command" && item.commandId === id
-        );
+    const byCommand = (id: string) =>
+      everyItem.find(
+        (item) => item.type === "command" && item.commandId === id
+      );
 
-      // #556: Open Markdown Document is intentionally menu-only.
-      expect(byCommand(editorCommandIds.openMarkdownDocument)).toMatchObject({
-        keybinding: "none"
+    it("shortcut display and native accelerator are two separate policies (#693)", () => {
+      for (const item of everyItem) {
+        if (item.type !== "command") {
+          continue;
+        }
+
+        // The old single-property model is gone.
+        expect(item, item.commandId).not.toHaveProperty("keybinding");
+        expect(item, item.commandId).not.toHaveProperty("keyAlias");
+        expect(JSON.stringify(item)).not.toContain("primaryUnlabeled");
+      }
+    });
+
+    it("Application Settings: shown (primary), bound natively through a hidden item", () => {
+      const item = byCommand(workspaceCommandIds.openApplicationSettings);
+
+      expect(item).toMatchObject({ nativeAccelerator: "hiddenPrimary" });
+      // Display is the default (primary): not switched off.
+      expect(item).not.toHaveProperty("shortcutDisplay", "none");
+    });
+
+    it("Open Markdown File: never a native accelerator (#556), display is allowed", () => {
+      const item = byCommand(editorCommandIds.openMarkdownDocument);
+
+      expect(item).not.toHaveProperty("nativeAccelerator");
+      expect(item).not.toHaveProperty("shortcutDisplay", "none");
+    });
+
+    it("Japanese Style Check: display primary, native none", () => {
+      const item = byCommand(assistCommandIds.openJapaneseMachineCheckDialog);
+
+      expect(item).toBeDefined();
+      expect(item).not.toHaveProperty("nativeAccelerator");
+      expect(item).not.toHaveProperty("shortcutDisplay", "none");
+      expect(NATIVE_MENU_ACCELERATOR_COMMAND_IDS).not.toContain(
+        assistCommandIds.openJapaneseMachineCheckDialog
+      );
+    });
+
+    it("Quit shows its native row's key but is not a customizable shortcut", () => {
+      expect(byCommand(applicationCommandIds.quitApplication)).toMatchObject({
+        shortcutDisplay: "none",
+        shortcutDisplayId: "app.quit"
       });
-      // #591: bound, but the visible item shows no shortcut label.
-      expect(
-        byCommand(workspaceCommandIds.openApplicationSettings)
-      ).toMatchObject({ keybinding: "primaryUnlabeled" });
-      // #642 aliases (F1, F12, Mod-+).
+    });
+
+    it("native accelerators are opt-in: exactly the commands that had one before (#693)", () => {
+      expect([...NATIVE_MENU_ACCELERATOR_COMMAND_IDS].sort()).toEqual(
+        [
+          "workspace.project.open",
+          "editor.file.new",
+          "editor.close",
+          "editor.document.save",
+          "editor.saveAll",
+          "editor.saveAs",
+          "workbench.commandPalette.open",
+          "search.project.openFromSelection",
+          "search.project.replace.openFromSelection",
+          "workspace.applicationSettings.open",
+          "app.zoom.in",
+          "app.zoom.out",
+          "app.zoom.reset"
+        ].sort()
+      );
+    });
+
+    it("native aliases (F1, F12, Mod-+) are native-only and need a native accelerator", () => {
       for (const id of [
         commandPaletteCommandIds.open,
         editorCommandIds.saveAs,
         applicationCommandIds.zoomIn
       ]) {
-        expect(byCommand(id)).toMatchObject({ keyAlias: true });
+        expect(byCommand(id)).toMatchObject({
+          nativeAccelerator: "primary",
+          nativeKeyAlias: true
+        });
+      }
+      for (const item of everyItem) {
+        if (item.type === "command" && item.nativeKeyAlias) {
+          expect(item.nativeAccelerator ?? "none", item.commandId).not.toBe("none");
+        }
       }
     });
 

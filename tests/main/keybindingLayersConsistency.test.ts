@@ -21,7 +21,7 @@ import {
   type LoadedKeybindings
 } from "../../src/main/keybindingsStore";
 import {
-  MENU_ACCELERATOR_COMMAND_IDS,
+  NATIVE_MENU_ACCELERATOR_COMMAND_IDS,
   createMenuAcceleratorLookup
 } from "../../src/main/menuAccelerators";
 import {
@@ -97,7 +97,7 @@ function runtimePairs(platform: PergamumPlatform): Set<string> {
   }
   const rows = getEffectiveKeybindingRows(platform);
   const lookup = createMenuAcceleratorLookup(platform, undefined, null, rows);
-  for (const commandId of MENU_ACCELERATOR_COMMAND_IDS) {
+  for (const commandId of NATIVE_MENU_ACCELERATOR_COMMAND_IDS) {
     for (const accelerator of lookup.getAll(commandId)) {
       // The menu uses CommandOrControl; compare through the physical key.
       const row = rows.find(
@@ -229,7 +229,7 @@ describe.each(["win32", "darwin"] as const)("UI == runtime layers (#655) on %s",
 describe("registration layers are listed by command (#655)", () => {
   it("every renderer-shortcut command and every menu command is a catalog command", () => {
     const known = new Set(resolveDefaultKeybindings("win32").map((row) => row.command));
-    for (const id of [...MENU_ACCELERATOR_COMMAND_IDS, ...Object.values(rendererShortcutCommandIds)]) {
+    for (const id of [...NATIVE_MENU_ACCELERATOR_COMMAND_IDS, ...Object.values(rendererShortcutCommandIds)]) {
       expect(known.has(id), id).toBe(true);
     }
   });

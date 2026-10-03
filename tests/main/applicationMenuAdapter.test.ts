@@ -6,7 +6,7 @@ import {
 } from "../../src/main/applicationMenuAdapter";
 import {
   createMenuAcceleratorLookup,
-  MENU_ACCELERATOR_COMMAND_IDS,
+  NATIVE_MENU_ACCELERATOR_COMMAND_IDS,
   type MenuAcceleratorLookup
 } from "../../src/main/menuAccelerators";
 import { applicationMenuModel } from "../../src/shared/applicationMenuModel";
@@ -179,7 +179,7 @@ describe("native menu adapter (#662)", () => {
       const commandIds = new Set(
         flatten(buildNativeMenuTemplate(context())).map((item) => item.id)
       );
-      for (const id of MENU_ACCELERATOR_COMMAND_IDS) {
+      for (const id of NATIVE_MENU_ACCELERATOR_COMMAND_IDS) {
         expect(commandIds.has(id), id).toBe(true);
       }
     });

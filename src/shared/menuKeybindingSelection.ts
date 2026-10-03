@@ -1,45 +1,25 @@
 /**
- * #664: which effective keybinding rows an application menu item carries.
+ * #664 / #693: which effective keybinding rows an application menu item uses.
  *
- * One selection rule shared by the Electron native menu (accelerators,
- * `main/menuAccelerators`) and the Renderer menu (shortcut labels), so the
- * label shown in the Renderer menu is always the key the native accelerator
- * backend actually binds.
+ * ONE selection rule (the customizable keys of a command: app scope, Pergamum
+ * source, not readonly, bound), applied to two separate purposes:
+ *   - the Renderer menu's shortcut LABEL: every command item, from the
+ *     effective rows (`allowed = null`);
+ *   - the Electron native ACCELERATOR: only the commands that opted in
+ *     (`NATIVE_MENU_ACCELERATOR_COMMAND_IDS` of the menu model).
+ * Having a label does not make a key a native accelerator.
  */
 
 import type { ResolvedKeybinding } from "./keybindings";
 
 /**
- * The commands that have an application-menu item (primary item or hidden
- * alias). App-scope commands that are handled by a renderer window listener
- * instead (the Command Palette prefix shortcuts, #643) are deliberately NOT
- * here, so the menu can never claim their keys: an Electron accelerator would
- * intercept the keystroke before the renderer sees it (see #556).
- */
-export const MENU_ACCELERATOR_COMMAND_IDS: readonly string[] = [
-  "workspace.project.open",
-  "editor.file.new",
-  "editor.close",
-  "editor.document.save",
-  "editor.saveAll",
-  "editor.saveAs",
-  "workbench.commandPalette.open",
-  "search.project.openFromSelection",
-  "search.project.replace.openFromSelection",
-  "workspace.applicationSettings.open",
-  "app.zoom.in",
-  "app.zoom.out",
-  "app.zoom.reset"
-];
-
-/**
- * The customizable (app-scope Pergamum) keys of each menu command, in catalog
+ * The customizable (app-scope Pergamum) keys of each command, in catalog
  * order: the primary key first, then alias keys (F1, F12, `Mod-+`, ...).
  * `allowed = null` serves every app-scope Pergamum command.
  */
 export function selectMenuKeybindingKeys(
   rows: readonly ResolvedKeybinding[],
-  allowed: readonly string[] | null = MENU_ACCELERATOR_COMMAND_IDS
+  allowed: readonly string[] | null
 ): ReadonlyMap<string, readonly string[]> {
   const allowedSet = allowed === null ? null : new Set(allowed);
   const byCommand = new Map<string, string[]>();

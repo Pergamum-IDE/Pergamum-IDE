@@ -7,10 +7,16 @@
  * (#661): the Electron native menu today (see `main/applicationMenuAdapter`),
  * and later the Renderer menu bar.
  *
+ * Two separate questions about a command item's key (#693):
+ *   - shortcut DISPLAY (`shortcutDisplay`): is its effective primary key shown
+ *     as a label? Read by the Renderer menu (Windows / Linux).
+ *   - native ACCELERATOR (`nativeAccelerator`): is its key registered with
+ *     Electron's native menu, which then handles the keystroke itself? Opt-in:
+ *     the default is no accelerator. Showing a key never registers it.
+ *
  * What is deliberately NOT in here:
- *   - shortcut strings: accelerators come from the effective keybindings
- *     (`main/menuAccelerators`); the model only says how a command item uses
- *     them (`keybinding` / `keyAlias`)
+ *   - shortcut strings: labels and accelerators both come from the effective
+ *     keybindings; the model only holds the two policies above
  *   - enablement: the renderer's CommandContext is the one source of truth,
  *     keyed by `commandId`
  *   - click handlers / dispatch / Electron types: adapter concerns
@@ -66,15 +72,30 @@ export type ApplicationMenuLabel =
   | { readonly literal: string };
 
 /**
- * How a command item uses the effective keybindings of its `commandId`.
- *   - `primary` (default): the item carries the command's primary key
- *   - `primaryUnlabeled`: the primary key is bound, but the native visible item
- *     shows no shortcut label (#591: Electron localizes the comma key label as
- *     "Ctrl+カンマ" on Japanese Windows). The Renderer menu displays its primary
- *     shortcut label (#667).
- *   - `none`: the item never carries a shortcut
+ * Whether the Renderer menu labels a command item with its effective primary
+ * shortcut (the first bound key; user overrides and unbinds included).
+ *   - `primary` (default): show it
+ *   - `none`: never show one
+ * This is presentation only. It says nothing about native registration, and the
+ * macOS native menu (whose items are drawn by the OS) cannot show a key that is
+ * not also a native accelerator - it shows none rather than fake one.
  */
-export type ApplicationMenuKeybinding = "primary" | "primaryUnlabeled" | "none";
+export type ApplicationMenuShortcutDisplay = "primary" | "none";
+
+/**
+ * Whether a command item registers its effective key(s) as an Electron native
+ * menu accelerator. Opt-in: the default is `none` - the key is then handled by
+ * the Renderer's configurable keybinding path only.
+ *   - `primary`: the visible native item carries the primary key
+ *   - `hiddenPrimary`: the primary key is bound through a hidden item and the
+ *     visible native item shows no accelerator label (#591: Electron localizes
+ *     the comma key as "Ctrl+カンマ" on Japanese Windows)
+ *   - `none`: no accelerator
+ */
+export type ApplicationMenuNativeAccelerator =
+  | "primary"
+  | "hiddenPrimary"
+  | "none";
 
 interface ApplicationMenuItemBase {
   /** Omitted = every platform. */
@@ -86,19 +107,23 @@ export interface ApplicationMenuCommandItem extends ApplicationMenuItemBase {
   /** Canonical identity; also the stable id used for enablement updates. */
   readonly commandId: ApplicationMenuCommandId;
   readonly label: ApplicationMenuLabel;
-  readonly keybinding?: ApplicationMenuKeybinding;
+  /** Default `primary`. See {@link ApplicationMenuShortcutDisplay}. */
+  readonly shortcutDisplay?: ApplicationMenuShortcutDisplay;
+  /** Default `none`. See {@link ApplicationMenuNativeAccelerator}. */
+  readonly nativeAccelerator?: ApplicationMenuNativeAccelerator;
   /**
    * #664: display only. The keybinding catalog row (a readonly native-role
    * row, e.g. `app.quit`) whose key the Renderer menu shows although this
-   * item binds no customizable key (`keybinding: "none"`): the native menu
-   * backend binds it itself. It is an id, never a shortcut string.
+   * item binds no customizable key (`shortcutDisplay: "none"`): the native
+   * menu backend binds it itself. It is an id, never a shortcut string.
    */
   readonly shortcutDisplayId?: string;
   /**
-   * The command's second and later catalog keys (F1, F12, `Mod-+`, ...) are
-   * also active, without a second visible entry (#642).
+   * Native only (needs a `nativeAccelerator`): the command's second and later
+   * catalog keys (F1, F12, `Mod-+`, ...) are also registered, through hidden
+   * items, without a second visible entry (#642). Never shown as a label.
    */
-  readonly keyAlias?: true;
+  readonly nativeKeyAlias?: true;
 }
 
 export interface ApplicationMenuNativeRoleItem extends ApplicationMenuItemBase {
@@ -151,7 +176,11 @@ function command(
   key: TranslationKey,
   extras: Pick<
     ApplicationMenuCommandItem,
-    "keybinding" | "keyAlias" | "platforms" | "shortcutDisplayId"
+    | "shortcutDisplay"
+    | "nativeAccelerator"
+    | "nativeKeyAlias"
+    | "platforms"
+    | "shortcutDisplayId"
   > = {}
 ): ApplicationMenuCommandItem {
   return { type: "command", commandId, label: { key }, ...extras };
@@ -197,9 +226,10 @@ function quitItem(
     type: "command",
     commandId: applicationCommandIds.quitApplication,
     label: { key: "menu.quit", values: { appName: APPLICATION_MENU_APP_NAME } },
-    keybinding: "none",
-    // The native backend binds Quit's fixed accelerator; the catalog row
-    // documents it (readonly native role), so the Renderer menu can show it.
+    shortcutDisplay: "none",
+    // The native backend binds Quit's fixed accelerator (an explicit one, not
+    // a customizable key); the catalog row documents it (readonly native
+    // role), so the Renderer menu can show it.
     shortcutDisplayId: "app.quit",
     platforms
   };
@@ -226,7 +256,9 @@ const macApplicationMenu: ApplicationMenuTopLevelItem = {
 
 const fileMenu: ApplicationMenuTopLevelItem = submenu("menu.file", [
   command(applicationCommandIds.createProject, "menu.createProject"),
-  command(applicationCommandIds.openProject, "menu.openProject"),
+  command(applicationCommandIds.openProject, "menu.openProject", {
+    nativeAccelerator: "primary"
+  }),
   command(applicationCommandIds.closeProject, "menu.closeProject"),
   separator,
   submenu("menu.file.import", [
@@ -236,30 +268,43 @@ const fileMenu: ApplicationMenuTopLevelItem = submenu("menu.file", [
     )
   ]),
   separator,
-  command(editorCommandIds.newFile, "menu.newFile"),
+  command(editorCommandIds.newFile, "menu.newFile", {
+    nativeAccelerator: "primary"
+  }),
   // #556: CommandOrControl+O was freed up for the Command Palette's
   // project-file-open mode (a renderer-level global shortcut). An Electron
   // menu accelerator would intercept the keystroke before the renderer ever
   // sees it (same mechanism removed for Reload in #552), so this item is
-  // mouse/menu-only.
-  command(editorCommandIds.openMarkdownDocument, "menu.openMarkdownFile", {
-    keybinding: "none"
+  // never carries a native accelerator (the default). If the user binds a key
+  // to it, the Renderer menu may label it, but only the Renderer's own
+  // keybinding path handles the keystroke.
+  command(editorCommandIds.openMarkdownDocument, "menu.openMarkdownFile"),
+  command(editorCommandIds.close, "menu.closeCurrentTab", {
+    nativeAccelerator: "primary"
   }),
-  command(editorCommandIds.close, "menu.closeCurrentTab"),
-  command(editorCommandIds.saveDocument, "menu.save"),
-  command(editorCommandIds.saveAll, "menu.saveAll"),
+  command(editorCommandIds.saveDocument, "menu.save", {
+    nativeAccelerator: "primary"
+  }),
+  command(editorCommandIds.saveAll, "menu.saveAll", {
+    nativeAccelerator: "primary"
+  }),
   // #587 Slice 5: F12 is the second catalog key (an alias, no second entry).
-  command(editorCommandIds.saveAs, "menu.saveAs", { keyAlias: true }),
+  command(editorCommandIds.saveAs, "menu.saveAs", {
+    nativeAccelerator: "primary",
+    nativeKeyAlias: true
+  }),
   separator,
   command(projectSettingsCommandIds.open, "menu.projectSettings"),
   // #646: the read-only Keyboard Shortcuts screen, right before Application
-  // Settings. A menu entry only: it carries no accelerator.
+  // Settings. A menu entry only: it carries no native accelerator.
   command(workspaceCommandIds.openKeyboardShortcuts, "menu.keyboardShortcuts"),
-  // #591 follow-up: the key is bound but the item shows no shortcut label.
+  // #591 follow-up: the key is bound (through a hidden native item) but the
+  // visible native item shows no accelerator label. The Renderer menu still
+  // shows the effective primary key (shortcutDisplay defaults to primary).
   command(
     workspaceCommandIds.openApplicationSettings,
     "menu.applicationSettings",
-    { keybinding: "primaryUnlabeled" }
+    { nativeAccelerator: "hiddenPrimary" }
   ),
   separator,
   // #636: Cmd+W belongs to `editor.close` (active document tab). The native
@@ -290,11 +335,13 @@ const editMenu: ApplicationMenuTopLevelItem = submenu("menu.edit", [
   // carries no payload - the renderer resolves the selection itself.
   command(
     searchSelectionShortcutCommandIds.openProjectSearchFromSelection,
-    "menu.edit.findInProject"
+    "menu.edit.findInProject",
+    { nativeAccelerator: "primary" }
   ),
   command(
     searchSelectionShortcutCommandIds.openProjectReplaceFromSelection,
-    "menu.edit.replaceInProject"
+    "menu.edit.replaceInProject",
+    { nativeAccelerator: "primary" }
   )
 ], { mnemonic: "E" });
 
@@ -302,7 +349,8 @@ const viewMenu: ApplicationMenuTopLevelItem = submenu("menu.view", [
   // #554: Mod+P is the primary Command Palette / launcher shortcut; F1 is its
   // alias (no second visible entry).
   command(commandPaletteCommandIds.open, "menu.commandPalette", {
-    keyAlias: true
+    nativeAccelerator: "primary",
+    nativeKeyAlias: true
   }),
   separator,
   nativeRole("toggleDevTools", "menu.toggleDevTools", {
@@ -310,9 +358,16 @@ const viewMenu: ApplicationMenuTopLevelItem = submenu("menu.view", [
   }),
   separator,
   // `Mod-+` is Zoom In's alias.
-  command(applicationCommandIds.zoomIn, "menu.zoomIn", { keyAlias: true }),
-  command(applicationCommandIds.zoomOut, "menu.zoomOut"),
-  command(applicationCommandIds.resetZoom, "menu.actualSize"),
+  command(applicationCommandIds.zoomIn, "menu.zoomIn", {
+    nativeAccelerator: "primary",
+    nativeKeyAlias: true
+  }),
+  command(applicationCommandIds.zoomOut, "menu.zoomOut", {
+    nativeAccelerator: "primary"
+  }),
+  command(applicationCommandIds.resetZoom, "menu.actualSize", {
+    nativeAccelerator: "primary"
+  }),
   separator,
   nativeRole("togglefullscreen", "menu.toggleFullScreen", {
     shortcutDisplayId: "window.toggleFullscreen"
@@ -375,6 +430,37 @@ export const applicationMenuModel: readonly ApplicationMenuTopLevelItem[] = [
   macWindowMenu,
   helpMenu
 ];
+
+function collectNativeAcceleratorCommandIds(
+  items: readonly ApplicationMenuItem[],
+  into: Set<string>
+): void {
+  for (const item of items) {
+    if (item.type === "submenu") {
+      collectNativeAcceleratorCommandIds(item.items, into);
+    } else if (
+      item.type === "command" &&
+      (item.nativeAccelerator ?? "none") !== "none"
+    ) {
+      into.add(item.commandId);
+    }
+  }
+}
+
+/**
+ * The commands whose keys are registered as Electron native menu accelerators:
+ * exactly the items that opted in with `nativeAccelerator`. This is the only
+ * native-accelerator allowlist; the Renderer menu's shortcut labels do not use
+ * it (presentation is separate, #693). Quit's fixed accelerator and the native
+ * roles' are not customizable keys and are handled by the adapter itself.
+ */
+export const NATIVE_MENU_ACCELERATOR_COMMAND_IDS: readonly string[] = (() => {
+  const ids = new Set<string>();
+
+  collectNativeAcceleratorCommandIds(applicationMenuModel, ids);
+
+  return [...ids];
+})();
 
 function isForPlatform(
   item: ApplicationMenuItem,

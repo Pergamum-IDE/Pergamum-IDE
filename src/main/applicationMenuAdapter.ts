@@ -137,6 +137,13 @@ function commandItemClick(
   };
 }
 
+/**
+ * The accelerator of a command item. Only an explicit `nativeAccelerator`
+ * (and Quit, whose fixed accelerator is not a customizable key) registers one
+ * (#693). On macOS this native menu is also the visible menu, so a command
+ * without it shows no key there, by design: a presentation-only key is never
+ * turned into an accelerator (nor written into the label) to be displayed.
+ */
 function commandItemAccelerator(
   item: ApplicationMenuCommandItem,
   context: NativeMenuAdapterContext
@@ -145,9 +152,9 @@ function commandItemAccelerator(
     return quitAccelerator(context.platform);
   }
 
-  const keybinding = item.keybinding ?? "primary";
-
-  return keybinding === "primary"
+  // Opt-in (#693): only an item that declares a native accelerator gets one.
+  // Having a shortcut label (or a user keybinding) never adds an accelerator.
+  return item.nativeAccelerator === "primary"
     ? context.accelerators.get(item.commandId)
     : undefined;
 }
@@ -169,14 +176,14 @@ function commandMenuItems(
 
   return [
     primary,
-    ...(item.keybinding === "primaryUnlabeled"
+    ...(item.nativeAccelerator === "hiddenPrimary"
       ? hiddenAcceleratorAliasItems(
           context,
           item.commandId,
           context.accelerators.get(item.commandId)
         )
       : []),
-    ...(item.keyAlias
+    ...(item.nativeKeyAlias && (item.nativeAccelerator ?? "none") !== "none"
       ? hiddenAcceleratorAliasItems(
           context,
           item.commandId,
