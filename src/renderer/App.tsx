@@ -702,9 +702,12 @@ import { projectDocumentAbsolutePath } from "../shared/tabPathDisplay";
 import {
   documentRelativeIndexInOrder,
   documentWorkspaceTabId,
+  orderedWorkspaceTabs,
   reorderWorkspaceTabOrder,
   specialWorkspaceTabId,
   syncWorkspaceTabOrder,
+  workspaceTabIdForTab,
+  workspaceTabKey,
   type SpecialTabId,
   type SpecialWorkspaceTab,
   type WorkspaceTabId
@@ -2870,27 +2873,6 @@ export function App(): JSX.Element {
     setEffectivePreviewRenderer(effectiveSettings.preview.renderer);
     setIsPreviewRendererSwitching(false);
   }, [effectiveSettings.preview.renderer, project?.activeProjectFilePath]);
-  // #272: recomputed whenever the Project or the open-editor set changes.
-  // Cheap (no serialization / hashing) — the coordinator debounces and
-  // captures Editor View State at most once per flush.
-  const sessionSnapshotInputs = useMemo(
-    () =>
-      buildSessionSnapshotInputs(
-        rendererSessionId,
-        project,
-        openDocumentsState,
-        layout.markdownEditorPreview.visible
-      ),
-    [
-      rendererSessionId,
-      project,
-      openDocumentsState,
-      layout.markdownEditorPreview.visible
-    ]
-  );
-  useEffect(() => {
-    sessionPersistence.updateSessionInputs(sessionSnapshotInputs);
-  }, [sessionPersistence, sessionSnapshotInputs]);
   useEffect(
     () => () => sessionPersistence.dispose(),
     [sessionPersistence]
@@ -4692,6 +4674,48 @@ export function App(): JSX.Element {
                   : openDocumentsState.activeDocumentId
                     ? documentWorkspaceTabId(openDocumentsState.activeDocumentId)
                     : undefined;
+
+  // Session recording of the mixed tab bar (documents, images and special
+  // tabs interleaved, plus which tab is active). Debug Log and Project-
+  // dependent tabs without a Project are filtered by the snapshot builder
+  // through `specialTabSessionPolicy`.
+  const activeWorkspaceTabKey = activeWorkspaceTabId
+    ? workspaceTabKey(activeWorkspaceTabId)
+    : null;
+  const sessionWorkspaceTabs = useMemo(
+    () => ({
+      tabIds: orderedWorkspaceTabs(tabs, specialTabs, workspaceTabOrder).map(
+        workspaceTabIdForTab
+      ),
+      activeTabId: activeWorkspaceTabId
+    }),
+    // `activeWorkspaceTabId` is a fresh object each render; its key is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tabs, specialTabs, workspaceTabOrder, activeWorkspaceTabKey]
+  );
+  // #272: recomputed whenever the Project or the open-editor set changes.
+  // Cheap (no serialization / hashing) — the coordinator debounces and
+  // captures Editor View State at most once per flush.
+  const sessionSnapshotInputs = useMemo(
+    () =>
+      buildSessionSnapshotInputs(
+        rendererSessionId,
+        project,
+        openDocumentsState,
+        layout.markdownEditorPreview.visible,
+        sessionWorkspaceTabs
+      ),
+    [
+      rendererSessionId,
+      project,
+      openDocumentsState,
+      layout.markdownEditorPreview.visible,
+      sessionWorkspaceTabs
+    ]
+  );
+  useEffect(() => {
+    sessionPersistence.updateSessionInputs(sessionSnapshotInputs);
+  }, [sessionPersistence, sessionSnapshotInputs]);
 
   // #355 → #354: "Select in File Explorer" (and every other tab context-menu
   // command) now dispatches through `handleTabAction` below, defined after
@@ -9252,13 +9276,15 @@ export function App(): JSX.Element {
           rendererSessionId,
           project,
           openDocumentsStateRef.current,
-          layout.markdownEditorPreview.visible
+          layout.markdownEditorPreview.visible,
+          sessionWorkspaceTabs
         );
         const prospectivePostCloseSessionInputs = buildSessionSnapshotInputs(
           rendererSessionId,
           null,
           removeProjectScopedOpenEditors(openDocumentsStateRef.current),
-          layout.markdownEditorPreview.visible
+          layout.markdownEditorPreview.visible,
+          sessionWorkspaceTabs
         );
 
         const closeResult = await runExplicitProjectCloseCommit({
@@ -9747,11 +9773,43 @@ export function App(): JSX.Element {
   // ordinary project-activation path (no "first document auto-open"). Only
   // touches stable setState / refs, so it is safe to call from the
   // cold-start closure.
+  // Opens (never activates) a special tab for Session Restore — only the open
+  // flag, none of the activation / loading side effects of the open commands.
+  function restoreSpecialTabOpenState(tabId: SpecialTabId): void {
+    switch (tabId) {
+      case "settings":
+        setIsSettingsTabOpen(true);
+        return;
+      case "keyboardShortcuts":
+        setIsKeyboardShortcutsTabOpen(true);
+        return;
+      case "projectSettings":
+        setIsProjectSettingsTabOpen(true);
+        return;
+      case "glossaryTagManager":
+        setIsGlossaryTagManagerTabOpen(true);
+        return;
+      case "glossaryEntryManager":
+        setIsGlossaryEntryManagerTabOpen(true);
+        return;
+      case "resumeHub":
+        // Its recent-documents list reloads from the open flag (effect).
+        setIsResumeHubTabOpen(true);
+        return;
+      case "debugLog":
+        // Never restored (specialTabSessionPolicy).
+        return;
+    }
+  }
+
   function applyRestoredEnvironment(env: {
     readonly project: PergamumProject | null;
     readonly openDocuments: OpenDocumentsState;
     readonly pendingViewStates: ReadonlyMap<string, unknown>;
     readonly previewVisible: boolean;
+    readonly specialTabs: readonly SpecialTabId[];
+    readonly activeSpecialTabId: SpecialTabId | null;
+    readonly workspaceTabOrder: readonly WorkspaceTabId[];
   }): void {
     editorNavigation.reset();
     projectActivationLifetimeRef.current.startProjectContextSwitch();
@@ -9771,6 +9829,17 @@ export function App(): JSX.Element {
         ? null
         : current
     );
+    // Session Restore of special tabs (identity only): the same open flags the
+    // normal open paths set, so an already-open tab is never duplicated.
+    // Project-dependent ones only arrive here after a successful project
+    // restore (see coldStartRestore). Debug Log is never restored.
+    for (const tabId of env.specialTabs) {
+      restoreSpecialTabOpenState(tabId);
+    }
+    if (env.activeSpecialTabId) {
+      setActiveSpecialTabId(env.activeSpecialTabId);
+    }
+    setWorkspaceTabOrder(env.workspaceTabOrder);
     coldStartMarkdownFocusRequestedRef.current = false;
     setMarkdownEditorFocusRequest(null);
     setCommandPaletteMarkdownFocusRestorePending(false);

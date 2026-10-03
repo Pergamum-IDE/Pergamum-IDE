@@ -212,6 +212,7 @@ export function fallbackFilenameForSessionEditor(
     case "untitled":
     case "glossaryDescription":
     case "projectImage":
+    case "specialTab":
       return null;
   }
 }

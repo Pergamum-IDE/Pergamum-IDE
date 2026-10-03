@@ -18,8 +18,10 @@ const app = readFileSync("src/renderer/App.tsx", "utf8");
 
 describe("Keyboard Shortcuts special tab wiring (#646)", () => {
   it("is a special tab id next to settings", () => {
-    const tabs = readFileSync("src/renderer/workspaceTabs.ts", "utf8");
-    expect(tabs).toContain('| "keyboardShortcuts"');
+    // The SpecialTabId list lives in src/shared/specialTab.ts (with the Session
+    // Restore policy); workspaceTabs.ts re-exports the type.
+    const tabs = readFileSync("src/shared/specialTab.ts", "utf8");
+    expect(tabs).toContain('"keyboardShortcuts"');
   });
 
   it("App.tsx adds only the minimal ResumeHub-sized wiring and delegates to the screen component", () => {

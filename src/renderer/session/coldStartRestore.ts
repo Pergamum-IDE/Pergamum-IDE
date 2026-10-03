@@ -33,6 +33,16 @@ import type {
   PergamumProject,
   ProjectOpenResult
 } from "../../shared/api";
+import {
+  isSessionRestorableSpecialTab,
+  specialTabRequiresProject,
+  type SpecialTabId
+} from "../../shared/specialTab";
+import {
+  documentWorkspaceTabId,
+  specialWorkspaceTabId,
+  type WorkspaceTabId
+} from "../workspaceTabs";
 import type { AppPlatform } from "../../shared/platform";
 import type {
   SessionEditor,
@@ -93,6 +103,12 @@ export interface RestoredEnvironment {
   readonly pendingViewStates: ReadonlyMap<string, unknown>;
   /** #541 follow-up: the saved Preview-pane visibility. */
   readonly previewVisible: boolean;
+  /** Restored special tabs (identity only), in tab order. */
+  readonly specialTabs: readonly SpecialTabId[];
+  /** The special tab that was active, or `null` when a document was. */
+  readonly activeSpecialTabId: SpecialTabId | null;
+  /** The restored mixed tab order (documents, images and special tabs). */
+  readonly workspaceTabOrder: readonly WorkspaceTabId[];
 }
 
 export interface ColdStartRestoreDeps {
@@ -327,6 +343,11 @@ async function buildRestoredEditor(
       };
     }
 
+    case "specialTab":
+      // Special tabs are not documents: `restoreSelectedSession` restores
+      // them separately (see `restoreSpecialTab`).
+      return null;
+
     case "projectImage": {
       if (!projectRestoreSucceeded || !project || !activeProjectContext) {
         return null;
@@ -406,6 +427,26 @@ async function buildRestoredEditor(
   }
 }
 
+/**
+ * Decide whether a saved special tab is restored. Policy lives in
+ * `specialTabSessionPolicy`: a non-restorable tab (Debug Log) is never
+ * brought back, and a Project-dependent tab needs a successfully restored
+ * Project (otherwise it would be a ghost tab).
+ */
+function restoreSpecialTab(
+  tabId: SpecialTabId,
+  context: { readonly projectRestoreSucceeded: boolean; readonly hasProject: boolean }
+): boolean {
+  if (!isSessionRestorableSpecialTab(tabId)) {
+    return false;
+  }
+
+  return (
+    !specialTabRequiresProject(tabId) ||
+    (context.projectRestoreSucceeded && context.hasProject)
+  );
+}
+
 interface ProjectRestoreOutcome {
   readonly project: PergamumProject | null;
   /** True only when a saved Project Context resolved to a live project of
@@ -481,8 +522,27 @@ async function restoreSelectedSession(
     : null;
 
   const built: BuiltEditor[] = [];
+  // Mixed tab order, built in saved order (the parser already renumbered
+  // `order` to 0..n-1). A special tab appears at most once.
+  const workspaceTabOrder: WorkspaceTabId[] = [];
+  const specialTabs: SpecialTabId[] = [];
 
   for (const editor of record.editors) {
+    if (editor.kind === "specialTab") {
+      if (
+        !specialTabs.includes(editor.tabId) &&
+        restoreSpecialTab(editor.tabId, {
+          projectRestoreSucceeded: projectOutcome.succeeded,
+          hasProject: project !== null
+        })
+      ) {
+        specialTabs.push(editor.tabId);
+        workspaceTabOrder.push(specialWorkspaceTabId(editor.tabId));
+      }
+
+      continue;
+    }
+
     const restored = await buildRestoredEditor(editor, {
       project,
       activeProjectContext,
@@ -492,6 +552,7 @@ async function restoreSelectedSession(
 
     if (restored) {
       built.push(restored);
+      workspaceTabOrder.push(documentWorkspaceTabId(restored.openDocument.id));
     }
   }
 
@@ -500,10 +561,25 @@ async function restoreSelectedSession(
     fallbackFilename: entry.fallbackFilename
   }));
 
+  // The saved active tab may be a special tab; the document active state is
+  // resolved among documents only (a saved special active identity is simply
+  // not among them, so the existing filename fallback applies).
   const activeIdentity = resolveRestoredActiveEditor({
     restored: restoredLikes,
     savedActive: record.activeEditor
   });
+
+  const savedActive = record.activeEditor;
+  const activeSpecialFromSaved =
+    savedActive?.kind === "specialTab" &&
+    specialTabs.includes(savedActive.tabId)
+      ? savedActive.tabId
+      : null;
+  // Never leave the editor area blank: with no document to show, fall back to
+  // the first restored special tab.
+  const activeSpecialTabId =
+    activeSpecialFromSaved ??
+    (built.length === 0 && specialTabs.length > 0 ? specialTabs[0] : null);
 
   const activeFromIdentity = activeIdentity
     ? (built.find((entry) =>
@@ -537,13 +613,19 @@ async function restoreSelectedSession(
     project,
     openDocuments,
     pendingViewStates,
-    previewVisible: record.previewVisible
+    previewVisible: record.previewVisible,
+    specialTabs,
+    activeSpecialTabId,
+    workspaceTabOrder
   });
 
   return {
     projectContextRestoreFailed:
       record.projectContext !== null && projectOutcome.failed,
-    allEditorsFailed: record.editors.length > 0 && built.length === 0
+    allEditorsFailed:
+      record.editors.length > 0 &&
+      built.length === 0 &&
+      specialTabs.length === 0
   };
 }
 
