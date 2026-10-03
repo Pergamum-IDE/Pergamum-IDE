@@ -38,6 +38,7 @@ import { sanitizedFileIoErrorMessage } from "../shared/sanitizedFileIoErrorMessa
 import { projectDocumentDiscoverySettingChanged } from "./projectDocumentsRefresh";
 import {
   type ApplicationMenuCommandId,
+  noArgumentMenuCommandId,
   type EditCommandId
 } from "../shared/commandIds";
 import { canDelegateNativeEditCommand } from "./nativeEditCommandEnablement";
@@ -275,7 +276,11 @@ import {
 } from "./dialog/GlossaryExportWizardDialog";
 import { JapaneseMachineCheckDialog } from "./dialog/JapaneseMachineCheckDialog";
 import type { JapaneseMachineCheckTarget } from "../shared/japaneseMachineCheck";
-import { resolveJapaneseMachineCheckTarget } from "./japaneseMachineCheckTarget";
+import {
+  isJapaneseMachineCheckTargetRunnable,
+  resolveJapaneseMachineCheckTarget,
+  resolveTabJapaneseMachineCheckTarget
+} from "./japaneseMachineCheckTarget";
 import type { GlossaryExportPlan } from "./glossaryExport/glossaryExportModel";
 import { renderGlossaryDescriptionForExport } from "./glossaryExport/glossaryExportHtml";
 import { countGlossaryEntryOccurrences } from "./glossaryExport/glossaryExportOccurrences";
@@ -420,6 +425,7 @@ import {
   registerLineJumpCommands
 } from "./lineJumpCommands";
 import {
+  assistCommandIds,
   createAssistCommandTitles,
   registerAssistCommands
 } from "./assistCommands";
@@ -644,6 +650,7 @@ import type {
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import {
   collectExportCandidatesFromOrigin,
+  isExportableDocumentForExport,
   type ExportCandidateListItem,
   type ExportOrigin
 } from "./exportCandidates";
@@ -1621,6 +1628,14 @@ export function App(): JSX.Element {
   const resolveJapaneseMachineCheckTargetRef = useRef<
     () => JapaneseMachineCheckTarget | null
   >(() => null);
+  // #684: the export dialog command. No origin = the whole project; a document
+  // tab's context menu passes its clicked file. Re-pointed every render.
+  const openExportDialogCommandRef = useRef<(origin?: ExportOrigin) => void>(
+    () => undefined
+  );
+  const canOpenExportDialogCommandRef = useRef<
+    (origin: ExportOrigin) => boolean
+  >(() => false);
   const [
     glossaryExportWizardOccurrenceCounts,
     setGlossaryExportWizardOccurrenceCounts
@@ -4194,19 +4209,23 @@ export function App(): JSX.Element {
           showLineEndingDistributionCommandRef.current(),
         insertParagraphIndent: () => insertParagraphIndentCommandRef.current(),
         removeParagraphIndent: () => removeParagraphIndentCommandRef.current(),
-        openExportDialog: () => {
-          void handleFileExplorerExport({ kind: "projectRoot" });
-        },
-        openJapaneseMachineCheckDialog: () => {
+        openExportDialog: (origin) => openExportDialogCommandRef.current(origin),
+        canOpenExportDialog: (origin) =>
+          canOpenExportDialogCommandRef.current(origin),
+        openJapaneseMachineCheckDialog: (explicitTarget) => {
           // The snapshot is taken here, once; the dialog keeps this object.
-          const target = resolveJapaneseMachineCheckTargetRef.current();
+          // An explicit target (a clicked tab) wins over the active editor's.
+          const target =
+            explicitTarget ?? resolveJapaneseMachineCheckTargetRef.current();
 
           if (target !== null) {
             setJapaneseMachineCheckTarget(target);
           }
         },
-        canRunJapaneseMachineCheck: () =>
-          resolveJapaneseMachineCheckTargetRef.current() !== null
+        canRunJapaneseMachineCheck: (explicitTarget) =>
+          explicitTarget === undefined
+            ? resolveJapaneseMachineCheckTargetRef.current() !== null
+            : isJapaneseMachineCheckTargetRunnable(explicitTarget)
       },
       createAssistCommandTitles(translate)
     );
@@ -6790,6 +6809,22 @@ export function App(): JSX.Element {
     );
   }
 
+  /**
+   * #684: what "日本語表現チェック..." checks for the right-clicked tab, read from
+   * that tab itself - a project document's path (on-disk case) and unsaved
+   * flag, or a glossary Description tab's own current draft.
+   */
+  function japaneseMachineCheckTargetForTab(
+    tab: DocumentTab
+  ): JapaneseMachineCheckTarget | null {
+    return resolveTabJapaneseMachineCheckTarget(tab, {
+      projectDocumentRelativePath: openProjectDocumentRelativePath,
+      openEditor: (editorId) =>
+        findOpenDocument(openDocumentsStateRef.current, editorId)?.editor ??
+        null
+    });
+  }
+
   function handleTabAction(
     action: TabContextMenuAction,
     tab: DocumentTab
@@ -6851,6 +6886,33 @@ export function App(): JSX.Element {
       case "saveAs":
         void saveFile({ editorId: tab.id, forceSaveAs: true });
         return;
+      case "export": {
+        // The CLICKED document, through the existing command (no activation).
+        const relativePath = openProjectDocumentRelativePath(tab.id);
+        if (relativePath === null) {
+          return;
+        }
+        executeUiCommand(
+          assistCommandIds.openExportDialog,
+          { source: "documentTabBar" },
+          { origin: { kind: "file", filePath: relativePath } }
+        );
+        return;
+      }
+      case "japaneseMachineCheck": {
+        // The CLICKED tab's document / current draft, through the existing
+        // command. Never the active editor, and the tab is not activated.
+        const target = japaneseMachineCheckTargetForTab(tab);
+        if (target === null) {
+          return;
+        }
+        executeUiCommand(
+          assistCommandIds.openJapaneseMachineCheckDialog,
+          { source: "documentTabBar" },
+          { target }
+        );
+        return;
+      }
       case "copyAbsolutePath":
         void handleTabContextMenuCopy(tab, "absolute");
         return;
@@ -6868,7 +6930,9 @@ export function App(): JSX.Element {
   ): TabContextMenuDescriptor {
     return describeTabContextMenu(tab, {
       allTabs: tabs,
-      projectAccess: project?.accessMode ?? null
+      projectAccess: project?.accessMode ?? null,
+      enablePlainTextDocuments:
+        effectiveSettings.textFiles.enablePlainTextDocuments
     });
   }
 
@@ -7050,7 +7114,7 @@ export function App(): JSX.Element {
     action: NotificationToastAction
   ): boolean {
     return commandRegistry.isEnabledForContext(
-      action.commandId,
+      noArgumentMenuCommandId(action.commandId),
       commandContextRef.current
     );
   }
@@ -7060,11 +7124,15 @@ export function App(): JSX.Element {
       return;
     }
 
-    executeUiCommand(action.commandId, { source: "unknown" });
+    executeUiCommand(noArgumentMenuCommandId(action.commandId), {
+      source: "unknown"
+    });
   }
 
   executeUiCommandRef.current = (commandId) => {
-    executeUiCommand(commandId, { source: "applicationMenu" });
+    executeUiCommand(noArgumentMenuCommandId(commandId), {
+      source: "applicationMenu"
+    });
   };
 
   async function delegateNativeEditCommand(
@@ -10035,6 +10103,15 @@ export function App(): JSX.Element {
   insertBlockquoteCommandRef.current = () => {
     handleInsertBlockquote();
   };
+  openExportDialogCommandRef.current = (origin) => {
+    void handleFileExplorerExport(origin ?? { kind: "projectRoot" });
+  };
+  canOpenExportDialogCommandRef.current = (origin) =>
+    origin.kind !== "file" ||
+    isExportableDocumentForExport(origin.filePath, {
+      enablePlainTextDocuments:
+        effectiveSettings.textFiles.enablePlainTextDocuments
+    });
   resolveJapaneseMachineCheckTargetRef.current = () =>
     resolveJapaneseMachineCheckTarget({
       currentEditor,

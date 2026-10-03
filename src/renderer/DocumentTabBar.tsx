@@ -107,6 +107,8 @@ const CONTEXT_COMMAND_ATTR: Record<TabContextMenuAction, string> = {
   selectInFileExplorer: "select-in-file-explorer",
   renameFile: "rename-file",
   saveAs: "save-as",
+  export: "export",
+  japaneseMachineCheck: "japanese-machine-check",
   copyAbsolutePath: "copy-absolute-path",
   copyRelativePath: "copy-relative-path",
   copyFileName: "copy-file-name"

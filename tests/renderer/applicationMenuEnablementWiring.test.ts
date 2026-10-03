@@ -15,7 +15,7 @@ describe("Application Menu enablement push (#252 follow-up)", () => {
 
     expect(loopIndex).toBeGreaterThan(-1);
     expect(integration.slice(loopIndex, loopIndex + 200)).toContain(
-      "registry.isEnabledForContext(commandId, context)"
+      "registry.isEnabledForContext(\n      noArgumentMenuCommandId(commandId),\n      context\n    )"
     );
 
     const source = readFileSync("src/renderer/App.tsx", "utf8");
@@ -37,8 +37,8 @@ describe("Application Menu enablement push (#252 follow-up)", () => {
     );
 
     // The value (not just the type) is imported, since it is iterated.
-    expect(source).toContain(
-      'import { applicationMenuCommandIds } from "../shared/commandIds"'
+    expect(source).toMatch(
+      /import \{\s*applicationMenuCommandIds,\s*noArgumentMenuCommandId\s*\} from "..\/shared\/commandIds"/
     );
     expect(source).toContain("for (const commandId of applicationMenuCommandIds)");
   });

@@ -40,7 +40,7 @@ describe("application menu wiring in App (#664)", () => {
     expect(block).toContain("imeCompositionSaveGuard.handleCommand(");
     expect(block).toContain("executeUiCommandRef.current");
     expect(app).toContain(
-      'executeUiCommand(commandId, { source: "applicationMenu" });'
+      'executeUiCommand(noArgumentMenuCommandId(commandId), {\n      source: "applicationMenu"\n    });'
     );
   });
 

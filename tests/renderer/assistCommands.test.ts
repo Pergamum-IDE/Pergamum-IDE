@@ -250,3 +250,129 @@ describe("assist commands (#252)", () => {
     expect(source).not.toContain("JSX");
   });
 });
+
+describe("explicit-target dialog commands (#684)", () => {
+  const origin = { kind: "file", filePath: "chapters/01.md" } as const;
+  const target = {
+    kind: "projectFile",
+    relativePath: "chapters/01.md",
+    isDirty: true
+  } as const;
+
+  function setup() {
+    const calls: unknown[][] = [];
+    const registry = new CommandRegistry();
+    const controller = {
+      showLineEndingDistribution: () => undefined,
+      insertParagraphIndent: () => undefined,
+      removeParagraphIndent: () => undefined,
+      openExportDialog: (o?: unknown) => void calls.push(["export", o]),
+      canOpenExportDialog: (o: unknown) => {
+        calls.push(["canExport", o]);
+
+        return o === origin;
+      },
+      openJapaneseMachineCheckDialog: (t?: unknown) =>
+        void calls.push(["check", t]),
+      canRunJapaneseMachineCheck: (t?: unknown) => {
+        calls.push(["canCheck", t]);
+
+        return t === undefined ? true : t === target;
+      }
+    };
+
+    registry.setCommandContextProvider(() => ({ "project.isOpen": true }) as never);
+    registerAssistCommands(registry, controller as never, {} as never);
+
+    return { registry, calls };
+  }
+
+  const context = { "project.isOpen": true } as never;
+
+  it("Export with no argument is the project-wide export and asks nothing about an origin", async () => {
+    const { registry, calls } = setup();
+
+    expect(
+      registry.isEnabledForContext(assistCommandIds.openExportDialog, context)
+    ).toBe(true);
+    await registry.execute(
+      assistCommandIds.openExportDialog,
+      { source: "commandPalette" },
+      undefined as never
+    );
+
+    expect(calls).toEqual([["export", undefined]]);
+  });
+
+  it("Export with an explicit origin passes it on and is judged on it", async () => {
+    const { registry, calls } = setup();
+
+    expect(
+      registry.isEnabledForContext(assistCommandIds.openExportDialog, context, {
+        origin
+      })
+    ).toBe(true);
+    expect(
+      registry.isEnabledForContext(assistCommandIds.openExportDialog, context, {
+        origin: { kind: "file", filePath: "other.md" }
+      })
+    ).toBe(false);
+
+    calls.length = 0;
+    await registry.execute(
+      assistCommandIds.openExportDialog,
+      { source: "documentTabBar" },
+      { origin }
+    );
+
+    expect(calls.at(-1)).toEqual(["export", origin]);
+  });
+
+  it("Japanese Style Check with no argument keeps the active-editor semantics", async () => {
+    const { registry, calls } = setup();
+
+    expect(
+      registry.isEnabledForContext(
+        assistCommandIds.openJapaneseMachineCheckDialog,
+        context
+      )
+    ).toBe(true);
+    expect(calls).toEqual([["canCheck", undefined]]);
+
+    await registry.execute(
+      assistCommandIds.openJapaneseMachineCheckDialog,
+      { source: "commandPalette" },
+      undefined as never
+    );
+
+    expect(calls.at(-1)).toEqual(["check", undefined]);
+  });
+
+  it("Japanese Style Check with an explicit target passes it on and is judged on it", async () => {
+    const { registry, calls } = setup();
+
+    expect(
+      registry.isEnabledForContext(
+        assistCommandIds.openJapaneseMachineCheckDialog,
+        context,
+        { target }
+      )
+    ).toBe(true);
+    expect(calls.at(-1)).toEqual(["canCheck", target]);
+
+    await registry.execute(
+      assistCommandIds.openJapaneseMachineCheckDialog,
+      { source: "documentTabBar" },
+      { target }
+    );
+
+    expect(calls.at(-1)).toEqual(["check", target]);
+  });
+
+  it("no new command ids: the same two ids serve both uses", () => {
+    expect(assistCommandIds.openExportDialog).toBe("assist.export.openDialog");
+    expect(assistCommandIds.openJapaneseMachineCheckDialog).toBe(
+      "assist.japaneseMachineCheck.openDialog"
+    );
+  });
+});

@@ -179,3 +179,48 @@ describe("context menu shortcut mappings (#683 / #685)", () => {
     expect(source).toContain("getEffectiveKeybindingRows");
   });
 });
+
+describe("Document Tab: Export / Japanese Style Check shortcuts (#684)", () => {
+  const active = { isActive: true, isProjectDocument: true };
+  const inactive = { isActive: false, isProjectDocument: true };
+
+  it("Export never shows a shortcut: its key exports the project, the item the clicked file", () => {
+    expect(documentTabContextMenuShortcutCommandId("export", active)).toBeNull();
+    expect(
+      documentTabContextMenuShortcutCommandId("export", inactive)
+    ).toBeNull();
+  });
+
+  it("Japanese Style Check shows its shortcut only on the active tab", () => {
+    expect(
+      documentTabContextMenuShortcutCommandId("japaneseMachineCheck", active)
+    ).toBe("assist.japaneseMachineCheck.openDialog");
+    expect(
+      documentTabContextMenuShortcutCommandId("japaneseMachineCheck", {
+        isActive: true,
+        isProjectDocument: false
+      })
+    ).toBe("assist.japaneseMachineCheck.openDialog");
+    expect(
+      documentTabContextMenuShortcutCommandId("japaneseMachineCheck", inactive)
+    ).toBeNull();
+  });
+
+  it("the label comes from the effective binding (user rebind / unbind)", () => {
+    const id = "assist.japaneseMachineCheck.openDialog";
+    const base = createContextMenuShortcutResolver("win32", win);
+
+    expect(base(id)).toBeUndefined(); // no default key: never invented
+
+    const bound = win.map((row) =>
+      row.command === id ? { ...row, key: "Mod-Shift-9" } : row
+    );
+    const rows = bound.some((row) => row.command === id)
+      ? bound
+      : [...win, { ...win[0], command: id, key: "Mod-Shift-9" }];
+
+    expect(createContextMenuShortcutResolver("win32", rows)(id)).toBe(
+      formatKeybindingLabel("Mod-Shift-9", "win32")
+    );
+  });
+});

@@ -10,12 +10,14 @@
  */
 
 import type { ProjectAccessMode } from "../shared/api";
+import { isJapaneseMachineCheckPath } from "../shared/japaneseMachineCheck";
 import { editorIdEquals } from "../shared/editorId";
 import type { TranslationKey } from "../shared/i18n";
 import {
   projectDocumentAbsolutePath,
   tabFileNameFromPath
 } from "../shared/tabPathDisplay";
+import { isExportableDocumentForExport } from "./exportCandidates";
 import type { DocumentTab } from "./openDocuments";
 
 export type TabContextMenuAction =
@@ -26,6 +28,8 @@ export type TabContextMenuAction =
   | "selectInFileExplorer"
   | "renameFile"
   | "saveAs"
+  | "export"
+  | "japaneseMachineCheck"
   | "copyAbsolutePath"
   | "copyRelativePath"
   | "copyFileName";
@@ -48,6 +52,8 @@ export interface DescribeTabContextMenuContext {
   /** Every document tab, in tab-bar order. */
   readonly allTabs: readonly DocumentTab[];
   readonly projectAccess: ProjectAccessMode | null;
+  /** The "enablePlainTextDocuments" setting: whether a project .txt exports. */
+  readonly enablePlainTextDocuments: boolean;
 }
 
 type TabKind = DocumentTab["id"]["kind"];
@@ -149,6 +155,51 @@ export function describeTabContextMenu(
           "tabs.contextMenu.disabled.unsupportedForTab"
         )
       : enabledItem("saveAs", "tabs.contextMenu.saveAs")
+  );
+
+  // --- export / Japanese style check (#684) -----------------------------
+  // Both act on THIS tab's document (the command is given it explicitly), not
+  // on the active editor. Whether each is possible is decided by the same
+  // rules as the File Explorer export / the Japanese style check command.
+  const projectRelativePath =
+    tab.id.kind === "projectDocument" ? tab.id.relativePath : null;
+
+  items.push(
+    projectRelativePath === null
+      ? disabledItem(
+          "export",
+          "command.assist.export.openDialog",
+          isGlossaryDescription || kind === "untitled"
+            ? "tabs.contextMenu.disabled.unsupportedForTab"
+            : "tabs.contextMenu.disabled.notProjectDocument",
+          true
+        )
+      : isExportableDocumentForExport(projectRelativePath, {
+            enablePlainTextDocuments: ctx.enablePlainTextDocuments
+          })
+        ? enabledItem("export", "command.assist.export.openDialog", true)
+        : disabledItem(
+            "export",
+            "command.assist.export.openDialog",
+            "tabs.contextMenu.disabled.unsupportedForTab",
+            true
+          )
+  );
+  items.push(
+    isGlossaryDescription ||
+      (projectRelativePath !== null &&
+        isJapaneseMachineCheckPath(projectRelativePath))
+      ? enabledItem(
+          "japaneseMachineCheck",
+          "command.assist.japaneseMachineCheck.openDialog"
+        )
+      : disabledItem(
+          "japaneseMachineCheck",
+          "command.assist.japaneseMachineCheck.openDialog",
+          projectRelativePath === null
+            ? "tabs.contextMenu.disabled.notProjectDocument"
+            : "tabs.contextMenu.disabled.unsupportedForTab"
+        )
   );
 
   // --- copy group --------------------------------------------------------

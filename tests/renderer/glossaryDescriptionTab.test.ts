@@ -256,7 +256,8 @@ describe("glossaryDescription tabs in OpenDocuments (#573 Slice 1)", () => {
     const tabs = documentTabs(openGlossary());
     const menu = describeTabContextMenu(tabs[0], {
       allTabs: tabs,
-      projectAccess: null
+      projectAccess: null,
+      enablePlainTextDocuments: true
     });
     const enabledById = Object.fromEntries(
       menu.items.map((item) => [item.id, item.enabled])

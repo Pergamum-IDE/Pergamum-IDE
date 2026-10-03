@@ -4,6 +4,7 @@ import {
   type JapaneseMachineCheckProjectFileTarget,
   type JapaneseMachineCheckTarget
 } from "../shared/japaneseMachineCheck";
+import type { EditorId } from "../shared/editorId";
 import type { CurrentEditor } from "./currentEditor";
 import { presetRepresentativeOrDefault } from "./glossaryEntryTabCommands";
 
@@ -48,6 +49,58 @@ export function createGlossaryDescriptionMachineCheckTarget(
     text: editor.draft.description,
     displayName: presetRepresentativeOrDefault(representative)
   };
+}
+
+/**
+ * Whether an EXPLICIT target (one handed to the command, e.g. by a document
+ * tab's context menu) can be checked. It is judged on its own, never against
+ * the active editor.
+ */
+export function isJapaneseMachineCheckTargetRunnable(
+  target: JapaneseMachineCheckTarget
+): boolean {
+  return target.kind === "projectFile"
+    ? isJapaneseMachineCheckPath(target.relativePath)
+    : true;
+}
+
+/**
+ * #684: the target of a RIGHT-CLICKED document tab. Read from that tab itself,
+ * never from the active editor, so a tab that is not active is checked as
+ * itself and nothing needs to be activated:
+ *  - a project document: its on-disk project-relative path and its own unsaved
+ *    flag (the check reads the saved file);
+ *  - a glossary Description tab: that tab's own current draft.
+ * Anything else (external file, untitled, ...) has no target.
+ */
+export interface TabJapaneseMachineCheckTargetDeps {
+  /** The tab's project-relative path with its on-disk casing, or null. */
+  readonly projectDocumentRelativePath: (editorId: EditorId) => string | null;
+  /** The tab's open editor (to read a glossary Description's draft), or null. */
+  readonly openEditor: (editorId: EditorId) => CurrentEditor | null;
+}
+
+export function resolveTabJapaneseMachineCheckTarget(
+  tab: { readonly id: EditorId; readonly isDirty: boolean },
+  deps: TabJapaneseMachineCheckTargetDeps
+): JapaneseMachineCheckTarget | null {
+  if (tab.id.kind === "projectDocument") {
+    const relativePath = deps.projectDocumentRelativePath(tab.id);
+
+    return relativePath !== null && isJapaneseMachineCheckPath(relativePath)
+      ? { kind: "projectFile", relativePath, isDirty: tab.isDirty }
+      : null;
+  }
+
+  if (tab.id.kind === "glossaryDescription") {
+    const editor = deps.openEditor(tab.id);
+
+    return editor?.kind === "glossaryDescription"
+      ? createGlossaryDescriptionMachineCheckTarget(editor)
+      : null;
+  }
+
+  return null;
 }
 
 export function resolveJapaneseMachineCheckTarget(

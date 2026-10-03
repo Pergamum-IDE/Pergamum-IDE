@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { applicationMenuCommandIds } from "../../src/shared/commandIds";
+import {
+  applicationMenuCommandIds,
+  noArgumentMenuCommandId
+} from "../../src/shared/commandIds";
 import { CommandRegistry } from "../../src/shared/commandRegistry";
 import { registerApplicationCommands } from "../../src/renderer/applicationCommands";
 import { registerAssistCommands } from "../../src/renderer/assistCommands";
@@ -245,7 +248,9 @@ describe("application menu command registration", () => {
     );
 
     expect(
-      applicationMenuCommandIds.map((commandId) => registry.get(commandId))
+      applicationMenuCommandIds.map((commandId) =>
+        registry.get(noArgumentMenuCommandId(commandId))
+      )
     ).toEqual(applicationMenuCommandIds.map(() => expect.any(Object)));
   });
 });

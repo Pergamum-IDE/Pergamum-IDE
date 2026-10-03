@@ -280,7 +280,9 @@ describe("snapshot (#688 Slice 4)", () => {
     );
 
     expect(app).toContain("resolveJapaneseMachineCheckTargetRef.current() !== null");
-    expect(app).toContain("const target = resolveJapaneseMachineCheckTargetRef.current();");
+    expect(app).toContain(
+      "explicitTarget ?? resolveJapaneseMachineCheckTargetRef.current()"
+    );
     expect(app).toContain("setJapaneseMachineCheckTarget(target)");
     expect(dialog).toContain(".prepare(target)");
     expect(dialog).toContain(".run({ ...target, runId })");

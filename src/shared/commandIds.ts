@@ -1,5 +1,7 @@
-import { defineCommandId } from "./commandRegistry";
+import { defineCommandId, type CommandId } from "./commandRegistry";
 import type { EditorId } from "./editorId";
+import type { ExportOrigin } from "./exportOrigin";
+import type { JapaneseMachineCheckTarget } from "./japaneseMachineCheck";
 
 export const applicationCommandIds = {
   openAbout: defineCommandId("app.about.open"),
@@ -40,10 +42,22 @@ export const assistCommandIds = {
   ),
   insertParagraphIndent: defineCommandId("assist.paragraphIndent.insert"),
   removeParagraphIndent: defineCommandId("assist.paragraphIndent.remove"),
-  openExportDialog: defineCommandId("assist.export.openDialog"),
-  openJapaneseMachineCheckDialog: defineCommandId(
-    "assist.japaneseMachineCheck.openDialog"
-  )
+  /**
+   * No argument: export the whole project (Command Palette, menu). With an
+   * explicit `origin` (e.g. a document tab's context menu): export from there.
+   */
+  openExportDialog: defineCommandId<
+    readonly [options?: { readonly origin?: ExportOrigin }],
+    void
+  >("assist.export.openDialog"),
+  /**
+   * No argument: check the active editor's target. With an explicit `target`
+   * (e.g. a document tab's context menu): check that, without activating it.
+   */
+  openJapaneseMachineCheckDialog: defineCommandId<
+    readonly [options?: { readonly target?: JapaneseMachineCheckTarget }],
+    void
+  >("assist.japaneseMachineCheck.openDialog")
 } as const;
 
 /**
@@ -170,6 +184,17 @@ export const applicationMenuCommandIds = [
 
 export type ApplicationMenuCommandId =
   (typeof applicationMenuCommandIds)[number];
+
+/**
+ * A menu / toast entry runs its command with no arguments. Some menu commands
+ * also accept optional arguments (`editor.close`, the two dialog commands of
+ * #684); this is the argument-less view the menu and toasts use.
+ */
+export function noArgumentMenuCommandId(
+  commandId: ApplicationMenuCommandId
+): CommandId<readonly [], void> {
+  return commandId as unknown as CommandId<readonly [], void>;
+}
 
 export function isApplicationMenuCommandId(
   commandId: string

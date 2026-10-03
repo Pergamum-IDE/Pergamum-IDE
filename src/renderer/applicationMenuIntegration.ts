@@ -20,7 +20,10 @@ import {
   isRendererMenuNativeRole,
   type RendererMenuNativeRole
 } from "../shared/api";
-import { applicationMenuCommandIds } from "../shared/commandIds";
+import {
+  applicationMenuCommandIds,
+  noArgumentMenuCommandId
+} from "../shared/commandIds";
 import type { CommandContext } from "../shared/commandEnablement";
 import type { CommandRegistry } from "../shared/commandRegistry";
 import {
@@ -57,7 +60,10 @@ export function computeApplicationMenuEnablement(
   const enablement: Record<string, boolean> = {};
 
   for (const commandId of applicationMenuCommandIds) {
-    enablement[commandId] = registry.isEnabledForContext(commandId, context);
+    enablement[commandId] = registry.isEnabledForContext(
+      noArgumentMenuCommandId(commandId),
+      context
+    );
   }
 
   return enablement;
