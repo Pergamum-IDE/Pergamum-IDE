@@ -880,50 +880,43 @@ describe("FileExplorer context-menu Move — disabled reason is visible (#327 bl
   });
 });
 
-function toolbarMoveButton(): HTMLButtonElement {
-  const button = container!.querySelector<HTMLButtonElement>(
-    '[data-file-explorer-toolbar-command="move"]'
-  );
-  if (!button) {
-    throw new Error("toolbar Move button not rendered");
+// The context menu is the Move route from the explorer (the header toolbar no
+// longer carries a Move button, #716); the Command Palette is the other one.
+function openMoveDialogViaContextMenu(relativePath: string): void {
+  contextMenuEntry(relativePath);
+  const item = moveMenuItem();
+  if (!item) {
+    throw new Error("context menu Move item not rendered");
   }
-  return button;
+  act(() => item.click());
 }
 
-describe("FileExplorer toolbar Move — primary route (#327)", () => {
-  it("renders a Move action in the File Explorer toolbar", async () => {
+describe("FileExplorer Move — header toolbar and context menu route (#327 / #716)", () => {
+  it("does not render a Move button in the File Explorer header toolbar", async () => {
     await mount();
-    expect(toolbarMoveButton().getAttribute("aria-label")).toBe("Move…");
+    expect(
+      container!.querySelector('[data-file-explorer-toolbar-command="move"]')
+    ).toBeNull();
+    expect(
+      container!.querySelectorAll(".fileExplorerToolbar .fileExplorerToolbarButton")
+    ).toHaveLength(3);
   });
 
-  it("is disabled with no selection and carries the disabled reason as title", async () => {
-    await mount();
-    const button = toolbarMoveButton();
-    expect(button.disabled).toBe(true);
-    expect(button.getAttribute("title")).toBe(
-      "Select one or more items to move."
-    );
-  });
-
-  it("is enabled for a files-only selection and opens the destination picker", async () => {
+  it("opens the destination picker from the context menu", async () => {
     await mount();
     clickEntry("a.md");
     clickEntry("b.md", { ctrlKey: true });
 
-    const button = toolbarMoveButton();
-    expect(button.disabled).toBe(false);
-    expect(button.getAttribute("title")).toBe("Move…");
-
-    act(() => button.click());
+    openMoveDialogViaContextMenu("a.md");
     expect(container!.querySelector(".moveDestinationDialogList")).not.toBeNull();
   });
 
-  it("sources from the current multi-selection, independent of any right-click", async () => {
+  it("sources from the current multi-selection when right-clicking a selected row", async () => {
     const harness = await mount();
     clickEntry("a.md");
     clickEntry("c.md", { ctrlKey: true });
 
-    act(() => toolbarMoveButton().click());
+    openMoveDialogViaContextMenu("a.md");
     act(() => destinationOption("Drafts").click());
     act(() => {
       container!
@@ -938,30 +931,13 @@ describe("FileExplorer toolbar Move — primary route (#327)", () => {
       dirtyProjectDocumentRelativePaths: []
     });
   });
-
-  it("uses the same enablement as the context menu (#340 folder ok / dirty open document blocks)", async () => {
-    await mount({ dirtyProjectDocumentRelativePaths: ["a.md"] });
-
-    // #340: a folder mixed into an otherwise-clean selection is movable.
-    clickEntry("b.md");
-    clickEntry("Drafts", { ctrlKey: true });
-    expect(toolbarMoveButton().disabled).toBe(false);
-    expect(toolbarMoveButton().getAttribute("title")).toBe("Move…");
-
-    // A dirty open document still blocks the Move.
-    clickEntry("a.md");
-    expect(toolbarMoveButton().disabled).toBe(true);
-    expect(toolbarMoveButton().getAttribute("title")).toBe(
-      "Save the document before moving it."
-    );
-  });
 });
 
 describe("FileExplorer Move — execution-time re-checks (#327 review blocker / #338)", () => {
   it("does not call the Move backend if a selected file became DIRTY while the picker was open", async () => {
     const harness = await mount();
     clickEntry("a.md");
-    act(() => toolbarMoveButton().click()); // picker opens while a.md is clean
+    openMoveDialogViaContextMenu("a.md"); // picker opens while a.md is clean
 
     // a.md gains unsaved changes before the user confirms.
     harness.setDirtyProjectDocuments(["a.md"]);
@@ -986,7 +962,7 @@ describe("FileExplorer Move — execution-time re-checks (#327 review blocker / 
     // Disabled now, but simulate the picker being reached and the document
     // then saved before confirming.
     harness.setDirtyProjectDocuments([]);
-    act(() => toolbarMoveButton().click());
+    openMoveDialogViaContextMenu("a.md");
     act(() => destinationOption("Drafts").click());
     act(() => {
       container!

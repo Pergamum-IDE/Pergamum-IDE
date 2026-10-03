@@ -16,7 +16,6 @@ import { MaskedIcon } from "./MaskedIcon";
 import pergamumProjectIconUrl from "../../assets/icons/file-associations/pergamum/pergamum-scroll-file-icon.svg?url";
 import filePlusIconUrl from "../../assets/icons/feather/explorer/file-plus.svg?url";
 import folderPlusIconUrl from "../../assets/icons/feather/explorer/folder-plus.svg?url";
-import moveIconUrl from "../../assets/icons/feather/explorer/move.svg?url";
 // #409: per-file-type icons for Markdown documents, Pergamum-recognized image
 // files, and plain-text files. Every other file keeps the generic document
 // icon below.
@@ -446,12 +445,6 @@ interface FileExplorerViewProps {
   highlightedRelativePath: string | null;
   visibilityOptions?: FileExplorerVisibilityOptions;
   canCreate: boolean;
-  /** #327: whether the current multi-selection can be moved (same rule as the
-   *  context-menu `Move…`). */
-  canMove?: boolean;
-  /** #327: localized reason the move is unavailable — shown as the toolbar
-   *  button's `title` when disabled. */
-  moveDisabledReasonLabel?: string;
   /** #328: project-relative paths of the pending Cut sources — the rows are
    *  rendered muted (`data-file-explorer-cut="true"`) while still visible. */
   cutRelativePaths?: ReadonlySet<string>;
@@ -481,9 +474,6 @@ interface FileExplorerViewProps {
   onReload: () => void;
   onNewFile: () => void;
   onNewFolder: () => void;
-  /** #327: the primary Move route — opens the destination picker for the
-   *  current selection. */
-  onMove?: () => void;
   onToggleDirectory: (relativePath: string) => void;
   onSelectRoot: () => void;
   /** Plain click / Space / plain Arrow — replace the selection with this
@@ -3973,12 +3963,6 @@ export function FileExplorer({
         highlightedRelativePath={project ? highlightedRelativePath : null}
         visibilityOptions={visibilityOptions}
         canCreate={canCreate}
-        canMove={canMoveSelection}
-        moveDisabledReasonLabel={
-          moveDisabledReason
-            ? translate(MOVE_DISABLED_REASON_MESSAGE_KEY[moveDisabledReason])
-            : undefined
-        }
         cutRelativePaths={cutRelativePaths}
         draggingRelativePaths={draggingRelativePaths}
         isProjectDocumentDirty={isProjectDocumentDirty}
@@ -3991,7 +3975,6 @@ export function FileExplorer({
         onReload={reloadCurrentExplorerContext}
         onNewFile={() => openCreateDialog("file")}
         onNewFolder={() => openCreateDialog("folder")}
-        onMove={() => setMoveDialogOpen(true)}
         onToggleDirectory={toggleDirectory}
         onSelectRoot={selectRoot}
         onSelectEntry={selectSingleEntry}
@@ -4632,8 +4615,6 @@ export function FileExplorerView({
   highlightedRelativePath,
   visibilityOptions = { enablePlainTextDocuments: false },
   canCreate,
-  canMove = false,
-  moveDisabledReasonLabel,
   cutRelativePaths = EMPTY_SELECTED_PATHS,
   draggingRelativePaths = EMPTY_SELECTED_PATHS,
   isProjectDocumentDirty = () => false,
@@ -4646,7 +4627,6 @@ export function FileExplorerView({
   onReload,
   onNewFile,
   onNewFolder,
-  onMove,
   onToggleDirectory,
   onSelectRoot,
   onSelectEntry,
@@ -4888,26 +4868,6 @@ export function FileExplorerView({
           >
             <MaskedIcon
               url={folderPlusIconUrl}
-              className="fileExplorerToolbarIcon"
-            />
-          </button>
-          <button
-            type="button"
-            className="fileExplorerToolbarButton"
-            data-file-explorer-toolbar-command="move"
-            title={
-              canMove
-                ? translate("explorer.contextMenu.move")
-                : (moveDisabledReasonLabel ??
-                  translate("explorer.contextMenu.move"))
-            }
-            aria-label={translate("explorer.contextMenu.move")}
-            disabled={!canMove}
-            aria-disabled={!canMove}
-            onClick={() => onMove?.()}
-          >
-            <MaskedIcon
-              url={moveIconUrl}
               className="fileExplorerToolbarIcon"
             />
           </button>
