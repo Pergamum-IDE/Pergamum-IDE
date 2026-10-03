@@ -42,6 +42,7 @@ import {
   type EditCommandId
 } from "../shared/commandIds";
 import { canDelegateNativeEditCommand } from "./nativeEditCommandEnablement";
+import { useCommandKeybindingDispatcher } from "./keybindings/commandKeybindingDispatcher";
 import type { CommandContext } from "../shared/commandEnablement";
 import type {
   DebugLogEditorIdKind,
@@ -5604,6 +5605,27 @@ export function App(): JSX.Element {
   // Pass fresh closures every render: the hook keeps a single listener and
   // reads this array through a ref, so pane shortcuts see the same current
   // command state as Activity Bar clicks.
+  // #693: user-assigned keys of registered app-scope commands that no native
+  // accelerator and no dedicated shortcut runs (e.g. Japanese Style Check).
+  // Always through the Command Registry, which decides enablement.
+  useCommandKeybindingDispatcher({
+    isEnabled: (commandId) => {
+      try {
+        return commandRegistry.isEnabledForContext(
+          noArgumentMenuCommandId(commandId as ApplicationMenuCommandId),
+          commandContextRef.current
+        );
+      } catch {
+        return false;
+      }
+    },
+    execute: (commandId) => {
+      executeUiCommand(
+        commandId as unknown as CommandId<readonly [], void>,
+        { source: "keyboardShortcut" }
+      );
+    }
+  });
   useGlobalKeyboardShortcuts([
     {
       id: "toggleMarkdownSyntaxChecker",

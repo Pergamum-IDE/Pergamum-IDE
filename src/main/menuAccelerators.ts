@@ -8,10 +8,8 @@
  * Electron's `CommandOrControl` spelling, which the menu has always used.
  */
 
-import {
-  MENU_ACCELERATOR_COMMAND_IDS,
-  selectMenuKeybindingKeys
-} from "../shared/menuKeybindingSelection";
+import { NATIVE_MENU_ACCELERATOR_COMMAND_IDS } from "../shared/applicationMenuModel";
+import { selectMenuKeybindingKeys } from "../shared/menuKeybindingSelection";
 import {
   resolveDefaultKeybindings,
   toElectronAccelerator,
@@ -20,9 +18,10 @@ import {
   type ResolvedKeybinding
 } from "../shared/keybindings";
 
-// #664: the list and the row selection moved to shared so the Renderer menu's
-// shortcut labels use the very same rule.
-export { MENU_ACCELERATOR_COMMAND_IDS };
+// #693: which commands are native accelerators is decided by the menu model
+// (each item's `nativeAccelerator`), not by a list here. The Renderer menu's
+// shortcut labels do not read it: showing a key is not registering it.
+export { NATIVE_MENU_ACCELERATOR_COMMAND_IDS };
 
 export interface MenuAcceleratorLookup {
   /** The primary accelerator (first default key), or `undefined`. */
@@ -50,14 +49,14 @@ export function nodePlatformToPergamumPlatform(
 
 /**
  * `catalog` defaults to the shipped default keybinding catalog. `commandIds`
- * limits the lookup to commands that have a menu item (default:
- * {@link MENU_ACCELERATOR_COMMAND_IDS}); pass `null` to serve every app-scope
- * Pergamum command (tests with a custom catalog).
+ * limits the lookup to the commands that opted in to a native accelerator
+ * (default: {@link NATIVE_MENU_ACCELERATOR_COMMAND_IDS}); pass `null` to serve
+ * every app-scope Pergamum command (tests with a custom catalog).
  */
 export function createMenuAcceleratorLookup(
   platform: PergamumPlatform,
   catalog?: KeybindingCatalog,
-  commandIds: readonly string[] | null = MENU_ACCELERATOR_COMMAND_IDS,
+  commandIds: readonly string[] | null = NATIVE_MENU_ACCELERATOR_COMMAND_IDS,
   /**
    * #645: resolved rows to read instead of the catalog defaults (the
    * effective keybindings with the user's overrides).

@@ -401,9 +401,9 @@ describe("Cmd+W / Cmd+Shift+W (#636)", () => {
   const adapter = readFileSync("src/main/applicationMenuAdapter.ts", "utf8");
 
   it("keeps editor.close on CommandOrControl+W (catalog-derived, #642)", () => {
-    // No keybinding override in the model (default "primary") ...
+    // The model opts it in to a primary native accelerator (#693) ...
     expect(model).toMatch(
-      /command\(editorCommandIds\.close,\s*"menu\.closeCurrentTab"\)/
+      /command\(editorCommandIds\.close,\s*"menu\.closeCurrentTab",\s*\{\s*nativeAccelerator: "primary"\s*\}\)/
     );
     // ... and the adapter takes the primary key from the catalog lookup.
     expect(adapter).toContain("context.accelerators.get(item.commandId)");

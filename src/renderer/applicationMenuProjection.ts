@@ -51,7 +51,7 @@ export type RendererMenuEntry =
 /**
  * Which keybinding row an item's shortcut label comes from (#664).
  *   - `customizable`: an app-scope Pergamum command; its effective primary
- *     key, exactly the one the native accelerator backend binds
+ *     key (presentation only: it is not necessarily a native accelerator, #693)
  *   - `nativeRole`: a readonly native-role row (Electron role / quit
  *     lifecycle) that documents the shortcut the native backend binds
  */
@@ -73,6 +73,13 @@ export interface RendererMenuProjectionOptions {
 /**
  * The Renderer menu bar replaces the visible native menu bar on Windows and
  * Linux only. macOS keeps its native global menu.
+ *
+ * #693 consequence: shortcut labels are a Renderer-menu feature. On macOS the
+ * OS draws the menu, and the only way to show a key there is a native
+ * accelerator, which would make Electron handle the keystroke. A key that is
+ * shown only for presentation (no `nativeAccelerator`) is therefore NOT shown
+ * on macOS: no accelerator is registered, and no key text is put into the
+ * label, just to display it.
  */
 export function shouldShowRendererMenuBar(platform: AppPlatform): boolean {
   return platform === "windows" || platform === "linux";
@@ -83,12 +90,12 @@ function resolveLabel(label: ApplicationMenuLabel, translate: Translate): string
 }
 
 /**
- * #664: the keybinding row an item shows, decided by the model's metadata:
- * an explicit `shortcutDisplayId` wins (display-only native rows); otherwise a
- * command item follows its `keybinding` policy (`primary` and
- * `primaryUnlabeled` request its customizable primary shortcut; `none` shows
+ * #664 / #693: the keybinding row an item shows, decided by the model's
+ * metadata: an explicit `shortcutDisplayId` wins (display-only native rows);
+ * otherwise a command item follows its `shortcutDisplay` policy (`primary`,
+ * the default, requests its effective primary shortcut; `none` shows
  * nothing) and a native role with a commandId shows that command's native
- * row.
+ * row. How the key is bound (native accelerator or not) plays no part.
  */
 function shortcutRequestFor(
   item: ApplicationMenuItem
@@ -98,8 +105,7 @@ function shortcutRequestFor(
       return { id: item.shortcutDisplayId, kind: "nativeRole" };
     }
 
-    const keybinding = item.keybinding ?? "primary";
-    return keybinding === "primary" || keybinding === "primaryUnlabeled"
+    return (item.shortcutDisplay ?? "primary") === "primary"
       ? { id: item.commandId, kind: "customizable" }
       : undefined;
   }

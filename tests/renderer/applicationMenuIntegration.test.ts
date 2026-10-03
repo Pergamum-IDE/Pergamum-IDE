@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { rendererMenuNativeRoles } from "../../src/shared/api";
 import {
+  NATIVE_MENU_ACCELERATOR_COMMAND_IDS,
   getApplicationMenuModel,
   type ApplicationMenuItem
 } from "../../src/shared/applicationMenuModel";
@@ -107,7 +108,7 @@ describe("Renderer menu shortcut labels (#664)", () => {
     expect(labelOf("win32", rows, "File").get("Save")).toBeUndefined();
   });
 
-  it("uses the same primary key the native accelerator backend binds, for every menu command", () => {
+  it("for every native-accelerator command, label and accelerator come from the same primary key", () => {
     const rows = withKey(
       rowsFor("win32"),
       editorCommandIds.saveAll,
@@ -122,7 +123,8 @@ describe("Renderer menu shortcut labels (#664)", () => {
     const resolver = createMenuShortcutLabelResolver("win32", rows);
     let compared = 0;
 
-    for (const commandId of applicationMenuCommandIds) {
+    // (A label is NOT limited to these: see the presentation-only tests below.)
+    for (const commandId of NATIVE_MENU_ACCELERATOR_COMMAND_IDS) {
       const accelerator = lookup.get(commandId);
       const label = resolver({ id: commandId, kind: "customizable" });
 
@@ -147,12 +149,11 @@ describe("Renderer menu shortcut labels (#664)", () => {
     expect(labels.get("Zoom In")).not.toBe("Ctrl++");
   });
 
-  it("keybinding: none items show no label, while primaryUnlabeled items show their primary key (#667)", () => {
+  it("Open Markdown File has no default key, hence no label; Application Settings shows its primary key (#667)", () => {
     const labels = labelOf("win32", rowsFor("win32"), "File");
 
-    // Open Markdown File (none) shows no label.
-    expect(labels.get("Open Markdown File...")).toBeUndefined();
-    // Application Settings (primaryUnlabeled) shows its primary key in Renderer menu.
+    expect(labels.has("Open Markdown File")).toBe(true);
+    expect(labels.get("Open Markdown File")).toBeUndefined();
     expect(labels.get("Application Settings...")).toBe("Ctrl+,");
   });
 
@@ -188,6 +189,128 @@ describe("Renderer menu shortcut labels (#664)", () => {
 
     const labels = labelOf("win32", keybindings, "File");
     expect(labels.get("Application Settings...")).toBeUndefined();
+  });
+
+  describe("presentation without a native accelerator (#693)", () => {
+    const JMC = "assist.japaneseMachineCheck.openDialog";
+    const userRows = (
+      platform: PergamumPlatform,
+      userEntries: { key: string; command: string }[]
+    ) => resolveEffectiveKeybindings({ platform, userEntries }).keybindings;
+    const jmcLabel = (
+      platform: PergamumPlatform,
+      rows: readonly ResolvedKeybinding[]
+    ) => labelOf(platform, rows, "Assist").get("Japanese Style Check...");
+
+    it("shows a key the user assigns to Japanese Style Check (Windows and Linux)", () => {
+      for (const platform of ["win32", "linux"] as const) {
+        const rows = userRows(platform, [{ key: "Mod-Alt-j", command: JMC }]);
+
+        expect(jmcLabel(platform, rows), platform).toBe(
+          formatKeybindingLabel("Mod-Alt-j", platform)
+        );
+        expect(jmcLabel(platform, rows)).toBe("Ctrl+Alt+J");
+      }
+    });
+
+    it("has no label before it is assigned", () => {
+      expect(jmcLabel("win32", rowsFor("win32"))).toBeUndefined();
+    });
+
+    it("follows a rebind", () => {
+      const first = userRows("win32", [{ key: "Mod-Alt-j", command: JMC }]);
+      const second = userRows("win32", [{ key: "Mod-Alt-k", command: JMC }]);
+
+      expect(jmcLabel("win32", first)).toBe("Ctrl+Alt+J");
+      expect(jmcLabel("win32", second)).toBe("Ctrl+Alt+K");
+    });
+
+    it("loses the label when the user unbinds it, while the item stays", () => {
+      const bound = userRows("win32", [{ key: "Mod-Alt-j", command: JMC }]);
+      // Effective rows after an unbind: the command has no key.
+      const unbound = withKey(bound, JMC, null);
+
+      expect(jmcLabel("win32", bound)).toBe("Ctrl+Alt+J");
+      expect(jmcLabel("win32", unbound)).toBeUndefined();
+      expect(labelOf("win32", unbound, "Assist").has("Japanese Style Check...")).toBe(
+        true
+      );
+    });
+
+    it("shows only the first bound key when there are several", () => {
+      const rows = userRows("win32", [
+        { key: "Mod-Alt-j", command: JMC },
+        { key: "Mod-Alt-k", command: JMC }
+      ]);
+
+      expect(jmcLabel("win32", rows)).toBe("Ctrl+Alt+J");
+    });
+
+    it("is general: any command item with a key shows it, not only Japanese Style Check", () => {
+      const rows = userRows("win32", [
+        { key: "Mod-Alt-1", command: workspaceCommandIds.openKeyboardShortcuts },
+        { key: "Mod-Alt-2", command: "assist.lineEndingDistribution.show" }
+      ]);
+
+      expect(labelOf("win32", rows, "File").get("Keyboard Shortcuts...")).toBe(
+        "Ctrl+Alt+1"
+      );
+      expect(labelOf("win32", rows, "Assist").get("Line Ending Distribution...")).toBe(
+        "Ctrl+Alt+2"
+      );
+    });
+
+    it("shows a key given to Open Markdown File (a label only; it is no native accelerator)", () => {
+      const template = rowsFor("win32").find(
+        (row) => row.scope === "app" && row.source === "pergamum" && !row.readonly
+      )!;
+      const rows = [
+        ...rowsFor("win32"),
+        {
+          ...template,
+          command: editorCommandIds.openMarkdownDocument,
+          key: "Mod-Alt-o"
+        }
+      ];
+
+      expect(labelOf("win32", rows, "File").get("Open Markdown File")).toBe(
+        "Ctrl+Alt+O"
+      );
+    });
+
+    it("does not read the native accelerator allowlist", () => {
+      const source = readFileSync(
+        "src/renderer/applicationMenuIntegration.ts",
+        "utf8"
+      );
+
+      expect(source).not.toContain("NATIVE_MENU_ACCELERATOR_COMMAND_IDS");
+      expect(source).not.toContain("MENU_ACCELERATOR_COMMAND_IDS");
+      expect(source).toContain("selectMenuKeybindingKeys(rows, null)");
+    });
+
+    it("keeps following the live effective-keybinding store", () => {
+      const source = readFileSync(
+        "src/renderer/applicationMenuIntegration.ts",
+        "utf8"
+      );
+
+      expect(source).toContain("useSyncExternalStore");
+      expect(source).toContain("subscribeEffectiveKeybindings");
+      expect(source).toContain("getEffectiveKeybindingsRevision");
+      expect(source).toMatch(/\[platform, keybindingsRevision\]/);
+    });
+
+    it("never changes enablement: a labelled item is as enabled as the registry says", () => {
+      const source = readFileSync(
+        "src/renderer/applicationMenuIntegration.ts",
+        "utf8"
+      );
+
+      // Labels and enablement are separate calls on separate inputs.
+      expect(source).toContain("isApplicationMenuCommandDisabled(");
+      expect(source).not.toMatch(/shortcutLabel.*isDisabled|isDisabled.*shortcutLabel/);
+    });
   });
 
   it("native roles show their documented native shortcut from the catalog rows", () => {

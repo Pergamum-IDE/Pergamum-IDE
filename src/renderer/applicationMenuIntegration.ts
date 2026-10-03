@@ -8,9 +8,9 @@
  *                           dirty-document preflight
  *   click (native role)  -> Electron runs the role (allowlisted IPC), or the
  *                           existing full screen API
- *   shortcut label       -> the effective keybindings, selected with the same
- *                           rule as the native accelerators, formatted by the
- *                           shared formatter
+ *   shortcut label       -> the effective keybindings (primary key), formatted
+ *                           by the shared formatter; independent of which keys
+ *                           are Electron native accelerators (#693)
  *   disabled             -> CommandRegistry.isEnabledForContext, the same
  *                           evaluation that is pushed to the native menu
  */
@@ -32,7 +32,6 @@ import {
   type ResolvedKeybinding
 } from "../shared/keybindings";
 import {
-  MENU_ACCELERATOR_COMMAND_IDS,
   selectMenuKeybindingKeys,
   selectNativeRoleKey
 } from "../shared/menuKeybindingSelection";
@@ -96,10 +95,10 @@ export function createMenuShortcutLabelResolver(
   platform: PergamumPlatform,
   rows: readonly ResolvedKeybinding[]
 ): (request: RendererMenuShortcutRequest) => string | undefined {
-  const customizable = selectMenuKeybindingKeys(
-    rows,
-    MENU_ACCELERATOR_COMMAND_IDS
-  );
+  // Every customizable command, from the effective rows: a label is shown for
+  // any command item that has a key, whether or not the key is also a native
+  // accelerator (#693).
+  const customizable = selectMenuKeybindingKeys(rows, null);
 
   return (request) => {
     const key =

@@ -321,6 +321,7 @@ export const debugLogCommandExecutionSources = [
   "contextMenu",
   "documentTabBar",
   "editorSurface",
+  "keyboardShortcut",
   "toolbar",
   "workspaceSidebar",
   "resumeHub",

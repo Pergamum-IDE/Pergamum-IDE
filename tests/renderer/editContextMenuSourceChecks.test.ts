@@ -169,8 +169,16 @@ function allSourceText(): string {
  * only moves focus between its items and closes on Escape / Tab. It binds no
  * shortcut and runs no command itself; the command still goes through the
  * Command Registry and the native-edit delegation.
+ *
+ * commandKeybindingDispatcher.ts (#693) is the same category as
+ * globalKeyboardShortcuts.ts: one capture-phase window listener that runs the
+ * effective key of a registered app-scope command that neither a native
+ * accelerator nor a dedicated renderer shortcut runs, through the Command
+ * Registry (which decides enablement). It names no command and is unrelated to
+ * the native-edit-command delegation.
  */
 const onKeyDownExemptFileNames = new Set([
+  "commandKeybindingDispatcher.ts",
   "CommandPalette.tsx",
   "ChoiceDialog.tsx",
   "ConfirmDialog.tsx",
