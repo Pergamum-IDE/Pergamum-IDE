@@ -15,7 +15,8 @@ export const applicationCommandIds = {
   zoomIn: defineCommandId("app.zoom.in"),
   zoomOut: defineCommandId("app.zoom.out"),
   resetZoom: defineCommandId("app.zoom.reset"),
-  openUsageTour: defineCommandId("help.usageTour")
+  openUsageTour: defineCommandId("help.usageTour"),
+  openMarkdownCheatSheet: defineCommandId("help.markdownCheatSheet")
 } as const;
 
 export const workspaceCommandIds = {
@@ -177,6 +178,7 @@ export const applicationMenuCommandIds = [
   workspaceCommandIds.openApplicationSettings,
   workspaceCommandIds.showResumeHub,
   applicationCommandIds.openUsageTour,
+  applicationCommandIds.openMarkdownCheatSheet,
   editorCommandIds.undo,
   editorCommandIds.redo,
   editorCommandIds.cutSelection,

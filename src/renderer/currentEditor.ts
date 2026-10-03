@@ -1,5 +1,7 @@
+import type { BuiltinMarkdownId } from "../shared/builtinMarkdown";
 import type { GlossaryEntry, GlossaryEntryId } from "../shared/glossary";
 import {
+  createBuiltinMarkdownEditorId,
   createFileEditorIdForPath,
   createGlossaryDescriptionEditorId,
   createProjectDocumentEditorId,
@@ -65,9 +67,22 @@ export interface GlossaryDescriptionRecoveryConflict {
   readonly currentUpdatedAt: string;
 }
 
+/**
+ * A built-in, read-only Markdown document (e.g. the Markdown Cheat Sheet).
+ * Not file-backed and not project-scoped: it has no `CurrentDocument`, so
+ * every file-backed feature gated on `markdownDocumentForEditor()` skips it
+ * (dirty, Save, Recovery, linters, outline, glossary, ...). Its text is
+ * derived from the built-in id and the display language at render time.
+ */
+export interface BuiltinMarkdownCurrentEditor {
+  kind: "builtinMarkdown";
+  builtinId: BuiltinMarkdownId;
+}
+
 export type CurrentEditor =
   | MarkdownCurrentEditor
-  | GlossaryDescriptionCurrentEditor;
+  | GlossaryDescriptionCurrentEditor
+  | BuiltinMarkdownCurrentEditor;
 
 const glossaryDescriptionTitlePrefix = "語彙";
 
@@ -78,6 +93,12 @@ export function createMarkdownCurrentEditor(
     kind: "markdown",
     document
   };
+}
+
+export function createBuiltinMarkdownCurrentEditor(
+  builtinId: BuiltinMarkdownId
+): BuiltinMarkdownCurrentEditor {
+  return { kind: "builtinMarkdown", builtinId };
 }
 
 export function createGlossaryDescriptionCurrentEditor(
@@ -203,6 +224,10 @@ export function currentEditorTitle(editor: CurrentEditor): string {
       return currentDocumentTitle(editor.document);
     case "glossaryDescription":
       return glossaryDescriptionEditorTitle(editor.representativeSurface);
+    case "builtinMarkdown":
+      // The localized tab label is applied by the host (it owns `translate`);
+      // this is only a stable, non-localized fallback.
+      return editor.builtinId;
   }
 }
 
@@ -212,6 +237,9 @@ export function isCurrentEditorDirty(editor: CurrentEditor): boolean {
       return isCurrentDocumentDirty(editor.document);
     case "glossaryDescription":
       return isGlossaryEntryDraftDirty(editor.draft);
+    case "builtinMarkdown":
+      // Read-only: can never hold unsaved changes.
+      return false;
   }
 }
 
@@ -229,6 +257,10 @@ export function editorIdForCurrentEditor(
 ): EditorId | null {
   if (editor.kind === "glossaryDescription") {
     return createGlossaryDescriptionEditorId(editor.entryId);
+  }
+
+  if (editor.kind === "builtinMarkdown") {
+    return createBuiltinMarkdownEditorId(editor.builtinId);
   }
 
   switch (editor.document.kind) {
@@ -252,6 +284,13 @@ export function isCurrentEditorIdentityCompatible(
     return (
       editorId.kind === "glossaryDescription" &&
       editorId.entryId === editor.entryId
+    );
+  }
+
+  if (editor.kind === "builtinMarkdown") {
+    return (
+      editorId.kind === "builtinMarkdown" &&
+      editorId.builtinId === editor.builtinId
     );
   }
 

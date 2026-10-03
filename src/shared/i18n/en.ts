@@ -28,6 +28,9 @@ export const enTranslations = {
   "command.app.about.open.description": "Show Pergamum version, license, and repository information.",
   "command.help.usageTour": "Usage Tour",
   "command.help.usageTour.description": "Show the usage tour.",
+  "command.help.markdownCheatSheet": "Markdown Cheat Sheet",
+  "command.help.markdownCheatSheet.description":
+    "Open the cheat sheet that compares Markdown notation with the rendered preview.",
   "command.app.zoom.in": "Zoom In",
   "command.app.zoom.in.description": "Zoom in the window.",
   "command.app.zoom.out": "Zoom Out",
@@ -1411,6 +1414,8 @@ export const enTranslations = {
   "menu.help": "Help",
   "menu.showResumeHub": "Show Resume Hub",
   "menu.usageTour": "Usage Tour",
+  "menu.markdownCheatSheet": "Markdown Cheat Sheet",
+  "markdownCheatSheet.tabTitle": "Markdown Cheat Sheet",
   "menu.hide": "Hide {appName}",
   "menu.hideOthers": "Hide Others",
   "menu.minimize": "Minimize",

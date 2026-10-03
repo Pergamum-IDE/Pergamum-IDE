@@ -60,14 +60,17 @@ export type StartupMarkdownRejectedRoute = Extract<
 >;
 import type { GlossaryEntry } from "../../shared/glossary";
 import {
+  createBuiltinMarkdownEditorId,
   createFileEditorIdForPath,
   createGlossaryDescriptionEditorId,
   createProjectDocumentEditorId,
+  editorIdEquals,
   serializeEditorId,
   type ActiveProjectContext,
   type EditorId
 } from "../../shared/editorId";
 import {
+  createBuiltinMarkdownCurrentEditor,
   createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
   type CurrentEditor
@@ -319,6 +322,22 @@ async function buildRestoredEditor(
       };
     }
 
+    case "builtinMarkdown": {
+      // Independent of any project: regenerated from the built-in source.
+      const id = createBuiltinMarkdownEditorId(editor.builtinId);
+
+      return {
+        openDocument: {
+          id,
+          editor: createBuiltinMarkdownCurrentEditor(editor.builtinId)
+        },
+        sessionIdentity: sessionEditorIdentity(editor),
+        fallbackFilename: fallbackFilenameForSessionEditor(editor),
+        viewStateKey: null,
+        viewState: null
+      };
+    }
+
     case "glossaryDescription": {
       // #573 Slice 8: project glossary data — only with the project itself.
       if (!projectRestoreSucceeded || !project) {
@@ -445,7 +464,13 @@ async function restoreSelectedSession(
       deps
     });
 
-    if (restored) {
+    // A duplicate entry (same editor identity) is restored once.
+    if (
+      restored &&
+      !built.some((entry) =>
+        editorIdEquals(entry.openDocument.id, restored.openDocument.id)
+      )
+    ) {
       built.push(restored);
     }
   }

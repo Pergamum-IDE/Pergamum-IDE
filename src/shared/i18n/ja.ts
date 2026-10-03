@@ -26,6 +26,9 @@ export const jaTranslations = {
   "command.app.about.open.description": "Pergamum のバージョン、ライセンス、リポジトリ情報を表示します。",
   "command.help.usageTour": "使い方ツアー",
   "command.help.usageTour.description": "使い方ツアーを表示します。",
+  "command.help.markdownCheatSheet": "Markdown チートシート",
+  "command.help.markdownCheatSheet.description":
+    "Markdown記法とプレビュー結果を見比べられるチートシートを開きます。",
   "command.app.zoom.in": "拡大",
   "command.app.zoom.in.description": "画面全体を拡大表示します。",
   "command.app.zoom.out": "縮小",
@@ -1406,6 +1409,8 @@ export const jaTranslations = {
   "menu.help": "ヘルプ",
   "menu.showResumeHub": "作業再開画面を表示",
   "menu.usageTour": "使い方ツアー",
+  "menu.markdownCheatSheet": "Markdown チートシート",
+  "markdownCheatSheet.tabTitle": "Markdown チートシート",
   "menu.hide": "{appName}を隠す",
   "menu.hideOthers": "ほかを隠す",
   "menu.minimize": "最小化",

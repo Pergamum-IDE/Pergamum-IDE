@@ -44,6 +44,7 @@ import type { GlossaryEntryDraft } from "./glossaryEntryDraft";
 import type { GlossaryTag } from "../shared/glossary";
 import {
   createCurrentDocumentMarkdownSurfaceSource,
+  createBuiltinMarkdownSurfaceSource,
   createGlossaryDescriptionMarkdownSurfaceSource,
   type MarkdownSurfaceSource
 } from "./markdownSurfaceSource";
@@ -479,6 +480,12 @@ interface EditorSurfaceProps {
   /** #573 Slice 5: omitted = no metadata panel on glossary tabs. */
   glossaryDescriptionMetadata?: GlossaryDescriptionMetadataConfig;
   /**
+   * The Markdown source of the active built-in read-only document (e.g. the
+   * Markdown Cheat Sheet), already resolved for the display language. Used
+   * only when `editor.kind === "builtinMarkdown"`.
+   */
+  builtinMarkdownText?: string;
+  /**
    * #505 Phase 0: gates the (high-frequency, per-scroll-event)
    * `preview.scrollSync.scrollEvent.classified` diagnostic's layout reads —
    * see that effect for why this needs an actual flag rather than emitting
@@ -709,6 +716,7 @@ interface EditorSurfaceProps {
 export function EditorSurface({
   editor,
   glossaryDescriptionMetadata,
+  builtinMarkdownText,
   isDebugModeEnabled,
   isSyncScrollEditorToPreviewEnabled,
   isSyncScrollPreviewToEditorEnabled,
@@ -793,11 +801,18 @@ export function EditorSurface({
     () =>
       editor.kind === "markdown"
         ? createCurrentDocumentMarkdownSurfaceSource(editor.document)
-        : createGlossaryDescriptionMarkdownSurfaceSource(editor),
+        : editor.kind === "builtinMarkdown"
+          ? createBuiltinMarkdownSurfaceSource(builtinMarkdownText ?? "")
+          : createGlossaryDescriptionMarkdownSurfaceSource(editor),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [markdownSurfaceSourceKey]
+    [markdownSurfaceSourceKey, builtinMarkdownText]
   );
   const isGlossaryDescription = editor.kind === "glossaryDescription";
+  // A built-in document (Markdown Cheat Sheet) uses the very same Editor /
+  // Preview stack, but read-only and with the Preview always shown (the whole
+  // point is comparing source and result), without touching the user's own
+  // Preview preference.
+  const isBuiltinMarkdown = editor.kind === "builtinMarkdown";
 
   // #573 Slice 5: session-local (not persisted), shared by every glossary
   // Description tab; collapsed by default so the Description stays primary.
@@ -848,7 +863,11 @@ export function EditorSurface({
           documentStates={documentStates}
           // #573 Slice 3: glossary Description always previews as plain
           // (horizontal) Markdown.
-          previewRenderer={isGlossaryDescription ? "markdown" : previewRenderer}
+          previewRenderer={
+            isGlossaryDescription || isBuiltinMarkdown
+              ? "markdown"
+              : previewRenderer
+          }
           isPreviewRendererSwitching={isPreviewRendererSwitching}
           narouMarkText={narouMarkText}
           previewUpdateDelayMs={previewUpdateDelayMs}
@@ -870,7 +889,7 @@ export function EditorSurface({
           translate={translate}
           soundFeedback={soundFeedback}
           soundSettings={soundSettings}
-          readOnly={isProjectOwnedReadOnly}
+          readOnly={isProjectOwnedReadOnly || isBuiltinMarkdown}
           onChangeMarkdownContent={onChangeMarkdownContent}
           onGlossarySelectionShortcut={onGlossarySelectionShortcut}
           onEmphasisMarkShortcut={onEmphasisMarkShortcut}
@@ -906,7 +925,7 @@ export function EditorSurface({
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
           ratio={markdownEditorPreviewRatio}
           onChangeRatio={onChangeMarkdownEditorPreviewRatio}
-          previewVisible={previewVisible}
+          previewVisible={previewVisible || isBuiltinMarkdown}
           documentOpenId={documentOpenId}
           onDocumentOpenPreviewRenderStarted={
             onDocumentOpenPreviewRenderStarted

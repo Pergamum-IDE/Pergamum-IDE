@@ -81,6 +81,20 @@ function sessionEditorFromOpenEditor(
         };
   }
 
+  // A built-in document is recorded by its built-in id only (its text is
+  // regenerated on restore); it has no #273 View State.
+  if (editor.kind === "builtinMarkdown") {
+    return {
+      editor: {
+        kind: "builtinMarkdown",
+        order,
+        builtinId: editor.builtinId,
+        viewState: null
+      },
+      viewStateKey: null
+    };
+  }
+
   switch (editor.document.kind) {
     case "project":
       return {

@@ -14,6 +14,8 @@ const titles = {
     "Show Pergamum version, license, and repository information.",
   openUsageTour: "Usage Tour",
   openUsageTourDescription: "Show the usage tour.",
+  openMarkdownCheatSheet: "Markdown Cheat Sheet",
+  openMarkdownCheatSheetDescription: "",
   quitApplication: "Quit Pergamum",
   quitApplicationDescription:
     "Quit Pergamum. Check for unsaved changes before exiting.",
@@ -46,6 +48,7 @@ describe("application commands", () => {
       {
         openAbout: () => undefined,
         openUsageTour: () => undefined,
+        openMarkdownCheatSheet: () => undefined,
         quitApplication: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
@@ -61,6 +64,7 @@ describe("application commands", () => {
     expect(registry.list().map((command) => command.id)).toEqual([
       "app.about.open",
       "help.usageTour",
+      "help.markdownCheatSheet",
       "app.quit",
       "workspace.project.create",
       "workspace.project.open",
@@ -91,6 +95,7 @@ describe("application commands", () => {
       {
         openAbout,
         openUsageTour,
+        openMarkdownCheatSheet: vi.fn(),
         quitApplication,
         createProject,
         openProject,
@@ -146,6 +151,7 @@ describe("application commands", () => {
       {
         openAbout: () => undefined,
         openUsageTour: () => undefined,
+        openMarkdownCheatSheet: () => undefined,
         quitApplication: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
@@ -187,6 +193,7 @@ describe("application commands", () => {
       {
         openAbout: () => undefined,
         openUsageTour: () => undefined,
+        openMarkdownCheatSheet: () => undefined,
         quitApplication: () => undefined,
         createProject: () => undefined,
         openProject: () => undefined,
@@ -214,6 +221,9 @@ describe("application commands", () => {
       openAboutDescription: "translated:command.app.about.open.description",
       openUsageTour: "translated:command.help.usageTour",
       openUsageTourDescription: "translated:command.help.usageTour.description",
+      openMarkdownCheatSheet: "translated:command.help.markdownCheatSheet",
+      openMarkdownCheatSheetDescription:
+        "translated:command.help.markdownCheatSheet.description",
       quitApplication: "translated:command.app.quit",
       quitApplicationDescription: "translated:command.app.quit.description",
       createProject: "translated:command.workspace.project.create",

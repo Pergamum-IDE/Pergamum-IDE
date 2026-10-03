@@ -17,6 +17,7 @@ import {
   type SessionRecord
 } from "../../src/shared/session";
 import { PROJECT_ID, RUN_ID, sid } from "../shared/sessionTestFixtures";
+import { parseSessionEditor } from "../../src/shared/session";
 
 const PROJECT: PergamumProject = {
   rootPath: "/w/Book",
@@ -739,5 +740,64 @@ describe("runColdStartRestore (#274)", () => {
     await runColdStartRestore(h.deps);
     expect(h.restoreUnavailable).toEqual(["unreadable"]);
     expect(h.finished).toEqual([false]);
+  });
+});
+
+describe("runColdStartRestore — built-in Markdown Cheat Sheet", () => {
+  function bi(order: number, builtinId = "markdownCheatSheet"): SessionEditor {
+    return { kind: "builtinMarkdown", order, builtinId, viewState: null } as SessionEditor;
+  }
+
+  it("restores the Cheat Sheet without any project, as a built-in editor (no file read)", async () => {
+    const readMarkdownFile = vi.fn(() => Promise.resolve(MD_FILE));
+    const h = harness(okPayload([record({ editors: [bi(0)] })]), { readMarkdownFile });
+    await runColdStartRestore(h.deps);
+
+    const docs = h.applied[0].openDocuments.documents;
+    expect(h.applied[0].project).toBeNull();
+    expect(docs).toHaveLength(1);
+    expect(docs[0].editor).toEqual({
+      kind: "builtinMarkdown",
+      builtinId: "markdownCheatSheet"
+    });
+    expect(docs[0].id.kind).toBe("builtinMarkdown");
+    expect(readMarkdownFile).not.toHaveBeenCalled();
+    expect(h.applied[0].openDocuments.activeDocumentId).toEqual(docs[0].id);
+  });
+
+  it("restores a mixed order with the Cheat Sheet active", async () => {
+    const h = harness(
+      okPayload([
+        record({
+          projectContext: withProject,
+          editors: [pm("chapters/one.md", 0), bi(1)],
+          activeEditor: { kind: "builtinMarkdown", builtinId: "markdownCheatSheet" }
+        })
+      ])
+    );
+    await runColdStartRestore(h.deps);
+
+    const env = h.applied[0];
+    expect(env.openDocuments.documents.map((doc) => doc.editor.kind)).toEqual([
+      "markdown",
+      "builtinMarkdown"
+    ]);
+    expect(env.openDocuments.activeDocumentId).toEqual(env.openDocuments.documents[1].id);
+  });
+
+  it("does not duplicate when listed twice", async () => {
+    const h = harness(okPayload([record({ editors: [bi(0), bi(1)] })]));
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].openDocuments.documents).toHaveLength(1);
+  });
+
+  it("drops an unknown built-in id at parse time and keeps the rest", async () => {
+    const parsed = parseSessionEditor({ kind: "builtinMarkdown", order: 0, builtinId: "future" });
+    expect(parsed).toBeNull();
+
+    const h = harness(okPayload([record({ editors: [sm("/w/x/a.md", 0)] })]));
+    await runColdStartRestore(h.deps);
+    expect(h.applied[0].openDocuments.documents).toHaveLength(1);
   });
 });

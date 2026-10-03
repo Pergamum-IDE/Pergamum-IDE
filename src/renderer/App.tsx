@@ -59,6 +59,7 @@ import {
 import {
   createEditorIdForPath,
   createGlossaryDescriptionEditorId,
+  createBuiltinMarkdownEditorId,
   createProjectDocumentEditorId,
   editorIdEquals,
   serializeEditorId,
@@ -194,6 +195,7 @@ import {
 } from "./lineEndingTracking";
 import {
   applyGlossaryDescriptionEditorSaveResult,
+  createBuiltinMarkdownCurrentEditor,
   createGlossaryDescriptionCurrentEditor,
   createMarkdownCurrentEditor,
   createNewGlossaryDescriptionCurrentEditor,
@@ -215,6 +217,12 @@ import {
   rewriteGlossaryDescriptionImageReferences
 } from "./glossaryImageReferenceMoveUpdate";
 import { DocumentTabBar } from "./DocumentTabBar";
+import { builtinMarkdownSource } from "../shared/builtinMarkdown";
+import {
+  decideUsageTourAutoStart,
+  decideUsageTourManualStart,
+  isUsageTourSurfaceUsable
+} from "./usageTour/usageTourSurface";
 import {
   handlePreviewLinkClick,
   type PreviewExternalLinkDeps
@@ -1773,6 +1781,14 @@ export function App(): JSX.Element {
   const [isUsageTourOpen, setIsUsageTourOpen] = useState(false);
   const [isUsageTourManual, setIsUsageTourManual] = useState(false);
   const openUsageTourCommandRef = useRef<() => void>(() => undefined);
+  const openMarkdownCheatSheetCommandRef = useRef<() => void>(
+    () => undefined
+  );
+  // The tour waits here until the Markdown Cheat Sheet it was asked to show
+  // has mounted a usable Editor / Preview (see the readiness effect).
+  const [pendingUsageTourStart, setPendingUsageTourStart] = useState<{
+    readonly manual: boolean;
+  } | null>(null);
   const openAboutDialogCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -4193,6 +4209,7 @@ export function App(): JSX.Element {
       {
         openAbout: () => openAboutDialogCommandRef.current(),
         openUsageTour: () => openUsageTourCommandRef.current(),
+        openMarkdownCheatSheet: () => openMarkdownCheatSheetCommandRef.current(),
         quitApplication: () => quitApplicationCommandRef.current(),
         createProject: () => createProjectCommandRef.current(),
         openProject: () => openProjectCommandRef.current(),
@@ -4631,8 +4648,15 @@ export function App(): JSX.Element {
     project !== null
   );
   const tabs = useMemo(
-    () => documentTabs(openDocumentsState),
-    [openDocumentsState]
+    () =>
+      documentTabs(openDocumentsState).map((tab) =>
+        // Built-in documents are titled in the display language (their
+        // identity is the built-in id, never the title).
+        tab.id.kind === "builtinMarkdown"
+          ? { ...tab, title: translate("markdownCheatSheet.tabTitle") }
+          : tab
+      ),
+    [openDocumentsState, translate]
   );
   const specialTabs = useMemo<SpecialWorkspaceTab[]>(() => {
     const list: SpecialWorkspaceTab[] = [];
@@ -7150,6 +7174,16 @@ export function App(): JSX.Element {
     });
   }
 
+  // Opens (or re-activates — never duplicates) the built-in Markdown Cheat
+  // Sheet tab. No file, project or Preview preference is involved.
+  function openMarkdownCheatSheetTab(): void {
+    projectActivationLifetimeRef.current.markExplicitEditorActivation();
+    applyEditor(
+      createBuiltinMarkdownEditorId("markdownCheatSheet"),
+      createBuiltinMarkdownCurrentEditor("markdownCheatSheet")
+    );
+  }
+
   function openEditor(
     editorId: EditorId,
     options?: OpenEditorOptions<CurrentEditor>
@@ -8535,6 +8569,11 @@ export function App(): JSX.Element {
     // whole draft through the existing glossary update path instead.
     if (targetOpenDocument.editor.kind === "glossaryDescription") {
       return await saveGlossaryDescriptionEditor(targetOpenDocument.id);
+    }
+
+    // A built-in document is read-only: nothing to save, never dirty.
+    if (targetOpenDocument.editor.kind === "builtinMarkdown") {
+      return "ignored";
     }
 
     const targetEditor = targetOpenDocument.editor;
@@ -10180,9 +10219,19 @@ export function App(): JSX.Element {
   closeProjectCommandRef.current = closeProject;
   quitApplicationCommandRef.current = quitApplication;
   openAboutDialogCommandRef.current = openAboutDialog;
+  openMarkdownCheatSheetCommandRef.current = openMarkdownCheatSheetTab;
   openUsageTourCommandRef.current = () => {
-    setIsUsageTourManual(true);
-    setIsUsageTourOpen(true);
+    // Manual replay: use the current screen when it already shows a usable
+    // Editor and Preview; otherwise (no project / document / Preview) show
+    // the Markdown Cheat Sheet first and start the tour once it has mounted.
+    if (decideUsageTourManualStart(isUsageTourSurfaceUsable()) === "openTour") {
+      setIsUsageTourManual(true);
+      setIsUsageTourOpen(true);
+      return;
+    }
+
+    openMarkdownCheatSheetTab();
+    setPendingUsageTourStart({ manual: true });
   };
 
   const handleCloseUsageTour = useCallback(() => {
@@ -10219,24 +10268,95 @@ export function App(): JSX.Element {
 
   // #714: auto-show once upon persistent settings load completed
   useEffect(() => {
-    if (
-      isSettingsLoading ||
-      settingsError !== null ||
-      autoShowUsageTourAttemptedRef.current
-    ) {
+    // Whether a project was restored is only known once the cold-start
+    // restore (and any launch routing) has settled.
+    const decision = decideUsageTourAutoStart({
+      settingsLoading: isSettingsLoading,
+      settingsFailed: settingsError !== null,
+      alreadyDecided: autoShowUsageTourAttemptedRef.current,
+      coldStartSettled: coldStartRestoreSettled,
+      launchRoutingSettled: coldStartMarkdownLaunchRoutingSettled,
+      autoShowDisabled: Boolean(settings.workbench.usageTourAutoShowDisabled),
+      hasProject: project !== null
+    });
+
+    if (decision === "wait") {
       return;
     }
 
     autoShowUsageTourAttemptedRef.current = true;
 
-    if (!settings.workbench.usageTourAutoShowDisabled) {
-      setIsUsageTourManual(false);
-      setIsUsageTourOpen(true);
+    if (decision === "skip") {
+      return;
     }
+
+    if (decision === "openCheatSheetThenTour") {
+      // Nothing restored to point at: show the Markdown Cheat Sheet (real
+      // Editor + Preview) and start the tour once it has mounted.
+      openMarkdownCheatSheetTab();
+      setPendingUsageTourStart({ manual: false });
+      return;
+    }
+
+    setIsUsageTourManual(false);
+    setIsUsageTourOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isSettingsLoading,
     settingsError,
-    settings.workbench.usageTourAutoShowDisabled
+    settings.workbench.usageTourAutoShowDisabled,
+    coldStartRestoreSettled,
+    coldStartMarkdownLaunchRoutingSettled,
+    project
+  ]);
+
+  // Start a prepared tour only after the Cheat Sheet's Editor and Preview are
+  // mounted and laid out. Driven by state (this effect re-runs on every
+  // relevant commit), with a bounded frame-synchronous re-check for the case
+  // where layout lands a frame after mount — never a wall-clock delay.
+  useEffect(() => {
+    if (pendingUsageTourStart === null) {
+      return;
+    }
+
+    if (
+      activeDocument?.editor.kind !== "builtinMarkdown" ||
+      isEditorAreaSpecialTabActive
+    ) {
+      return;
+    }
+
+    const start = (): void => {
+      setIsUsageTourManual(pendingUsageTourStart.manual);
+      setIsUsageTourOpen(true);
+      setPendingUsageTourStart(null);
+    };
+
+    if (isUsageTourSurfaceUsable()) {
+      start();
+      return;
+    }
+
+    let frames = 0;
+    let frameId = requestAnimationFrame(function check() {
+      frames += 1;
+
+      if (isUsageTourSurfaceUsable() || frames >= 60) {
+        // After ~1s of frames, start anyway: a missing target falls back to
+        // the tour's centered balloon, so it can never get stuck pending.
+        start();
+        return;
+      }
+
+      frameId = requestAnimationFrame(check);
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, [
+    pendingUsageTourStart,
+    activeDocument?.id,
+    activeDocument?.editor.kind,
+    isEditorAreaSpecialTabActive
   ]);
 
   openBulkTextImportDialogCommandRef.current = openBulkTextImportDialog;
@@ -13386,7 +13506,10 @@ export function App(): JSX.Element {
         onOpenRubyDialog={handleOpenRubyDialogFromToolbar}
         onOpenEmphasisDialog={handleOpenEmphasisDialogFromToolbar}
         canTogglePreview={isPreviewEligible}
-        isPreviewVisible={layout.markdownEditorPreview.visible}
+        isPreviewVisible={
+          layout.markdownEditorPreview.visible ||
+          activeDocument?.editor.kind === "builtinMarkdown"
+        }
         onTogglePreview={handleTogglePreviewVisible}
         selectedPreviewRenderer={requestedPreviewRenderer}
         defaultPreviewRenderer={effectiveSettings.preview.renderer}
@@ -13736,6 +13859,14 @@ export function App(): JSX.Element {
                     {activeDocument ? (
                       <EditorSurface
                         editor={activeDocument.editor}
+                        builtinMarkdownText={
+                          activeDocument.editor.kind === "builtinMarkdown"
+                            ? builtinMarkdownSource(
+                                activeDocument.editor.builtinId,
+                                displayLanguage
+                              )
+                            : undefined
+                        }
                         themeKind={
                           resolveColorTheme(effectiveSettings.workbench.colorTheme).kind
                         }

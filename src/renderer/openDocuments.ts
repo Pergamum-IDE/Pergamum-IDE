@@ -238,7 +238,8 @@ export function getDirtyWorkingCopies(
   return state.documents.flatMap((openDocument): DirtyWorkingCopy[] => {
     const { editor } = openDocument;
 
-    if (!isCurrentEditorDirty(editor)) {
+    // A built-in read-only document can never be dirty.
+    if (editor.kind === "builtinMarkdown" || !isCurrentEditorDirty(editor)) {
       return [];
     }
 
@@ -511,6 +512,11 @@ function isProjectScopedOpenEditor(openDocument: OpenDocument): boolean {
 
   // #573: a glossary Description tab belongs to the project's glossary, so
   // it closes with the project like a project document does.
+  // A built-in document belongs to no project: it survives project close.
+  if (editor.kind === "builtinMarkdown") {
+    return false;
+  }
+
   return (
     editor.kind === "glossaryDescription" ||
     editor.document.kind === "project"

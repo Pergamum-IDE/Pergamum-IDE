@@ -223,6 +223,7 @@ export const debugLogEditorIdKinds = [
   "projectDocument",
   "glossaryEntry",
   "glossaryDescription",
+  "builtinMarkdown",
   "unknown"
 ] as const;
 

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { renderMermaidPlaceholder } from "../../src/renderer/preview/mermaidPreviewPlaceholder";
 import {
@@ -188,5 +189,30 @@ describe("renderMermaidDiagramsInContainer (#564)", () => {
 
     expect(renderFn).not.toHaveBeenCalled();
     expect(container.innerHTML).toBe("<p>no diagrams here</p>");
+  });
+});
+
+describe("Mermaid tooltip suppression styles contract (#564 / #716)", () => {
+  const stylesSource = readFileSync("src/renderer/styles.css", "utf8");
+
+  function ruleBody(selector: string): string {
+    const selectorIndex = stylesSource.indexOf(`${selector} {`);
+    expect(selectorIndex).toBeGreaterThan(-1);
+    const closeIndex = stylesSource.indexOf("}", selectorIndex);
+    return stylesSource.slice(selectorIndex, closeIndex);
+  }
+
+  it("suppresses body-level Mermaid tooltip with display: none !important to prevent global window scrollbars", () => {
+    const tooltipRule = ruleBody("body > .mermaidTooltip");
+    expect(tooltipRule).toContain("display: none !important;");
+  });
+
+  it("does not apply overflow: hidden to body to sweep tooltip leaks under the rug", () => {
+    const bodyIndex = stylesSource.indexOf("body {");
+    if (bodyIndex !== -1) {
+      const closeIndex = stylesSource.indexOf("}", bodyIndex);
+      const bodyRule = stylesSource.slice(bodyIndex, closeIndex);
+      expect(bodyRule).not.toContain("overflow: hidden");
+    }
   });
 });

@@ -23,6 +23,7 @@
  * launch routing / UI reconstruction is a downstream Issue.
  */
 
+import { isBuiltinMarkdownId, type BuiltinMarkdownId } from "./builtinMarkdown";
 import { isUuidv7 } from "./uuidv7";
 import { restoreZoomFactor } from "./zoom";
 
@@ -111,7 +112,8 @@ export type SessionEditorKind =
   | "projectMarkdown"
   | "standaloneMarkdown"
   | "untitled"
-  | "glossaryDescription";
+  | "glossaryDescription"
+  | "builtinMarkdown";
 
 interface SessionEditorFields {
   /** 0-based tab position. Also kept explicit so a partially-valid list
@@ -158,11 +160,24 @@ export interface SessionGlossaryDescriptionEditor extends SessionEditorFields {
   readonly viewState: SessionEditorViewState | null;
 }
 
+/**
+ * A built-in read-only Markdown document (e.g. the Markdown Cheat Sheet). Only
+ * its built-in id is persisted — the text is regenerated from the built-in
+ * source on restore (never a file path, never content).
+ */
+export interface SessionBuiltinMarkdownEditor extends SessionEditorFields {
+  readonly kind: "builtinMarkdown";
+  readonly builtinId: BuiltinMarkdownId;
+  /** Always `null`; typed like the other editors so the union stays uniform. */
+  readonly viewState: SessionEditorViewState | null;
+}
+
 export type SessionEditor =
   | SessionProjectMarkdownEditor
   | SessionStandaloneMarkdownEditor
   | SessionUntitledEditor
-  | SessionGlossaryDescriptionEditor;
+  | SessionGlossaryDescriptionEditor
+  | SessionBuiltinMarkdownEditor;
 
 /**
  * Just enough to name which open editor was active — matched by identity
@@ -173,7 +188,8 @@ export type SessionEditorIdentity =
   | { readonly kind: "projectMarkdown"; readonly relativePath: string }
   | { readonly kind: "standaloneMarkdown"; readonly filePath: string }
   | { readonly kind: "untitled"; readonly untitledId: string }
-  | { readonly kind: "glossaryDescription"; readonly entryId: string };
+  | { readonly kind: "glossaryDescription"; readonly entryId: string }
+  | { readonly kind: "builtinMarkdown"; readonly builtinId: BuiltinMarkdownId };
 
 // ---------------------------------------------------------------------------
 // Project context
@@ -455,6 +471,16 @@ export function parseSessionEditor(value: unknown): SessionEditor | null {
             viewState: parseSessionEditorViewState(value.viewState)
           }
         : null;
+    case "builtinMarkdown":
+      // An unknown / future id drops just this entry.
+      return isBuiltinMarkdownId(value.builtinId)
+        ? {
+            kind: "builtinMarkdown",
+            order,
+            builtinId: value.builtinId,
+            viewState: null
+          }
+        : null;
     default:
       return null;
   }
@@ -472,6 +498,8 @@ export function sessionEditorIdentity(
       return { kind: "untitled", untitledId: editor.untitledId };
     case "glossaryDescription":
       return { kind: "glossaryDescription", entryId: editor.entryId };
+    case "builtinMarkdown":
+      return { kind: "builtinMarkdown", builtinId: editor.builtinId };
   }
 }
 
@@ -487,6 +515,8 @@ export function sessionEditorIdentityKey(
       return `untitled ${identity.untitledId}`;
     case "glossaryDescription":
       return `glossaryDescription ${identity.entryId}`;
+    case "builtinMarkdown":
+      return `builtinMarkdown ${identity.builtinId}`;
   }
 }
 
@@ -520,6 +550,10 @@ export function parseSessionEditorIdentity(
     case "glossaryDescription":
       return isIdentityString(value.entryId)
         ? { kind: "glossaryDescription", entryId: value.entryId }
+        : null;
+    case "builtinMarkdown":
+      return isBuiltinMarkdownId(value.builtinId)
+        ? { kind: "builtinMarkdown", builtinId: value.builtinId }
         : null;
     default:
       return null;

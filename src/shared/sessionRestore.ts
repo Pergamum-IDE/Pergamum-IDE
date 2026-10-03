@@ -211,6 +211,7 @@ export function fallbackFilenameForSessionEditor(
       return basename(editor.filePath);
     case "untitled":
     case "glossaryDescription":
+    case "builtinMarkdown":
       return null;
   }
 }

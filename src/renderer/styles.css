@@ -8580,6 +8580,19 @@ label.settingsItemHeader {
   background-color: var(--pg-color-preview-syntax-deletion-background);
 }
 
+/*
+ * Mermaid generates an empty `.mermaidTooltip` directly under `document.body`
+ * even when interaction is disabled (securityLevel: "strict", htmlLabels: false).
+ * This tooltip box extends the document scrollHeight and creates an unwanted
+ * window-level vertical scrollbar across the entire application. Pergamum does
+ * not currently support Mermaid tooltips or interactions, so we suppress this
+ * body-level tooltip. Re-evaluate this rule if formal support for Mermaid
+ * tooltips/interactions is introduced in the future.
+ */
+body > .mermaidTooltip {
+  display: none !important;
+}
+
 /* #564: Mermaid diagram blocks — Markdown horizontal preview only. No theme
    settings in this issue; this is layout/scoping only. */
 .preview .markdownMermaidBlock {

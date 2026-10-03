@@ -38,6 +38,8 @@ function editorLabel(editorId: EditorId): string {
       return `file-${editorId.path}`;
     case "glossaryDescription":
       return `glossaryDescription-${editorId.entryId}`;
+    case "builtinMarkdown":
+      return `builtinMarkdown-${editorId.builtinId}`;
   }
 }
 

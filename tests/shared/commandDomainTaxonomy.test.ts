@@ -46,6 +46,7 @@ function buildCoreCommandRegistry(): CommandRegistry {
     {
       openAbout: () => undefined,
       openUsageTour: () => undefined,
+      openMarkdownCheatSheet: () => undefined,
       quitApplication: () => undefined,
       createProject: () => undefined,
       openProject: () => undefined,
@@ -61,6 +62,8 @@ function buildCoreCommandRegistry(): CommandRegistry {
         "Show Pergamum version, license, and repository information.",
       openUsageTour: "Usage Tour",
       openUsageTourDescription: "Show the usage tour.",
+      openMarkdownCheatSheet: "Markdown Cheat Sheet",
+      openMarkdownCheatSheetDescription: "",
       quitApplication: "Quit Pergamum",
       quitApplicationDescription: "Quit Pergamum",
       createProject: "Create Project",
