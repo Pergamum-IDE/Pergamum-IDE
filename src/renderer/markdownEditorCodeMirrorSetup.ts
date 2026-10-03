@@ -59,7 +59,6 @@ import {
 import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
 import {
   bracketMatching,
-  defaultHighlightStyle,
   foldGutter,
   foldKeymap,
   indentOnInput,
@@ -71,6 +70,7 @@ import { lintKeymap } from "@codemirror/lint";
 import { EditorState, type Extension } from "@codemirror/state";
 import { createEditorThemeExtension } from "./editorThemeExtension";
 import { createJapaneseLintExtension } from "./japaneseLint/japaneseLintGutterExtension";
+import { markdownSyntaxHighlightStyle } from "./markdownSyntaxHighlightStyle";
 import {
   EDITOR_INDENT_COMMAND_IDS,
   fencedCodeIndentUnitFacet
@@ -158,7 +158,8 @@ export function createMarkdownEditorBaseSetup(
     dropCursor(),
     EditorState.allowMultipleSelections.of(true),
     indentOnInput(),
-    syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+    // #701: theme-aware Markdown syntax colors (no light-only default style).
+    syntaxHighlighting(markdownSyntaxHighlightStyle),
     bracketMatching(),
     closeBrackets(),
     rectangularSelection(),
