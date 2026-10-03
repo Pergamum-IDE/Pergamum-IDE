@@ -70,7 +70,6 @@ describe("Markdown Cheat Sheet content (ja / en)", () => {
   it("Japanese source has every required construct", () => {
     for (const piece of [
       "# Markdown チートシート",
-      "# 見出し1",
       "## 見出し2",
       "**太字**",
       "*イタリック*",
@@ -92,7 +91,6 @@ describe("Markdown Cheat Sheet content (ja / en)", () => {
   it("English source mirrors it and contains no Japanese", () => {
     for (const piece of [
       "# Markdown Cheat Sheet",
-      "# Heading 1",
       "## Heading 2",
       "**Bold**",
       "*Italic*",

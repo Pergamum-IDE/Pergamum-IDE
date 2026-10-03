@@ -685,12 +685,17 @@ describe("FileExplorer context-menu Move — result handling (#327)", () => {
       dirtyProjectDocumentRelativePaths: []
     });
     // The subtree's registered documents are relocated for the open editor.
-    expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith([
-      {
-        oldRelativePath: "Drafts/draft-01.md",
-        newRelativePath: "Archive/Drafts/draft-01.md"
-      }
-    ]);
+    // (#image-viewer: the moved folder is reported too, so open image tabs
+    // inside it can follow.)
+    expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith(
+      [
+        {
+          oldRelativePath: "Drafts/draft-01.md",
+          newRelativePath: "Archive/Drafts/draft-01.md"
+        }
+      ],
+      [{ from: "Drafts", to: "Archive/Drafts" }]
+    );
     // Old location + new location both refreshed; selection leaves the old path.
     expect(harness.listCalls).toContain("Archive");
     expect(harness.listCalls).toContain("Archive/Drafts");

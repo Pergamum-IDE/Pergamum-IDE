@@ -24,6 +24,7 @@
  */
 
 import { isBuiltinMarkdownId, type BuiltinMarkdownId } from "./builtinMarkdown";
+import { isSpecialTabId, type SpecialTabId } from "./specialTab";
 import { isUuidv7 } from "./uuidv7";
 import { restoreZoomFactor } from "./zoom";
 
@@ -113,7 +114,9 @@ export type SessionEditorKind =
   | "standaloneMarkdown"
   | "untitled"
   | "glossaryDescription"
-  | "builtinMarkdown";
+  | "builtinMarkdown"
+  | "projectImage"
+  | "specialTab";
 
 interface SessionEditorFields {
   /** 0-based tab position. Also kept explicit so a partially-valid list
@@ -172,12 +175,41 @@ export interface SessionBuiltinMarkdownEditor extends SessionEditorFields {
   readonly viewState: SessionEditorViewState | null;
 }
 
+/**
+ * A project image viewer tab. Only the project-relative path is persisted;
+ * the image itself is re-validated and re-read through the project-local
+ * image protocol on restore. No View State (nothing to restore).
+ */
+export interface SessionProjectImageEditor extends SessionEditorFields {
+  readonly kind: "projectImage";
+  /** Reopen locator AND resource identity within the project root. */
+  readonly relativePath: string;
+  /** Always `null` when written: an image has no text selection / scroll
+   *  to restore. Typed like the other editors so the union stays uniform. */
+  readonly viewState: SessionEditorViewState | null;
+}
+
+/**
+ * A special (non-document) workspace tab, e.g. Application Settings. Only its
+ * identity is persisted — `order` is its position among ALL tabs (documents,
+ * images and special tabs interleaved), so a mixed tab order survives a
+ * restart. Never any internal view state.
+ */
+export interface SessionSpecialTabEditor extends SessionEditorFields {
+  readonly kind: "specialTab";
+  readonly tabId: SpecialTabId;
+  /** Always `null`; typed like the other editors so the union stays uniform. */
+  readonly viewState: SessionEditorViewState | null;
+}
+
 export type SessionEditor =
   | SessionProjectMarkdownEditor
   | SessionStandaloneMarkdownEditor
   | SessionUntitledEditor
   | SessionGlossaryDescriptionEditor
-  | SessionBuiltinMarkdownEditor;
+  | SessionBuiltinMarkdownEditor
+  | SessionProjectImageEditor
+  | SessionSpecialTabEditor;
 
 /**
  * Just enough to name which open editor was active — matched by identity
@@ -189,7 +221,9 @@ export type SessionEditorIdentity =
   | { readonly kind: "standaloneMarkdown"; readonly filePath: string }
   | { readonly kind: "untitled"; readonly untitledId: string }
   | { readonly kind: "glossaryDescription"; readonly entryId: string }
-  | { readonly kind: "builtinMarkdown"; readonly builtinId: BuiltinMarkdownId };
+  | { readonly kind: "builtinMarkdown"; readonly builtinId: BuiltinMarkdownId }
+  | { readonly kind: "projectImage"; readonly relativePath: string }
+  | { readonly kind: "specialTab"; readonly tabId: SpecialTabId };
 
 // ---------------------------------------------------------------------------
 // Project context
@@ -481,6 +515,20 @@ export function parseSessionEditor(value: unknown): SessionEditor | null {
             viewState: null
           }
         : null;
+    case "projectImage":
+      return isIdentityString(value.relativePath)
+        ? {
+            kind: "projectImage",
+            order,
+            relativePath: value.relativePath,
+            viewState: null
+          }
+        : null;
+    case "specialTab":
+      // An unknown / future / corrupted id drops just this entry.
+      return isSpecialTabId(value.tabId)
+        ? { kind: "specialTab", order, tabId: value.tabId, viewState: null }
+        : null;
     default:
       return null;
   }
@@ -500,6 +548,10 @@ export function sessionEditorIdentity(
       return { kind: "glossaryDescription", entryId: editor.entryId };
     case "builtinMarkdown":
       return { kind: "builtinMarkdown", builtinId: editor.builtinId };
+    case "projectImage":
+      return { kind: "projectImage", relativePath: editor.relativePath };
+    case "specialTab":
+      return { kind: "specialTab", tabId: editor.tabId };
   }
 }
 
@@ -517,6 +569,10 @@ export function sessionEditorIdentityKey(
       return `glossaryDescription ${identity.entryId}`;
     case "builtinMarkdown":
       return `builtinMarkdown ${identity.builtinId}`;
+    case "projectImage":
+      return `projectImage ${identity.relativePath}`;
+    case "specialTab":
+      return `specialTab ${identity.tabId}`;
   }
 }
 
@@ -554,6 +610,14 @@ export function parseSessionEditorIdentity(
     case "builtinMarkdown":
       return isBuiltinMarkdownId(value.builtinId)
         ? { kind: "builtinMarkdown", builtinId: value.builtinId }
+        : null;
+    case "projectImage":
+      return isIdentityString(value.relativePath)
+        ? { kind: "projectImage", relativePath: value.relativePath }
+        : null;
+    case "specialTab":
+      return isSpecialTabId(value.tabId)
+        ? { kind: "specialTab", tabId: value.tabId }
         : null;
     default:
       return null;

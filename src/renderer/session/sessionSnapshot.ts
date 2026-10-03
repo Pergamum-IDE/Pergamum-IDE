@@ -28,9 +28,16 @@ import type { CurrentEditor } from "../currentEditor";
 import { glossaryEntryDraftIsNew } from "../glossaryEntryDraft";
 import {
   activeOpenDocument,
+  findOpenDocument,
+  type OpenDocument,
   type OpenDocumentsState
 } from "../openDocuments";
 import type { PergamumProject } from "../../shared/api";
+import {
+  isSessionRestorableSpecialTab,
+  specialTabRequiresProject
+} from "../../shared/specialTab";
+import type { WorkspaceTabId } from "../workspaceTabs";
 
 /**
  * One open editor, reduced to what the Session needs, plus the key its
@@ -95,6 +102,21 @@ function sessionEditorFromOpenEditor(
     };
   }
 
+  // A project image viewer tab is recorded by its project-relative path only
+  // (no content, no #273 View State — there is no text selection / scroll to
+  // restore). Restore re-checks the file and reopens it as an image tab.
+  if (editor.kind === "projectImage") {
+    return {
+      editor: {
+        kind: "projectImage",
+        order,
+        relativePath: editor.relativePath,
+        viewState: null
+      },
+      viewStateKey: null
+    };
+  }
+
   switch (editor.document.kind) {
     case "project":
       return {
@@ -133,6 +155,18 @@ function sessionEditorFromOpenEditor(
 }
 
 /**
+ * The workspace tab bar as the user sees it (documents, images and special
+ * tabs interleaved), so the Session can record the mixed order and which
+ * special tab — if any — was active. Omitted ⟹ documents only (legacy shape).
+ */
+export interface SessionWorkspaceTabs {
+  /** Every open tab, in visible order. */
+  readonly tabIds: readonly WorkspaceTabId[];
+  /** The active tab (document or special). */
+  readonly activeTabId: WorkspaceTabId | undefined;
+}
+
+/**
  * Build the (view-state-free) snapshot inputs from renderer state. Cheap
  * enough to call on every render — no serialization, no hashing.
  */
@@ -140,13 +174,15 @@ export function buildSessionSnapshotInputs(
   sessionId: string,
   project: PergamumProject | null,
   openDocumentsState: OpenDocumentsState,
-  previewVisible: boolean
+  previewVisible: boolean,
+  workspaceTabs?: SessionWorkspaceTabs
 ): SessionSnapshotInputs {
   const active = activeOpenDocument(openDocumentsState);
   const editors: SessionEditorInput[] = [];
-  let activeEditor: SessionEditorIdentity | null = null;
+  let activeDocumentIdentity: SessionEditorIdentity | null = null;
+  let activeSpecialIdentity: SessionEditorIdentity | null = null;
 
-  openDocumentsState.documents.forEach((openDocument) => {
+  const pushDocument = (openDocument: OpenDocument): void => {
     const editorInput = sessionEditorFromOpenEditor(
       openDocument.id,
       openDocument.editor,
@@ -160,9 +196,66 @@ export function buildSessionSnapshotInputs(
     editors.push(editorInput);
 
     if (active && editorIdEquals(openDocument.id, active.id)) {
-      activeEditor = sessionEditorIdentity(editorInput.editor);
+      activeDocumentIdentity = sessionEditorIdentity(editorInput.editor);
     }
-  });
+  };
+
+  if (!workspaceTabs) {
+    openDocumentsState.documents.forEach(pushDocument);
+  } else {
+    const pushed = new Set<OpenDocument>();
+
+    for (const tabId of workspaceTabs.tabIds) {
+      if (tabId.kind === "document") {
+        const openDocument = findOpenDocument(
+          openDocumentsState,
+          tabId.editorId
+        );
+
+        if (openDocument && !pushed.has(openDocument)) {
+          pushed.add(openDocument);
+          pushDocument(openDocument);
+        }
+
+        continue;
+      }
+
+      // Special tab: only a restorable one (never Debug Log), and a
+      // Project-dependent one only while a Project is open.
+      if (
+        !isSessionRestorableSpecialTab(tabId.id) ||
+        (specialTabRequiresProject(tabId.id) && project === null)
+      ) {
+        continue;
+      }
+
+      const editor: SessionEditor = {
+        kind: "specialTab",
+        order: editors.length,
+        tabId: tabId.id,
+        viewState: null
+      };
+
+      editors.push({ editor, viewStateKey: null });
+
+      if (workspaceTabs.activeTabId?.kind === "special" && workspaceTabs.activeTabId.id === tabId.id) {
+        activeSpecialIdentity = sessionEditorIdentity(editor);
+      }
+    }
+
+    // Safety net: a document not (yet) in `tabIds` is still recorded.
+    for (const openDocument of openDocumentsState.documents) {
+      if (!pushed.has(openDocument)) {
+        pushDocument(openDocument);
+      }
+    }
+  }
+
+  // A restorable active special tab wins; otherwise (a document, or a special
+  // tab that is not restored such as Debug Log) the active document is the
+  // saved active identity, exactly as before special tabs were recorded.
+  const activeEditor: SessionEditorIdentity | null =
+    activeSpecialIdentity ?? activeDocumentIdentity;
 
   return {
     sessionId,
@@ -188,7 +281,8 @@ export function buildRendererSessionSnapshot(
 ): RendererSessionSnapshot {
   const editors: SessionEditor[] = inputs.editors.map(
     ({ editor, viewStateKey }) => {
-      if (viewStateKey === null) {
+      // An image viewer tab never carries View State.
+      if (viewStateKey === null || editor.kind === "projectImage") {
         return editor;
       }
 

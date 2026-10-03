@@ -117,6 +117,7 @@ function harness(
     readProjectDocumentContent: vi.fn(() => Promise.resolve("body\n")),
     readMarkdownFile: vi.fn(() => Promise.resolve(MD_FILE)),
     registerProjectDocumentPath: vi.fn(() => Promise.resolve(null)),
+    isProjectImageAvailable: vi.fn(() => Promise.resolve(true)),
     getGlossaryEntryById: vi.fn(() => Promise.resolve(null)),
     applyRestoredEnvironment: (env) => {
       // record the adoption order relative to apply
@@ -798,6 +799,279 @@ describe("runColdStartRestore — built-in Markdown Cheat Sheet", () => {
 
     const h = harness(okPayload([record({ editors: [sm("/w/x/a.md", 0)] })]));
     await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].openDocuments.documents).toHaveLength(1);
+  });
+});
+
+describe("runColdStartRestore — project image viewer tabs", () => {
+  function img(relativePath: string, order: number): SessionEditor {
+    return { kind: "projectImage", order, relativePath, viewState: null };
+  }
+
+  it("restores an image tab as an image viewer (never as a text document), in order, and keeps it active", async () => {
+    const isProjectImageAvailable = vi.fn(() => Promise.resolve(true));
+    const readProjectDocumentContent = vi.fn(() => Promise.resolve("body"));
+    const h = harness(
+      okPayload([
+        record({
+          projectContext: withProject,
+          editors: [pm("chapters/one.md", 0), img("art/map.png", 1)],
+          activeEditor: { kind: "projectImage", relativePath: "art/map.png" }
+        })
+      ]),
+      { isProjectImageAvailable, readProjectDocumentContent }
+    );
+    await runColdStartRestore(h.deps);
+
+    const docs = h.applied[0].openDocuments.documents;
+    expect(docs.map((doc) => doc.editor.kind)).toEqual(["markdown", "projectImage"]);
+    expect(docs[1].editor).toMatchObject({
+      kind: "projectImage",
+      relativePath: "art/map.png",
+      name: "map.png"
+    });
+    expect(h.applied[0].openDocuments.activeDocumentId).toEqual(docs[1].id);
+    expect(isProjectImageAvailable).toHaveBeenCalledWith("art/map.png");
+    // The image is never read as a text document.
+    expect(readProjectDocumentContent).toHaveBeenCalledTimes(1);
+    expect(readProjectDocumentContent).toHaveBeenCalledWith("chapters/one.md");
+  });
+
+  it("skips a missing image like a missing document: notice, no tab, others restored", async () => {
+    const h = harness(
+      okPayload([
+        record({
+          projectContext: withProject,
+          editors: [pm("chapters/one.md", 0), img("art/gone.png", 1)]
+        })
+      ]),
+      { isProjectImageAvailable: () => Promise.resolve(false) }
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.skipped).toEqual(["gone.png"]);
+    expect(h.applied[0].openDocuments.documents.map((doc) => doc.editor.kind)).toEqual([
+      "markdown"
+    ]);
+  });
+
+  it("treats a failing availability check as missing", async () => {
+    const h = harness(
+      okPayload([
+        record({ projectContext: withProject, editors: [img("art/x.png", 0)] })
+      ]),
+      { isProjectImageAvailable: () => Promise.reject(new Error("ipc")) }
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.skipped).toEqual(["x.png"]);
+    expect(h.applied[0].openDocuments.documents).toEqual([]);
+  });
+
+  it("does not restore an image tab without its project", async () => {
+    const isProjectImageAvailable = vi.fn(() => Promise.resolve(true));
+    const h = harness(
+      okPayload([record({ editors: [img("art/map.png", 0)] })]),
+      { isProjectImageAvailable }
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(isProjectImageAvailable).not.toHaveBeenCalled();
+    expect(h.applied[0].openDocuments.documents).toEqual([]);
+  });
+});
+
+describe("runColdStartRestore — special tabs", () => {
+  function st(tabId: string, order: number): SessionEditor {
+    return { kind: "specialTab", order, tabId, viewState: null } as SessionEditor;
+  }
+  function img(relativePath: string, order: number): SessionEditor {
+    return { kind: "projectImage", order, relativePath, viewState: null };
+  }
+  const orderKeys = (env: RestoredEnvironment): string[] =>
+    env.workspaceTabOrder.map((id) =>
+      id.kind === "special" ? `special:${id.id}` : `doc:${id.editorId.kind}`
+    );
+
+  it("restores Application Settings with no project (project-independent)", async () => {
+    const h = harness(okPayload([record({ editors: [st("settings", 0)] })]));
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].project).toBeNull();
+    expect(h.applied[0].specialTabs).toEqual(["settings"]);
+    expect(h.applied[0].activeSpecialTabId).toBe("settings");
+    expect(h.applied[0].openDocuments.documents).toEqual([]);
+    expect(h.finished).toEqual([true]);
+  });
+
+  it("restores Project Settings after a successful project restore", async () => {
+    const h = harness(
+      okPayload([
+        record({
+          projectContext: withProject,
+          editors: [pm("chapters/one.md", 0), st("projectSettings", 1)],
+          activeEditor: { kind: "specialTab", tabId: "projectSettings" }
+        })
+      ])
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].specialTabs).toEqual(["projectSettings"]);
+    expect(h.applied[0].activeSpecialTabId).toBe("projectSettings");
+    expect(h.applied[0].openDocuments.documents).toHaveLength(1);
+  });
+
+  it("skips project-dependent tabs when the project could not be restored, keeping project-independent ones", async () => {
+    const h = harness(
+      okPayload([
+        record({
+          projectContext: withProject,
+          editors: [
+            st("projectSettings", 0),
+            st("glossaryTagManager", 1),
+            st("settings", 2)
+          ]
+        })
+      ]),
+      {
+        openProjectByFilePath: () =>
+          Promise.resolve({ kind: "identityMismatch" } as const)
+      }
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].specialTabs).toEqual(["settings"]);
+    expect(orderKeys(h.applied[0])).toEqual(["special:settings"]);
+  });
+
+  it("skips project-dependent tabs when the session had no project", async () => {
+    const h = harness(
+      okPayload([record({ editors: [st("projectSettings", 0), st("resumeHub", 1)] })])
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].specialTabs).toEqual([]);
+    expect(h.applied[0].activeSpecialTabId).toBeNull();
+  });
+
+  it("never restores Debug Log, even if a session contains it", async () => {
+    const h = harness(
+      okPayload([
+        record({
+          editors: [sm("/w/x/a.md", 0), st("debugLog", 1), st("settings", 2)],
+          activeEditor: { kind: "specialTab", tabId: "debugLog" }
+        })
+      ])
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].specialTabs).toEqual(["settings"]);
+    expect(orderKeys(h.applied[0])).toEqual(["doc:file", "special:settings"]);
+    // Active fallback is the existing one: a restored document, no invalid id.
+    expect(h.applied[0].activeSpecialTabId).toBeNull();
+    expect(h.applied[0].openDocuments.activeDocumentId).toEqual(
+      h.applied[0].openDocuments.documents[0].id
+    );
+  });
+
+  it("falls back to the first restored special tab when Debug Log was the only saved tab with others special", async () => {
+    const h = harness(
+      okPayload([
+        record({
+          editors: [st("debugLog", 0), st("keyboardShortcuts", 1)],
+          activeEditor: { kind: "specialTab", tabId: "debugLog" }
+        })
+      ])
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].specialTabs).toEqual(["keyboardShortcuts"]);
+    expect(h.applied[0].activeSpecialTabId).toBe("keyboardShortcuts");
+  });
+
+  it("restores the mixed order (document, special, image, special, txt) and the active special tab", async () => {
+    const h = harness(
+      okPayload([
+        record({
+          projectContext: withProject,
+          editors: [
+            pm("chapters/one.md", 0),
+            st("settings", 1),
+            img("art/map.png", 2),
+            st("projectSettings", 3),
+            pm("notes.txt", 4)
+          ],
+          activeEditor: { kind: "specialTab", tabId: "settings" }
+        })
+      ]),
+      // notes.txt is not in the project snapshot: registered on restore.
+      { registerProjectDocumentPath: () => Promise.resolve("notes.txt") }
+    );
+    await runColdStartRestore(h.deps);
+
+    const env = h.applied[0];
+    expect(orderKeys(env)).toEqual([
+      "doc:projectDocument",
+      "special:settings",
+      "doc:projectDocument",
+      "special:projectSettings",
+      "doc:projectDocument"
+    ]);
+    expect(env.openDocuments.documents.map((entry) => entry.editor.kind)).toEqual([
+      "markdown",
+      "projectImage",
+      "markdown"
+    ]);
+    expect(env.specialTabs).toEqual(["settings", "projectSettings"]);
+    expect(env.activeSpecialTabId).toBe("settings");
+  });
+
+  it("does not duplicate a special tab listed twice", async () => {
+    const h = harness(
+      okPayload([record({ editors: [st("settings", 0), st("settings", 1)] })])
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].specialTabs).toEqual(["settings"]);
+    expect(orderKeys(h.applied[0])).toEqual(["special:settings"]);
+  });
+
+  it("skips an unknown special tab id and continues the startup", async () => {
+    const h = harness(
+      okPayload([
+        record({
+          editors: [
+            // A future / corrupted entry is dropped by the session parser.
+            ...[parseSessionEditor({ kind: "specialTab", order: 0, tabId: "futureTab" })].filter(
+              (entry): entry is SessionEditor => entry !== null
+            ),
+            sm("/w/x/a.md", 1)
+          ]
+        })
+      ])
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].specialTabs).toEqual([]);
+    expect(h.applied[0].openDocuments.documents).toHaveLength(1);
+    expect(h.finished).toEqual([true]);
+  });
+
+  it("restores a pre-special-tab session (documents only) unchanged", async () => {
+    const h = harness(
+      okPayload([
+        record({
+          projectContext: withProject,
+          editors: [pm("chapters/one.md", 0)],
+          activeEditor: { kind: "projectMarkdown", relativePath: "chapters/one.md" }
+        })
+      ])
+    );
+    await runColdStartRestore(h.deps);
+
+    expect(h.applied[0].specialTabs).toEqual([]);
+    expect(h.applied[0].activeSpecialTabId).toBeNull();
     expect(h.applied[0].openDocuments.documents).toHaveLength(1);
   });
 });

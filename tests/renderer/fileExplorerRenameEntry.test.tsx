@@ -434,13 +434,18 @@ describe("File Explorer Rename entry points (#362)", () => {
         "Renamed",
         []
       );
-      expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith([
-        { oldRelativePath: "Drafts/draft.md", newRelativePath: "Renamed/draft.md" },
-        {
-          oldRelativePath: "Drafts/sub/b.md",
-          newRelativePath: "Renamed/sub/b.md"
-        }
-      ]);
+      expect(harness.onProjectDocumentsMoved).toHaveBeenCalledWith(
+        [
+          { oldRelativePath: "Drafts/draft.md", newRelativePath: "Renamed/draft.md" },
+          {
+            oldRelativePath: "Drafts/sub/b.md",
+            newRelativePath: "Renamed/sub/b.md"
+          }
+        ],
+        // The renamed folder is reported too, so open image viewer tabs inside
+        // it can follow.
+        [{ from: "Drafts", to: "Renamed" }]
+      );
       expect(harness.onProjectDocumentRenamed).not.toHaveBeenCalled();
       // the parent directory of the renamed folder is refreshed
       expect(harness.listFileExplorerChildren).toHaveBeenCalledWith(null);

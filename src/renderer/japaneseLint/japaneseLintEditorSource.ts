@@ -37,8 +37,11 @@ export function resolveJapaneseLintEditorSource(
     return glossaryDescriptionJapaneseLintSource;
   }
 
-  // A built-in read-only document is not the user's manuscript.
-  if (currentEditor.kind === "builtinMarkdown") {
+  // Built-in read-only documents are not the user's manuscript; image tabs have no text.
+  if (
+    currentEditor.kind === "builtinMarkdown" ||
+    currentEditor.kind === "projectImage"
+  ) {
     return null;
   }
 

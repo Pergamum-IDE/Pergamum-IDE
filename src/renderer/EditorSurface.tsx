@@ -36,8 +36,11 @@ import type { BuiltInThemeKind } from "../shared/colorTheme";
 import type { Translate } from "../shared/i18n";
 import {
   markdownDocumentForEditor,
-  type CurrentEditor
+  type CurrentEditor,
+  type GlossaryDescriptionCurrentEditor,
+  type MarkdownCurrentEditor
 } from "./currentEditor";
+import { ImageViewerSurface } from "./ImageViewerSurface";
 import { GlossaryDescriptionMetadataPanel } from "./GlossaryDescriptionMetadataPanel";
 import { USAGE_TOUR_TARGETS } from "./usageTour/usageTourTypes";
 import type { GlossaryEntryDraft } from "./glossaryEntryDraft";
@@ -713,7 +716,36 @@ interface EditorSurfaceProps {
   }) => void;
 }
 
-export function EditorSurface({
+/**
+ * An image viewer tab has no text document at all, so it is routed to its own
+ * read-only surface before any Markdown / glossary editor machinery (preview
+ * render, linters, Find, CodeMirror) is set up. Switching between a text tab
+ * and an image tab therefore swaps surfaces, like any other tab switch.
+ */
+export function EditorSurface(props: EditorSurfaceProps): JSX.Element {
+  const isNarrow = useIsNarrowMarkdownWorkspace();
+  const { editor } = props;
+
+  if (editor.kind === "projectImage") {
+    return (
+      <ImageViewerSurface
+        relativePath={editor.relativePath}
+        name={editor.name}
+        translate={props.translate}
+        ratio={props.markdownEditorPreviewRatio}
+        isNarrow={isNarrow}
+      />
+    );
+  }
+
+  return <TextEditorSurface {...props} editor={editor} />;
+}
+
+type TextEditorSurfaceProps = Omit<EditorSurfaceProps, "editor"> & {
+  editor: MarkdownCurrentEditor | GlossaryDescriptionCurrentEditor;
+};
+
+function TextEditorSurface({
   editor,
   glossaryDescriptionMetadata,
   builtinMarkdownText,
@@ -791,7 +823,7 @@ export function EditorSurface({
   onDocumentOpenPreviewFrameObserved,
   onViewportChanged,
   onPreviewScrollSyncEvent
-}: EditorSurfaceProps): JSX.Element {
+}: TextEditorSurfaceProps): JSX.Element {
   // #573 Slice 2: re-derived only when the document object itself changes
   // (the same cadence the surface's effects previously keyed on). Slice 3: a
   // glossary Description tab is re-derived when its editor (draft) changes.

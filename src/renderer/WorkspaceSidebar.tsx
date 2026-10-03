@@ -77,7 +77,8 @@ interface WorkspaceSidebarProps {
   /** #338: after a successful File Explorer Move, the old → new relocations
    *  for every moved file. The host follows open editor identity along these. */
   onFileExplorerProjectDocumentsMoved?: (
-    relocations: readonly ProjectDocumentPathRelocation[]
+    relocations: readonly ProjectDocumentPathRelocation[],
+    movedFolders?: readonly { readonly from: string; readonly to: string }[]
   ) => void;
   /** #413: pre-move confirmation for the project-local image links of every
    *  explicitly-selected Markdown document in a move (C1). #414 P0-2: also

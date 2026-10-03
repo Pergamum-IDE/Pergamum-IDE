@@ -699,7 +699,7 @@ describe("workspace navigation", () => {
     expect(onActivateDocument).not.toHaveBeenCalled();
   });
 
-  it("selects non-document asset files without using the Project document activation path", () => {
+  it("selects a supported image file and opens it in the read-only image viewer tab", () => {
     const onSelectEntry = vi.fn();
     const onActivateDocument = vi.fn();
     const element = FileExplorerView(fileExplorerViewProps({
@@ -721,7 +721,9 @@ describe("workspace navigation", () => {
     (onClick as () => void)();
 
     expect(onSelectEntry).toHaveBeenCalledWith("cover.png");
-    expect(onActivateDocument).not.toHaveBeenCalled();
+    // Images open an image viewer tab through the same activation callback;
+    // App routes a supported image path to a read-only viewer, not a document.
+    expect(onActivateDocument).toHaveBeenCalledWith("cover.png");
   });
 
   it("connects Project document activation to the shared openEditor path", () => {

@@ -56,6 +56,12 @@ export interface DocumentTab {
    * comparing raw paths against the project root (#152 dogfood follow-up).
    */
   isExternalMarkdownFile: boolean;
+  /**
+   * True for a read-only project image viewer tab. It keeps the project
+   * document EditorId (so reveal / rename / copy-path work) but has no
+   * document content to Save As / export / check.
+   */
+  isImageViewer?: boolean;
 }
 
 export interface ReplaceOpenDocumentResult {
@@ -238,8 +244,12 @@ export function getDirtyWorkingCopies(
   return state.documents.flatMap((openDocument): DirtyWorkingCopy[] => {
     const { editor } = openDocument;
 
-    // A built-in read-only document can never be dirty.
-    if (editor.kind === "builtinMarkdown" || !isCurrentEditorDirty(editor)) {
+    // Built-in documents and image viewer tabs are read-only.
+    if (
+      editor.kind === "builtinMarkdown" ||
+      editor.kind === "projectImage" ||
+      !isCurrentEditorDirty(editor)
+    ) {
       return [];
     }
 
@@ -276,7 +286,10 @@ export function documentTabs(state: OpenDocumentsState): DocumentTab[] {
     id: openDocument.id,
     title: currentEditorTitle(openDocument.editor),
     isDirty: isCurrentEditorDirty(openDocument.editor),
-    isExternalMarkdownFile: isExternalMarkdownFileEditor(openDocument.editor)
+    isExternalMarkdownFile: isExternalMarkdownFileEditor(openDocument.editor),
+    ...(openDocument.editor.kind === "projectImage"
+      ? { isImageViewer: true }
+      : {})
   }));
 }
 
@@ -517,10 +530,12 @@ function isProjectScopedOpenEditor(openDocument: OpenDocument): boolean {
     return false;
   }
 
-  return (
-    editor.kind === "glossaryDescription" ||
-    editor.document.kind === "project"
-  );
+  // An image tab is a project file, so it closes with the project too.
+  if (editor.kind === "projectImage" || editor.kind === "glossaryDescription") {
+    return true;
+  }
+
+  return markdownDocumentForEditor(editor)?.kind === "project";
 }
 
 export function removeProjectScopedOpenEditors(

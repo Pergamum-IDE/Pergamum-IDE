@@ -2422,6 +2422,8 @@ export const enTranslations = {
   "preview.mermaid.errorHint": "Check the diagram syntax.",
   "preview.mermaid.showDetails": "Show details",
   "preview.switchingRenderer": "Switching preview renderer…",
+  "imageViewer.editorNotice": "Image files cannot be edited.",
+  "imageViewer.loadFailed": "The image could not be displayed.",
   "workspace.editor": "Editor",
   "workspace.markdownEditor": "Markdown editor",
   "workspace.markdownPreview": "Markdown preview",
