@@ -173,10 +173,12 @@ describe("context menu shortcut mappings (#683 / #685)", () => {
 
   it("never hardcodes shortcut strings", () => {
     const source = readFileSync("src/renderer/contextMenuShortcuts.ts", "utf8");
+    const genericSource = readFileSync("src/renderer/commandShortcuts.ts", "utf8");
 
     expect(source).not.toMatch(/["'](Ctrl|Cmd|Mod|Alt|Shift)[-+]/);
-    expect(source).toContain("formatKeybindingLabel");
-    expect(source).toContain("getEffectiveKeybindingRows");
+    expect(genericSource).not.toMatch(/["'](Ctrl|Cmd|Mod|Alt|Shift)[-+]/);
+    expect(genericSource).toContain("formatKeybindingLabel");
+    expect(genericSource).toContain("getEffectiveKeybindingRows");
   });
 });
 

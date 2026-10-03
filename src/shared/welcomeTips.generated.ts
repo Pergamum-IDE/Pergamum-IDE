@@ -32,11 +32,6 @@ export interface WelcomeTip {
 export interface WelcomeTipsData {
   readonly schemaVersion: number;
   readonly source: string;
-  readonly modKeyPolicy: {
-    readonly token: string;
-    readonly windowsLinux: string;
-    readonly macOS: string;
-  };
   readonly iconPaths: Record<string, string>;
   readonly tips: readonly WelcomeTip[];
 }
@@ -44,11 +39,6 @@ export interface WelcomeTipsData {
 export const welcomeTipsData: WelcomeTipsData = {
   "schemaVersion": 1,
   "source": "pergamum_welcome_tips_filled_ja.xlsx",
-  "modKeyPolicy": {
-    "token": "Mod",
-    "windowsLinux": "Ctrl",
-    "macOS": "Command"
-  },
   "iconPaths": {
     "project": "assets/icons/codicons/tips/project.svg",
     "file": "assets/icons/codicons/tips/file.svg",
@@ -95,11 +85,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "まずはプロジェクトから",
-          "body": "Pergamum の作業はプロジェクト単位です。新しく始めるときは「プロジェクトを作成」、続きからなら {key:Mod+Shift+O} で開けます。"
+          "body": "Pergamum の作業はプロジェクト単位です。新しく始めるときは「プロジェクトを作成」、続きから始めるなら「プロジェクトを開く」から選択できます。"
         },
         "en": {
           "title": "Start with a project",
-          "body": "Pergamum work is organized by project. Create a new project when starting fresh, or open an existing one with {key:Mod+Shift+O}."
+          "body": "Pergamum work is organized by project. Create a new project when starting fresh, or select “Open Project” to continue existing work."
         }
       },
       "link": null,
@@ -137,11 +127,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "保存はこまめに",
-          "body": "現在の文書は {kb:editor.document.save} で保存できます。保存できる変更があるときだけ有効になります。"
+          "body": "現在の文書をこまめに保存しながら執筆を進められます。保存できる変更があるときだけ実行できます。"
         },
         "en": {
           "title": "Save often",
-          "body": "Save the current document with {kb:editor.document.save}. It is enabled only when there are changes that can be saved."
+          "body": "You can save the current document as you write. The save action is enabled only when there are unsaved changes."
         }
       },
       "link": null
@@ -157,11 +147,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "新しい本文ファイル",
-          "body": "新しいファイルは {kb:editor.file.new} で作成できます。小さく章や断片を分けておくと、あとで並べ替えや検索が楽になります。"
+          "body": "新しい本文ファイルを追加して執筆を進められます。小さく章や断片を分けておくと、あとで並べ替えや検索が楽になります。"
         },
         "en": {
           "title": "Create a new manuscript file",
-          "body": "Create a new file with {kb:editor.file.new}. Splitting chapters or fragments into smaller files makes rearranging and searching easier later."
+          "body": "You can add new manuscript files to organize your work. Splitting chapters or fragments into smaller files makes rearranging and searching easier later."
         }
       },
       "link": null
@@ -177,11 +167,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "まとめて保存",
-          "body": "複数のタブを編集しているときは {kb:editor.saveAll} でまとめて保存できます。"
+          "body": "複数のタブを並行して編集しているときは、未保存の文書をまとめて保存できます。"
         },
         "en": {
           "title": "Save everything",
-          "body": "When you have edited multiple tabs, use {kb:editor.saveAll} to save them together."
+          "body": "When you are editing across multiple tabs, you can save all modified documents together."
         }
       },
       "link": null,
@@ -198,11 +188,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "名前を付けて保存",
-          "body": "Markdown 文書は {kb:editor.saveAs} で別名保存できます。メニューの隠しアクセラレータとして {key:F12} も使えます。"
+          "body": "Markdown 文書は別の名前で保存できます。下書きを分岐したいときや、別ファイルとして残したいときに利用できます。"
         },
         "en": {
           "title": "Save as",
-          "body": "Markdown documents can be saved under another name with {kb:editor.saveAs}. The hidden menu accelerator {key:F12} is also available."
+          "body": "Markdown documents can be saved under a different name. Use this when you want to branch drafts or keep a separate file."
         }
       },
       "link": null
@@ -218,11 +208,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "設定を開く",
-          "body": "アプリケーション設定は {kb:workspace.applicationSettings.open} または {key:Mod+,} から開けます。プロジェクト固有の設定は「プロジェクト設定」から確認できます。"
+          "body": "アプリケーション設定はメニューやコマンドパレットからいつでも開けます。プロジェクト固有の設定は「プロジェクト設定」から確認できます。"
         },
         "en": {
           "title": "Open settings",
-          "body": "Open application settings with {kb:workspace.applicationSettings.open} or {key:Mod+,}. Project-specific settings can be checked from Project Settings."
+          "body": "You can open Application Settings from the menu or Command Palette. Project-specific settings can be checked from Project Settings."
         }
       },
       "link": null
@@ -280,11 +270,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "基本の文字装飾",
-          "body": "太字は {kb:editor.markdown.bold}、斜体は {kb:editor.markdown.italic}、打ち消し線は {kb:editor.markdown.strikethrough} で挿入できます。"
+          "body": "本文中に太字、斜体、打ち消し線などの基本的な文字装飾を挿入できます。書式ツールバーやMarkdown記法と合わせて活用できます。"
         },
         "en": {
           "title": "Basic text formatting",
-          "body": "Insert bold with {kb:editor.markdown.bold}, italic with {kb:editor.markdown.italic}, and strikethrough with {kb:editor.markdown.strikethrough}."
+          "body": "You can apply basic text formatting such as bold, italic, and strikethrough to your prose. Use the formatting toolbar or Markdown syntax."
         }
       },
       "link": null
@@ -300,11 +290,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "見出しを使う",
-          "body": "見出しは {kb:editor.markdown.heading} から挿入できます。章や節に見出しを付けると、見出しジャンプや文書マップが使いやすくなります。"
+          "body": "見出しを使って文章の構造を整理できます。章や節に見出しを付けておくと、見出しジャンプや文書マップによる全体把握がスムーズになります。"
         },
         "en": {
           "title": "Use headings",
-          "body": "Insert headings with {kb:editor.markdown.heading}. Adding headings to chapters and sections makes heading jump and the document map more useful."
+          "body": "You can structure your documents using headings. Adding headings to chapters and sections makes heading navigation and the document map more useful."
         }
       },
       "link": null
@@ -320,11 +310,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "ルビを振る",
-          "body": "ルビを振りたいテキストを選択して {kb:editor.markdown.insertRuby} を実行すると、ルビ挿入ダイアログを開けます。"
+          "body": "ルビを振りたいテキストを選択してメニューやツールバーから操作すると、親文字とルビを指定できるルビ挿入ダイアログを開けます。"
         },
         "en": {
           "title": "Add ruby text",
-          "body": "Select the text you want to annotate, then run {kb:editor.markdown.insertRuby} to open the ruby insertion dialog."
+          "body": "Select text and choose the ruby action to open a dialog where you can set base text and ruby readings."
         }
       },
       "link": null,
@@ -341,11 +331,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "傍点を振る",
-          "body": "傍点を振りたいテキストを選択して {kb:editor.markdown.insertEmphasisMark} を実行すると、傍点挿入ダイアログを開けます。"
+          "body": "強調したいテキストを選択して操作すると、傍点（圏点）の種類を選んで付与できる挿入ダイアログを開けます。"
         },
         "en": {
           "title": "Add emphasis marks",
-          "body": "Select the text you want to emphasize, then run {kb:editor.markdown.insertEmphasisMark} to open the emphasis mark dialog."
+          "body": "Select the text you want to emphasize to open a dialog where you can choose and apply emphasis dot marks."
         }
       },
       "link": null,
@@ -383,11 +373,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "インデントとアウトデント",
-          "body": "インデントは {kb:editor.indent}、アウトデントは {kb:editor.outdent} で実行できます。リストやテキストの階層を整えるときに使います。"
+          "body": "行のインデント（字下げ）やアウトデント（字上げ）を素早く行えます。リストやテキストの階層構造を整えるときに役立ちます。"
         },
         "en": {
           "title": "Indent and outdent",
-          "body": "Run {kb:editor.indent} to indent and {kb:editor.outdent} to outdent. Use them when arranging list or text hierarchy."
+          "body": "You can quickly indent and outdent lines. Use this to structure lists and organize text hierarchy."
         }
       },
       "link": null
@@ -403,11 +393,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "画像を挿入",
-          "body": "画像は {kb:editor.image.insert} で挿入できます。エクスポート時の扱いを安定させるため、画像はプロジェクト内に置くのがおすすめです。"
+          "body": "本文中に画像を挿入できます。エクスポートやプレビューの表示を安定させるため、画像ファイルはプロジェクト内に置くのがおすすめです。"
         },
         "en": {
           "title": "Insert images",
-          "body": "Insert images with {kb:editor.image.insert}. For stable export behavior, keep images inside the project."
+          "body": "You can insert images into your manuscript. For predictable preview and export behavior, keep image files inside the project."
         }
       },
       "link": null
@@ -423,11 +413,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "引用ブロックを挿入",
-          "body": "引用や作中資料を分けたいときは {kb:editor.markdown.insertBlockquote} で引用ブロックを挿入できます。"
+          "body": "手紙や作中資料、引用文などを地の文と区別したいときは、引用ブロックを使って見やすく整えられます。"
         },
         "en": {
           "title": "Insert a blockquote",
-          "body": "Use {kb:editor.markdown.insertBlockquote} to insert a blockquote when you want to separate quoted text or in-story documents."
+          "body": "Use blockquotes when you want to visually set off quoted text, in-universe letters, or reference materials from narrative prose."
         }
       },
       "link": null
@@ -443,11 +433,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "リンクを挿入",
-          "body": "リンクは {kb:editor.markdown.link} から挿入できます。外部資料へのリンクは、本文に必要な範囲だけ置くのがおすすめです。"
+          "body": "本文中にハイパーリンクを挿入できます。取材メモや外部資料への参照リンクは、必要な範囲に絞って配置すると執筆に集中しやすくなります。"
         },
         "en": {
           "title": "Insert links",
-          "body": "Insert links with {kb:editor.markdown.link}. For external references, include only the links that are useful to the manuscript."
+          "body": "You can insert hyperlinks into your documents. Keeping external reference links focused makes it easier to stay in flow while writing."
         }
       },
       "link": null
@@ -463,11 +453,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "表を挿入",
-          "body": "表は {kb:editor.markdown.insertTable} から挿入できます。行数はヘッダ行を除いた「本体行」として指定します。"
+          "body": "専用ダイアログから Markdown の表を挿入できます。行数はヘッダ行を除いた「本体行」として指定して作成します。"
         },
         "en": {
           "title": "Insert tables",
-          "body": "Insert tables with {kb:editor.markdown.insertTable}. Row count means body rows, excluding the header row."
+          "body": "You can insert Markdown tables using a dedicated dialog. Specify the row count as body rows, excluding the header row."
         }
       },
       "link": null
@@ -483,11 +473,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "Tab から抜ける",
-          "body": "Tab をエディタ入力に使う設定でも、{key:Escape→Tab} や {key:Ctrl+M} でフォーカス移動へ戻せます。アクセシビリティ用の脱出手段です。"
+          "body": "Tab キーをエディタ入力に使う設定でも、フォーカス移動へ戻るための脱出手段が用意されています。詳しい操作はキーボードショートカット画面で確認できます。"
         },
         "en": {
           "title": "Escape from Tab capture",
-          "body": "Even when Tab is used for editor input, {key:Escape→Tab} or {key:Ctrl+M} returns to focus navigation. This is an accessibility escape hatch."
+          "body": "Even when Tab is configured for editor input, Pergamum provides a way to return to focus navigation. You can check the current operation in Keyboard Shortcuts."
         }
       },
       "link": null
@@ -503,11 +493,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "区切り線を入れる",
-          "body": "場面の切り替えや区切りを入れたいときは {kb:editor.markdown.insertHorizontalRule} で水平線を挿入できます。"
+          "body": "場面の切り替えや幕間などの区切りを入れたいときは、水平線を挿入して視覚的なブレイクを作れます。"
         },
         "en": {
           "title": "Insert a divider",
-          "body": "Use {kb:editor.markdown.insertHorizontalRule} to insert a horizontal rule when you want to mark a scene break or separation."
+          "body": "You can insert a horizontal rule to mark scene transitions, intermissions, or visual breaks in your story."
         }
       },
       "link": null
@@ -523,11 +513,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "コードブロックを挿入",
-          "body": "コードや固定幅で見せたい断片は {kb:editor.markdown.insertCodeBlock} でコードブロックにできます。小説本文では必要な場面だけに使うと読みやすくなります。"
+          "body": "固定幅で見せたいテキストや引用断片は、コードブロックとして記述できます。小説本文では必要な場面に絞って活用できます。"
         },
         "en": {
           "title": "Insert a code block",
-          "body": "Use {kb:editor.markdown.insertCodeBlock} for code or fragments that should appear in fixed-width text. In prose, use it only where it helps readability."
+          "body": "You can format text in code blocks when you want monospace fragments or technical excerpts. In prose, use them where they best serve readability."
         }
       },
       "link": null
@@ -543,11 +533,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "コマンドパレット",
-          "body": "操作に迷ったら {kb:workbench.commandPalette.open} でコマンドパレットを開けます。登録済みの操作を名前で検索できます。"
+          "body": "コマンドパレットでは、登録済みの操作を名前で検索できます。メニューやボタンの場所に迷ったときにも便利です。"
         },
         "en": {
           "title": "Command Palette",
-          "body": "When you are not sure where an action is, open the Command Palette with {kb:workbench.commandPalette.open}. You can search registered actions by name."
+          "body": "In the Command Palette, you can search all registered actions by name. It is a quick way to find features when you are unsure where they live."
         }
       },
       "link": null,
@@ -564,11 +554,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "ファイルをすばやく開く",
-          "body": "プロジェクト内の文書を探すときは {key:Mod+O} を使います。通常の「ファイルを開く」とは別に、プロジェクト内検索に最適化されています。"
+          "body": "クイックオープン機能を使うと、プロジェクト内の文書をファイル名で素早く検索して開けます。ファイル数が増えたときに重宝します。"
         },
         "en": {
           "title": "Open files quickly",
-          "body": "Use {key:Mod+O} to find documents inside the project. This is optimized for project file search, separate from the normal file open action."
+          "body": "Quick Open lets you search and jump to documents inside the project by name. It is especially handy as your manuscript grows."
         }
       },
       "link": null
@@ -584,11 +574,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "見出しへジャンプ",
-          "body": "Markdown 文書内の見出しへ移動したいときは {key:Mod+#} を使います。章や節を見出しで分けておくと効果的です。"
+          "body": "見出しジャンプ機能を使うと、文書内の章や節の一覧から目的の見出しへ素早く移動できます。長編の執筆で特に役立ちます。"
         },
         "en": {
           "title": "Jump to headings",
-          "body": "Use {key:Mod+#} to move to headings in a Markdown document. It works best when chapters and sections are divided with headings."
+          "body": "Heading Jump lets you navigate directly to chapters and sections across your document. It is especially useful when writing longer stories."
         }
       },
       "link": null
@@ -604,11 +594,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "語彙へジャンプ",
-          "body": "語彙項目へ移動したいときは {key:Mod+@} を使います。名前や用語を管理しているプロジェクトで便利です。"
+          "body": "語彙ジャンプ機能を使うと、登録された登場人物や設定用語を検索してすぐに確認できます。執筆中に設定を確かめたいときに便利です。"
         },
         "en": {
           "title": "Jump to glossary entries",
-          "body": "Use {key:Mod+@} to move to glossary entries. It is useful in projects that manage character names, places, or special terms."
+          "body": "Glossary Jump lets you quickly search and jump to registered characters or worldbuilding terms while writing."
         }
       },
       "link": null
@@ -624,11 +614,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "File Explorer を表示",
-          "body": "ファイル一覧は {kb:workspace.files.toggle} で表示を切り替えられます。プロジェクト内の構成を確認したいときに使います。"
+          "body": "File Explorer では、プロジェクト内のファイル構成を確認したり、文書を切り替えたりできます。サイドバーからいつでも表示できます。"
         },
         "en": {
           "title": "Show File Explorer",
-          "body": "Toggle the file list with {kb:workspace.files.toggle}. Use it when you want to check the project structure."
+          "body": "In the File Explorer, you can browse your project’s file hierarchy and switch documents from the sidebar at any time."
         }
       },
       "link": null
@@ -644,11 +634,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "語彙集を表示",
-          "body": "語彙集は {kb:workspace.glossary.focus} で表示できます。登場人物や地名、独自用語をまとめる場所です。"
+          "body": "語彙集サイドバーでは、登場人物や地名、作中の独自用語を一覧管理できます。執筆中の設定参照に役立ちます。"
         },
         "en": {
           "title": "Show the glossary",
-          "body": "Show the glossary with {kb:workspace.glossary.focus}. It is the place to collect characters, places, and custom terms."
+          "body": "The Glossary sidebar lets you organize characters, places, and in-universe terms in one place for quick reference while writing."
         }
       },
       "link": null
@@ -664,11 +654,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "文書マップを表示",
-          "body": "文書マップは {kb:workspace.documentMap.focus} で表示できます。見出しや語彙の出現を俯瞰したいときに便利です。"
+          "body": "文書マップでは、文書内の見出し構成や登場人物・語彙の出現分布を俯瞰できます。物語の流れや展開の偏りを確認できます。"
         },
         "en": {
           "title": "Show the document map",
-          "body": "Show the document map with {kb:workspace.documentMap.focus}. It helps you overview headings and glossary occurrences."
+          "body": "The Document Map provides a visual overview of heading structure and glossary occurrences to help you analyze story pacing."
         }
       },
       "link": null
@@ -684,11 +674,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "文書統計を表示",
-          "body": "文書統計は {kb:workspace.documentMetrics.focus} で表示できます。文字数や構成の確認に使えます。"
+          "body": "文書統計サイドバーでは、文字数や行数、原稿用紙換算などの執筆進捗をリアルタイムに確認できます。"
         },
         "en": {
           "title": "Show document metrics",
-          "body": "Show document metrics with {kb:workspace.documentMetrics.focus}. Use it to check character counts and structure."
+          "body": "The Document Metrics sidebar lets you monitor character counts, lines, and manuscript page estimates in real time."
         }
       },
       "link": null
@@ -725,11 +715,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "行番号へ移動",
-          "body": "行番号が分かっているときは {key:Mod+:} で指定行へ移動できます。エラー位置やレビュー指摘を追うときに使えます。"
+          "body": "行番号ジャンプ機能を使うと、指定した行へ素早く移動できます。校正指摘やレビュー位置の確認に便利です。"
         },
         "en": {
           "title": "Go to a line number",
-          "body": "Use {key:Mod+:} when you know the line number. It is useful for following error locations or review comments."
+          "body": "Go to Line lets you navigate directly to a specific line number. It is helpful when addressing proofreading feedback or review notes."
         }
       },
       "link": null
@@ -745,11 +735,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "タブを行き来する",
-          "body": "開いているタブは {key:Alt+Left} / {key:Alt+Right} で前後に移動できます。入力中のテキスト欄では誤動作しないようになっています。"
+          "body": "開いている文書タブは前後に切り替えて移動できます。入力中のテキスト欄では誤動作しないよう配慮されています。"
         },
         "en": {
           "title": "Move between tabs",
-          "body": "Use {key:Alt+Left} / {key:Alt+Right} to move between open tabs. It is designed not to interfere while typing in text fields."
+          "body": "You can cycle through open document tabs. Tab switching is designed not to interfere while typing in active text fields."
         }
       },
       "link": null
@@ -765,11 +755,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "開いている文書を検索",
-          "body": "現在の文書内を探すときは {key:Mod+F} を使います。タブごとに検索語を持てるので、文書を移っても作業を続けやすくなっています。"
+          "body": "開いている文書内の語句を素早く検索できます。タブごとに検索語が保持されるため、複数の章を行き来しながらでも検索状態を維持できます。"
         },
         "en": {
           "title": "Search the open document",
-          "body": "Use {key:Mod+F} to search within the current document. Each tab can keep its own query, making it easier to continue work after switching documents."
+          "body": "You can search for text within the active document. Each tab preserves its own query, so your search state remains intact when switching chapters."
         }
       },
       "link": null
@@ -785,11 +775,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "プロジェクト全体を検索",
-          "body": "プロジェクト全体を探したいときは {key:Mod+%} で検索モードを開けます。本文を横断して調べたいときに使います。"
+          "body": "プロジェクト全体検索を使うと、すべての本文ファイルを横断して語句を探せます。作中での表記ゆれや伏線の確認に役立ちます。"
         },
         "en": {
           "title": "Search the whole project",
-          "body": "Use {key:Mod+%} to open project-wide search. It is useful when you want to search across manuscript files."
+          "body": "Project-wide search lets you look across every manuscript file at once. It helps you check consistency and track motifs across chapters."
         }
       },
       "link": null
@@ -805,11 +795,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "開いている文書を置換",
-          "body": "現在の文書内で置換したいときは {key:Mod+H} を使います。置換は範囲と対象を確認しながら進めるのがおすすめです。"
+          "body": "開いている文書内のテキストを置換できます。対象や変更箇所を視覚的に確認しながら安全に置き換えを進められます。"
         },
         "en": {
           "title": "Replace in the open document",
-          "body": "Use {key:Mod+H} to replace text in the current document. Confirm the range and targets as you work."
+          "body": "You can replace text within the active document, confirming matched instances visually as you update your manuscript."
         }
       },
       "link": null
@@ -825,11 +815,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "選択範囲から検索",
-          "body": "選択した文字列を使ってプロジェクト内検索を始めるには {key:Mod+Shift+F} を使います。似た表記の確認に便利です。"
+          "body": "本文中で選択した文字列をそのまま検索語として、プロジェクト全体検索を開始できます。気になった用語の登場箇所を調べるのに便利です。"
         },
         "en": {
           "title": "Search from the selection",
-          "body": "Use {key:Mod+Shift+F} to start project search with the selected text. It is handy for checking similar spellings or repeated terms."
+          "body": "You can launch project search directly from selected text in the editor. It is a quick way to find all appearances of a term across files."
         }
       },
       "link": null,
@@ -846,11 +836,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "選択範囲から置換",
-          "body": "選択した文字列を使ってプロジェクト内置換を始めるには {key:Mod+Shift+H} を使います。実行前に対象範囲をよく確認してください。"
+          "body": "選択した文字列を置換元として、プロジェクト全体の置換パネルを起動できます。キャラクター名や設定変更の一括反映に役立ちます。"
         },
         "en": {
           "title": "Replace from the selection",
-          "body": "Use {key:Mod+Shift+H} to start project replace with the selected text. Check the target range carefully before applying replacements."
+          "body": "You can start project-wide replacement using your current selection. It helps you propagate character name or terminology updates across the manuscript."
         }
       },
       "link": null,
@@ -867,11 +857,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "プレビューを切り替える",
-          "body": "Markdown の見え方を確認したいときは {kb:editor.preview.toggle} でプレビューを切り替えられます。"
+          "body": "Markdown の仕上がりを確認したいときは、エディタの横にプレビュー画面を表示してリアルタイムに確認できます。"
         },
         "en": {
           "title": "Toggle preview",
-          "body": "Use {kb:editor.preview.toggle} to toggle the preview when you want to check how Markdown will look."
+          "body": "You can display a real-time preview alongside the editor whenever you want to check the rendered look of your Markdown text."
         }
       },
       "link": null,
@@ -888,11 +878,31 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "Markdown 構文チェック",
-          "body": "Markdown 構文チェックは {kb:editor.markdown.toggleSyntaxChecker} で切り替えられます。小説本文でノイズになりやすい一部ルールは抑制されています。"
+          "body": "Markdown 構文チェック機能を有効にすると、記述の誤りや注意点をエディタ上で確認できます。小説本文でノイズになりやすいルールは調整されています。"
         },
         "en": {
           "title": "Markdown syntax check",
-          "body": "Toggle Markdown syntax checking with {kb:editor.markdown.toggleSyntaxChecker}. Some rules that tend to be noisy for prose are suppressed."
+          "body": "Enabling Markdown syntax checking highlights syntax issues directly in the editor, with prose-friendly tuning to minimize distraction."
+        }
+      },
+      "link": null
+    },
+    {
+      "id": "welcome.japanese-checker",
+      "enabled": true,
+      "category": "View",
+      "categoryKey": "view",
+      "weight": 75,
+      "icon": "editor",
+      "iconPath": "assets/icons/codicons/tips/edit-sparkle.svg",
+      "text": {
+        "ja": {
+          "title": "日本語表記をチェック",
+          "body": "日本語表記チェックには、ツールバーから実施するインスタントチェックと、ファイルの右クリックメニューから実施するチェックがあります。"
+        },
+        "en": {
+          "title": "Check Japanese notation",
+          "body": "There are two ways to check Japanese notation: an instant check from the toolbar and a check from the file's right-click menu."
         }
       },
       "link": null
@@ -908,11 +918,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "表示倍率を調整",
-          "body": "画面の表示倍率は {kb:app.zoom.in} / {kb:app.zoom.out} で調整できます。戻すときは {kb:app.zoom.reset} を使います。"
+          "body": "画面の表示倍率は拡大・縮小して調整できます。見やすい文字サイズに合わせて執筆環境をカスタマイズでき、いつでも標準倍率に戻せます。"
         },
         "en": {
           "title": "Adjust zoom",
-          "body": "Adjust the display zoom with {kb:app.zoom.in} / {kb:app.zoom.out}. Use {kb:app.zoom.reset} to return to the default size."
+          "body": "You can zoom the application in or out to fit your preferred reading size, and easily reset back to standard zoom at any time."
         }
       },
       "link": null
@@ -1017,11 +1027,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "選択範囲から語彙を開く",
-          "body": "本文中の語句を選択して {kb:glossary.openFromEditorSelection} を実行すると、その語句を語彙候補として開けます。"
+          "body": "本文中で気になる語句を選択して操作すると、その語句を語彙集の項目として直接開いたり登録したりできます。"
         },
         "en": {
           "title": "Open a glossary entry from the selection",
-          "body": "Select a term in the manuscript and run {kb:glossary.openFromEditorSelection} to open that term as a glossary candidate."
+          "body": "Selecting a term in the manuscript lets you open or register it directly in the glossary for streamlined worldbuilding management."
         }
       },
       "link": null
@@ -1202,11 +1212,11 @@ export const welcomeTipsData: WelcomeTipsData = {
       "text": {
         "ja": {
           "title": "Pergamum とは",
-          "body": "ギリシャ時代に大図書館を擁したトルコ西部の都市の名前が由来です。"
+          "body": "ギリシャ時代に大図書館を擁したトルコ西部に実在した都市名が由来です。"
         },
         "en": {
           "title": "What is Pergamum?",
-          "body": "The name comes from a city in western Turkey that had a great library in the Greek era."
+          "body": "The name comes from an actual city in western Turkey that once had a great library in the Greek era."
         }
       },
       "link": null

@@ -13524,7 +13524,6 @@ export function App(): JSX.Element {
       recentProjects={settings.recentProjects}
       translate={translate}
       language={displayLanguage}
-      platform={window.pergamum.platform}
       onCreateProject={() => {
         void createProject();
       }}

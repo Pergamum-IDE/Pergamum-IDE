@@ -1,6 +1,17 @@
 import type { Translate } from "../shared/i18n";
 import type { SidebarMode } from "./sidebarMode";
 import { USAGE_TOUR_TARGETS } from "./usageTour/usageTourTypes";
+import {
+  formatCommandTooltip,
+  useCommandShortcutResolver
+} from "./commandShortcuts";
+import {
+  workspaceCommandIds,
+  projectSettingsCommandIds,
+  searchSelectionShortcutCommandIds
+} from "../shared/commandIds";
+import { rendererShortcutCommandIds } from "./keybindings/rendererShortcuts";
+import { debugLogCommandIds } from "./debugLogCommands";
 import fileIcon from "../../assets/icons/feather/activity-bar/file.svg?raw";
 import glossaryIcon from "../../assets/icons/feather/activity-bar/glossary.svg?raw";
 import searchIcon from "../../assets/icons/feather/activity-bar/search.svg?raw";
@@ -28,12 +39,10 @@ interface ActivityBarProps {
 }
 
 interface ActivityBarIconProps {
-  label: string;
   svg: string;
 }
 
 function ActivityBarIcon({
-  label,
   svg
 }: ActivityBarIconProps): JSX.Element {
   return (
@@ -41,7 +50,6 @@ function ActivityBarIcon({
       className="activityBarIcon"
       aria-hidden="true"
       dangerouslySetInnerHTML={{ __html: svg }}
-      title={label}
     />
   );
 }
@@ -59,6 +67,8 @@ export function ActivityBar({
   onOpenApplicationSettings,
   onOpenDebugLog
 }: ActivityBarProps): JSX.Element {
+  const resolveShortcut = useCommandShortcutResolver();
+
   const filesLabel = translate("activity.files");
   const searchLabel = translate("activity.search");
   const glossaryLabel = translate("activity.glossary");
@@ -80,11 +90,14 @@ export function ActivityBar({
           }
           aria-label={filesLabel}
           aria-pressed={activeMode === "files"}
-          title={filesLabel}
+          title={formatCommandTooltip(
+            filesLabel,
+            resolveShortcut(rendererShortcutCommandIds.toggleFiles)
+          )}
           onClick={() => onSelectMode("files")}
           data-usage-tour-target={USAGE_TOUR_TARGETS.activityFiles}
         >
-          <ActivityBarIcon label={filesLabel} svg={fileIcon} />
+          <ActivityBarIcon svg={fileIcon} />
         </button>
         <button
           type="button"
@@ -95,11 +108,16 @@ export function ActivityBar({
           }
           aria-label={searchLabel}
           aria-pressed={activeMode === "search"}
-          title={searchLabel}
+          title={formatCommandTooltip(
+            searchLabel,
+            resolveShortcut(
+              searchSelectionShortcutCommandIds.openProjectSearchFromSelection
+            )
+          )}
           onClick={() => onSelectMode("search")}
           data-usage-tour-target={USAGE_TOUR_TARGETS.activitySearch}
         >
-          <ActivityBarIcon label={searchLabel} svg={searchIcon} />
+          <ActivityBarIcon svg={searchIcon} />
         </button>
         <button
           type="button"
@@ -110,11 +128,14 @@ export function ActivityBar({
           }
           aria-label={glossaryLabel}
           aria-pressed={activeMode === "glossary"}
-          title={glossaryLabel}
+          title={formatCommandTooltip(
+            glossaryLabel,
+            resolveShortcut(rendererShortcutCommandIds.toggleGlossary)
+          )}
           onClick={() => onSelectMode("glossary")}
           data-usage-tour-target={USAGE_TOUR_TARGETS.activityGlossary}
         >
-          <ActivityBarIcon label={glossaryLabel} svg={glossaryIcon} />
+          <ActivityBarIcon svg={glossaryIcon} />
         </button>
         <button
           type="button"
@@ -125,11 +146,14 @@ export function ActivityBar({
           }
           aria-label={documentMapLabel}
           aria-pressed={activeMode === "documentMap"}
-          title={documentMapLabel}
+          title={formatCommandTooltip(
+            documentMapLabel,
+            resolveShortcut(rendererShortcutCommandIds.toggleDocumentMap)
+          )}
           onClick={() => onSelectMode("documentMap")}
           data-usage-tour-target={USAGE_TOUR_TARGETS.activityDocumentMap}
         >
-          <ActivityBarIcon label={documentMapLabel} svg={documentMapIcon} />
+          <ActivityBarIcon svg={documentMapIcon} />
         </button>
         <button
           type="button"
@@ -140,14 +164,14 @@ export function ActivityBar({
           }
           aria-label={documentMetricsLabel}
           aria-pressed={activeMode === "documentMetrics"}
-          title={documentMetricsLabel}
+          title={formatCommandTooltip(
+            documentMetricsLabel,
+            resolveShortcut(rendererShortcutCommandIds.toggleDocumentMetrics)
+          )}
           onClick={() => onSelectMode("documentMetrics")}
           data-usage-tour-target={USAGE_TOUR_TARGETS.activityDocumentMetrics}
         >
-          <ActivityBarIcon
-            label={documentMetricsLabel}
-            svg={documentMetricsIcon}
-          />
+          <ActivityBarIcon svg={documentMetricsIcon} />
         </button>
       </div>
 
@@ -162,10 +186,13 @@ export function ActivityBar({
             }
             aria-label={debugLogLabel}
             aria-pressed={isDebugLogActive}
-            title={debugLogLabel}
+            title={formatCommandTooltip(
+              debugLogLabel,
+              resolveShortcut(debugLogCommandIds.open)
+            )}
             onClick={() => onOpenDebugLog?.()}
           >
-            <ActivityBarIcon label={debugLogLabel} svg={bugIcon} />
+            <ActivityBarIcon svg={bugIcon} />
           </button>
         ) : null}
         {isProjectOpen ? (
@@ -178,13 +205,13 @@ export function ActivityBar({
             }
             aria-label={projectSettingsLabel}
             aria-pressed={isProjectSettingsActive}
-            title={projectSettingsLabel}
+            title={formatCommandTooltip(
+              projectSettingsLabel,
+              resolveShortcut(projectSettingsCommandIds.open)
+            )}
             onClick={() => onOpenProjectSettings?.()}
           >
-            <ActivityBarIcon
-              label={projectSettingsLabel}
-              svg={projectSettingsIcon}
-            />
+            <ActivityBarIcon svg={projectSettingsIcon} />
           </button>
         ) : null}
         <button
@@ -196,13 +223,13 @@ export function ActivityBar({
           }
           aria-label={applicationSettingsLabel}
           aria-pressed={isApplicationSettingsActive}
-          title={applicationSettingsLabel}
+          title={formatCommandTooltip(
+            applicationSettingsLabel,
+            resolveShortcut(workspaceCommandIds.openApplicationSettings)
+          )}
           onClick={onOpenApplicationSettings}
         >
-          <ActivityBarIcon
-            label={applicationSettingsLabel}
-            svg={settingsIcon}
-          />
+          <ActivityBarIcon svg={settingsIcon} />
         </button>
       </div>
     </nav>

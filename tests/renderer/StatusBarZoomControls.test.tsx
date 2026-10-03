@@ -59,10 +59,10 @@ describe("StatusBarZoomControls", () => {
     });
 
     const zoomOutBtn = container?.querySelector(
-      "button[title='ズームアウト']"
+      "button[aria-label='ズームアウト']"
     ) as HTMLButtonElement;
     const zoomInBtn = container?.querySelector(
-      "button[title='ズームイン']"
+      "button[aria-label='ズームイン']"
     ) as HTMLButtonElement;
     const resetBtn = container?.querySelector(
       "button.statusBarZoomResetButton"
@@ -71,10 +71,15 @@ describe("StatusBarZoomControls", () => {
 
     expect(zoomOutBtn).toBeTruthy();
     expect(zoomOutBtn.getAttribute("aria-label")).toBe("ズームアウト");
+    expect(zoomOutBtn.title).toContain("ズームアウト");
+    expect(zoomOutBtn.title).not.toContain("()");
     expect(zoomInBtn).toBeTruthy();
     expect(zoomInBtn.getAttribute("aria-label")).toBe("ズームイン");
+    expect(zoomInBtn.title).toContain("ズームイン");
+    expect(zoomInBtn.title).not.toContain("()");
     expect(resetBtn).toBeTruthy();
-    expect(resetBtn.title).toBe("ズームを100%に戻す");
+    expect(resetBtn.title).toContain("ズームを100%に戻す");
+    expect(resetBtn.title).not.toContain("()");
     expect(resetBtn.getAttribute("aria-label")).toBe("ズームを100%に戻す");
     expect(resetBtn.textContent).toBe("100%");
     expect(selectEl).toBeNull();
@@ -116,7 +121,7 @@ describe("StatusBarZoomControls", () => {
     });
 
     const zoomOutBtn = container?.querySelector(
-      "button[title='ズームアウト']"
+      "button[aria-label='ズームアウト']"
     ) as HTMLButtonElement;
 
     act(() => {
@@ -142,7 +147,7 @@ describe("StatusBarZoomControls", () => {
     });
 
     const zoomInBtn = container?.querySelector(
-      "button[title='ズームイン']"
+      "button[aria-label='ズームイン']"
     ) as HTMLButtonElement;
 
     act(() => {
