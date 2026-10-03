@@ -36,6 +36,7 @@ import type { BuiltInThemeKind } from "../shared/colorTheme";
 import type { Translate } from "../shared/i18n";
 import {
   markdownDocumentForEditor,
+  type BuiltinMarkdownCurrentEditor,
   type CurrentEditor,
   type GlossaryDescriptionCurrentEditor,
   type MarkdownCurrentEditor
@@ -742,7 +743,10 @@ export function EditorSurface(props: EditorSurfaceProps): JSX.Element {
 }
 
 type TextEditorSurfaceProps = Omit<EditorSurfaceProps, "editor"> & {
-  editor: MarkdownCurrentEditor | GlossaryDescriptionCurrentEditor;
+  editor:
+    | MarkdownCurrentEditor
+    | GlossaryDescriptionCurrentEditor
+    | BuiltinMarkdownCurrentEditor;
 };
 
 function TextEditorSurface({
