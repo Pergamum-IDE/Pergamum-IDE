@@ -10710,9 +10710,9 @@ label.settingsItemHeader {
 .bulkTextImportDialogExecutionBanner {
   margin: 0;
   padding: 10px 12px;
-  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 4px;
-  background: var(--app-dialog-inset-background, #f7f8fa);
+  background: var(--pg-color-surface-inset);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -10720,18 +10720,18 @@ label.settingsItemHeader {
 }
 
 .bulkTextImportDialogExecutionBanner.isCompleted {
-  border-color: var(--app-success-border, #b7d8bb);
-  background: var(--app-success-inset-background, #f1f8f2);
+  border-color: var(--pg-color-status-success);
+  background: var(--pg-color-status-success-background);
 }
 
 .bulkTextImportDialogExecutionBanner.isPartial {
-  border-color: var(--app-warning-border, #e4d2a8);
-  background: var(--app-warning-inset-background, #fdf8ee);
+  border-color: var(--pg-color-status-warning);
+  background: var(--pg-color-status-warning-background);
 }
 
 .bulkTextImportDialogExecutionBanner.isFailed {
-  border-color: var(--app-danger-border, #e4b7b7);
-  background: var(--app-danger-inset-background, #fdf2f2);
+  border-color: var(--pg-color-status-error);
+  background: var(--pg-color-status-error-background);
 }
 
 .bulkTextImportDialogExecutionSummary {
@@ -10742,7 +10742,7 @@ label.settingsItemHeader {
 .bulkTextImportDialogExecutionCounts {
   margin: 0;
   font-size: 0.82rem;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
@@ -10751,7 +10751,7 @@ label.settingsItemHeader {
 .bulkTextImportDialogExecutionDetail {
   margin: 0;
   font-size: 0.82rem;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
   overflow-wrap: anywhere;
 }
 
@@ -10785,7 +10785,7 @@ label.settingsItemHeader {
 
 .bulkTextImportDialogExecutionTarget,
 .bulkTextImportDialogExecutionReason {
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
   overflow-wrap: anywhere;
 }
 
@@ -10807,10 +10807,10 @@ label.settingsItemHeader {
   margin: 0;
   padding-block: 8px;
   padding-inline: 10px;
-  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 4px;
-  background: var(--app-dialog-inset-background, #f7f8fa);
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  background: var(--pg-color-surface-inset);
+  color: var(--pg-color-surface-muted);
   line-height: 1.4;
 }
 
@@ -10832,18 +10832,18 @@ label.settingsItemHeader {
   gap: 4px;
   padding-block: 16px;
   padding-inline: 12px;
-  border: 1px dashed var(--app-dialog-border, #cbd5df);
+  border: 1px dashed var(--app-dialog-border);
   border-radius: 6px;
-  background: var(--app-dialog-inset-background, #f7f8fa);
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  background: var(--pg-color-surface-inset);
+  color: var(--pg-color-surface-muted);
   text-align: center;
   cursor: default;
 }
 
 .bulkTextImportDialogDropArea.isDragActive {
-  border-color: var(--app-accent, #2f6fed);
-  background: var(--app-dialog-accent-inset-background, #eef3ff);
-  color: var(--app-dialog-foreground, #1f2933);
+  border-color: var(--pg-color-accent-primary);
+  background: var(--pg-color-status-info-background);
+  color: var(--app-dialog-foreground);
 }
 
 /* #420 Step 8: no destination folder ⟹ the whole D&D area is inert. */
@@ -10876,16 +10876,16 @@ label.settingsItemHeader {
   min-width: 0;
   padding-block: 6px;
   padding-inline: 10px;
-  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 4px;
-  background: var(--app-dialog-inset-background, #f7f8fa);
+  background: var(--pg-color-surface-inset);
   word-break: break-all;
 }
 
 .bulkTextImportDialogSourceCount {
   margin: 0;
   font-size: 0.78rem;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
 }
 
 .bulkTextImportDialogTargets {
@@ -10897,16 +10897,16 @@ label.settingsItemHeader {
 .bulkTextImportDialogCheckFailedDetail {
   margin: 4px 0 0;
   font-size: 0.8rem;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
 }
 
 .bulkTextImportDialogCheckFailed {
   margin: 0;
   padding-block: 8px;
   padding-inline: 10px;
-  border: 1px solid var(--app-danger-border, #e4b7b7);
+  border: 1px solid var(--pg-color-status-error);
   border-radius: 4px;
-  background: var(--app-danger-inset-background, #fdf2f2);
+  background: var(--pg-color-status-error-background);
 }
 
 .bulkTextImportDialogCheckFailed p {
@@ -10949,7 +10949,7 @@ label.settingsItemHeader {
   flex-direction: column;
   gap: 6px;
   padding: 6px;
-  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 5px;
   min-width: 0;
 }
@@ -10994,14 +10994,14 @@ label.settingsItemHeader {
   font-size: 0.74rem;
   font-weight: 400;
   white-space: nowrap;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
 }
 
 .bulkTextImportDialogBulkApplyLabel {
   flex: 0 0 auto;
   font-size: 0.72rem;
   white-space: nowrap;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
 }
 
 .bulkTextImportDialogFolderScope {
@@ -11009,7 +11009,7 @@ label.settingsItemHeader {
   flex-direction: column;
   gap: 4px;
   padding-inline-start: 8px;
-  border-inline-start: 2px solid var(--app-dialog-border, #cbd5df);
+  border-inline-start: 2px solid var(--app-dialog-border);
   min-width: 0;
 }
 
@@ -11027,14 +11027,14 @@ label.settingsItemHeader {
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
   font-size: 0.7rem;
   line-height: 1;
   cursor: pointer;
 }
 
 .bulkTextImportDialogFolderScopeToggle:hover {
-  color: var(--app-dialog-foreground, #1f2933);
+  color: var(--app-dialog-foreground);
 }
 
 .bulkTextImportDialogBatchEncodingSelect,
@@ -11042,6 +11042,10 @@ label.settingsItemHeader {
   flex: 0 0 auto;
   font: inherit;
   font-size: 0.74rem;
+  border: 1px solid var(--pg-color-input-border);
+  border-radius: 4px;
+  background: var(--pg-color-input-background);
+  color: var(--pg-color-input-foreground);
   padding: 1px 4px;
   max-width: 150px;
 }
@@ -11095,7 +11099,7 @@ label.settingsItemHeader {
   position: absolute;
   inset: 0;
   border-radius: 999px;
-  background: var(--app-dialog-border, #cbd5df);
+  background: var(--app-dialog-border);
   transition: background 0.15s ease;
   pointer-events: none;
 }
@@ -11114,7 +11118,7 @@ label.settingsItemHeader {
 
 .bulkTextImportDialogLineEndingToggleInput:checked
   + .bulkTextImportDialogLineEndingToggleTrack {
-  background: var(--app-accent, #2f6fed);
+  background: var(--pg-color-accent-primary);
 }
 
 .bulkTextImportDialogLineEndingToggleInput:checked
@@ -11130,23 +11134,23 @@ label.settingsItemHeader {
 
 .bulkTextImportDialogLineEndingToggleInput:focus-visible
   + .bulkTextImportDialogLineEndingToggleTrack {
-  outline: 2px solid var(--app-accent, #2f6fed);
+  outline: 2px solid var(--pg-color-accent-primary);
   outline-offset: 2px;
 }
 
 .bulkTextImportDialogLineEndingToggleHint {
   margin: 0;
   font-size: 0.74rem;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
 }
 
 .bulkTextImportDialogFileRow,
 .bulkTextImportDialogFolderRow {
   padding-block: 4px;
   padding-inline: 8px;
-  border: 1px solid var(--app-dialog-border, #cbd5df);
+  border: 1px solid var(--app-dialog-border);
   border-radius: 4px;
-  background: var(--app-dialog-inset-background, #f7f8fa);
+  background: var(--pg-color-surface-inset);
   min-width: 0;
 }
 
@@ -11177,17 +11181,17 @@ label.settingsItemHeader {
 
 .bulkTextImportDialogFileRow[data-status-kind="readable"]
   .bulkTextImportDialogFileStatusSymbol {
-  color: var(--app-success-foreground, #2f7d32);
+  color: var(--pg-color-status-success);
 }
 
 .bulkTextImportDialogFileRow[data-status-kind="renamed"]
   .bulkTextImportDialogFileStatusSymbol {
-  color: var(--app-warning-foreground, #8a5a00);
+  color: var(--pg-color-status-warning-text);
 }
 
 .bulkTextImportDialogFileRow[data-status-kind="skipped"]
   .bulkTextImportDialogFileStatusSymbol {
-  color: var(--app-danger-foreground, #a12b2b);
+  color: var(--pg-color-status-error-text);
 }
 
 .bulkTextImportDialogFileMain {
@@ -11213,7 +11217,7 @@ label.settingsItemHeader {
 }
 
 .bulkTextImportDialogFileTarget {
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
 }
 
 .bulkTextImportDialogSourcePathLeftEllipsis {
@@ -11238,7 +11242,7 @@ label.settingsItemHeader {
 }
 
 .bulkTextImportDialogFilePathArrow {
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
   font-size: 0.78rem;
   line-height: 1;
 }
@@ -11249,7 +11253,7 @@ label.settingsItemHeader {
   align-self: center;
   justify-self: end;
   font-size: 0.76rem;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
 }
 
 .bulkTextImportDialogFileEncodingControl {
@@ -11260,6 +11264,10 @@ label.settingsItemHeader {
 .bulkTextImportDialogFileEncodingSelect {
   font: inherit;
   font-size: 0.76rem;
+  border: 1px solid var(--pg-color-input-border);
+  border-radius: 4px;
+  background: var(--pg-color-input-background);
+  color: var(--pg-color-input-foreground);
   padding: 1px 4px;
   max-width: 150px;
 }
@@ -11274,22 +11282,22 @@ label.settingsItemHeader {
   gap: 6px;
   min-width: 0;
   font-size: 0.78rem;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
 }
 
 .bulkTextImportDialogFilePreviewLine.isFailed {
-  color: var(--app-danger-foreground, #a12b2b);
+  color: var(--pg-color-status-error-text);
 }
 
 .bulkTextImportDialogFilePreviewLine.isSkipped {
-  color: var(--app-warning-foreground, #8a5a00);
+  color: var(--pg-color-status-warning-text);
 }
 
 .bulkTextImportDialogFolderTarget {
   margin-top: 2px;
   font-size: 0.82rem;
   overflow-wrap: anywhere;
-  color: var(--app-dialog-secondary-foreground, #52616f);
+  color: var(--pg-color-surface-muted);
 }
 
 .bulkTextImportDialogFilePreview {
@@ -11309,7 +11317,7 @@ label.settingsItemHeader {
 .bulkTextImportDialogFolderSkipNote {
   margin: 4px 0 0;
   font-size: 0.8rem;
-  color: var(--app-warning-foreground, #8a5a00);
+  color: var(--pg-color-status-warning-text);
 }
 
 .bulkTextImportDialogFolderSource {
