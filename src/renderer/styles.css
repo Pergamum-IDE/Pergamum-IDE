@@ -10991,8 +10991,13 @@ label.settingsItemHeader {
   color: var(--app-dialog-icon-error);
 }
 
+
 .appDialogIcon-question {
   color: var(--app-dialog-icon-question);
+}
+
+.appDialogIcon-externalLink {
+  color: var(--app-dialog-icon-info);
 }
 
 .appDialogBody {

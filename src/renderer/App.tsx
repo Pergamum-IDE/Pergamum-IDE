@@ -215,6 +215,10 @@ import {
   rewriteGlossaryDescriptionImageReferences
 } from "./glossaryImageReferenceMoveUpdate";
 import { DocumentTabBar } from "./DocumentTabBar";
+import {
+  handlePreviewLinkClick,
+  type PreviewExternalLinkDeps
+} from "./previewExternalLink";
 import { DEFAULT_ZOOM_FACTOR } from "../shared/zoom";
 import { StatusBarZoomControls } from "./components/StatusBarZoomControls";
 import { useTabSwitchShortcuts } from "./editorTabShortcuts";
@@ -3716,6 +3720,44 @@ export function App(): JSX.Element {
       t(displayLanguage, key, values),
     [displayLanguage]
   );
+  // Interactive Preview links: one delegated click handler. http(s) asks for
+  // confirmation and opens the OS browser through the validated main-side
+  // path; every other link is neutralized (see previewExternalLink.ts).
+  const previewExternalLinkDepsRef = useRef<PreviewExternalLinkDeps>({
+    confirmOpen: async () => false,
+    openExternal: async () => undefined
+  });
+  previewExternalLinkDepsRef.current = {
+    confirmOpen: async (url) =>
+      (await confirmDialog({
+        title: translate("dialog.externalLink.title"),
+        message: {
+          kind: "plainText",
+          text: translate("dialog.externalLink.message", { url })
+        },
+        icon: {
+          kind: "externalLink",
+          tooltip: translate("dialog.icon.externalLink")
+        },
+        clipboardText: null,
+        confirmLabel: translate("common.open"),
+        cancelLabel: translate("common.cancel")
+      })) === "confirm",
+    openExternal: (url) => window.pergamum.appInfo.openExternalUrl(url)
+  };
+  useEffect(() => {
+    const onClick = (event: MouseEvent): void => {
+      handlePreviewLinkClick(event, {
+        confirmOpen: (url) => previewExternalLinkDepsRef.current.confirmOpen(url),
+        openExternal: (url) => previewExternalLinkDepsRef.current.openExternal(url)
+      });
+    };
+
+    // Capture phase: runs before any React handler and before the default
+    // navigation of the anchor.
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, []);
 
   const notifyEmphasisMarkNoSelection = useCallback(() => {
     notificationController.notify({
