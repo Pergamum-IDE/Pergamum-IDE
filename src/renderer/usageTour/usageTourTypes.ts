@@ -11,7 +11,9 @@ export const USAGE_TOUR_TARGETS = {
   toolbarCallout: "toolbar-callout",
   toolbarMarkdownLinter: "toolbar-markdown-linter",
   toolbarJapaneseLinter: "toolbar-japanese-linter",
-  toolbarPreview: "toolbar-preview"
+  toolbarPreview: "toolbar-preview",
+  editorSurface: "editor-surface",
+  previewSurface: "preview-surface"
 } as const;
 
 export type UsageTourTargetId =

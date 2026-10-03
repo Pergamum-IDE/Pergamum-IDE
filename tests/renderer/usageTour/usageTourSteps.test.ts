@@ -4,8 +4,8 @@ import { USAGE_TOUR_TARGETS } from "../../../src/renderer/usageTour/usageTourTyp
 import { t } from "../../../src/shared/i18n";
 
 describe("USAGE_TOUR_STEPS", () => {
-  it("defines exactly 13 steps", () => {
-    expect(USAGE_TOUR_STEPS).toHaveLength(13);
+  it("defines exactly 15 steps", () => {
+    expect(USAGE_TOUR_STEPS).toHaveLength(15);
   });
 
   it("does not contain hardcoded text or Japanese characters in step definitions", () => {
@@ -19,9 +19,9 @@ describe("USAGE_TOUR_STEPS", () => {
     }
   });
 
-  it("has target-free centered placement for step 1 and step 13", () => {
+  it("has target-free centered placement for step 1 and step 15", () => {
     expect(USAGE_TOUR_STEPS[0].targetId).toBeUndefined();
-    expect(USAGE_TOUR_STEPS[12].targetId).toBeUndefined();
+    expect(USAGE_TOUR_STEPS[14].targetId).toBeUndefined();
   });
 
   it("targets Activity Bar buttons for steps 2 to 6 with right placement preference", () => {
@@ -38,8 +38,35 @@ describe("USAGE_TOUR_STEPS", () => {
     });
   });
 
-  it("targets Toolbar buttons for steps 7 to 12 with bottom placement preference", () => {
-    const toolbarSteps = USAGE_TOUR_STEPS.slice(6, 12);
+  it("keeps the step order (Editor after Document Metrics, Preview area after Preview)", () => {
+    expect(USAGE_TOUR_STEPS.map((step) => step.id)).toEqual([
+      "welcome",
+      "fileExplorer",
+      "search",
+      "glossary",
+      "documentMap",
+      "documentMetrics",
+      "editor",
+      "commandPalette",
+      "insertImage",
+      "callout",
+      "markdownLinter",
+      "japaneseLinter",
+      "preview",
+      "previewArea",
+      "completed"
+    ]);
+  });
+
+  it("targets the whole Editor and Preview surfaces (steps 7 and 14)", () => {
+    expect(USAGE_TOUR_STEPS[6].targetId).toBe(USAGE_TOUR_TARGETS.editorSurface);
+    expect(USAGE_TOUR_STEPS[13].targetId).toBe(USAGE_TOUR_TARGETS.previewSurface);
+    // Existing toolbar Preview step still points at the toggle button.
+    expect(USAGE_TOUR_STEPS[12].targetId).toBe(USAGE_TOUR_TARGETS.toolbarPreview);
+  });
+
+  it("targets Toolbar buttons for steps 8 to 13 with bottom placement preference", () => {
+    const toolbarSteps = USAGE_TOUR_STEPS.slice(7, 13);
     expect(toolbarSteps.map((s) => s.targetId)).toEqual([
       USAGE_TOUR_TARGETS.toolbarCommandPalette,
       USAGE_TOUR_TARGETS.toolbarImage,
@@ -52,6 +79,38 @@ describe("USAGE_TOUR_STEPS", () => {
       expect(step.preferredPlacement).toBe("bottom");
     });
   });
+
+  it("resolves the new Editor / Preview area copy (ja and en)", () => {
+    expect(t("ja", USAGE_TOUR_STEPS[6].titleKey)).toBe("エディタ");
+    expect(t("ja", USAGE_TOUR_STEPS[6].bodyKey)).toBe(
+      "この領域が【エディタ】です。\n" +
+        "文書ファイルは、初期設定ではMarkdown形式に対応しています。\n" +
+        "テキストファイルを編集する場合は、アプリケーション設定からテキストファイルへの対応を有効にしてください。\n" +
+        "「ファイルのインポート」を使うことで、既存のテキストファイルをプロジェクトへ取り込むこともできます。"
+    );
+    expect(t("ja", USAGE_TOUR_STEPS[13].titleKey)).toBe("プレビュー領域");
+    expect(t("ja", USAGE_TOUR_STEPS[13].bodyKey)).toBe(
+      "この領域が【プレビュー】です。\n" +
+        "Markdown形式では、Mermaid記法とKaTeX記法に対応しています。\n" +
+        "チャートや数式を原稿内に記述できます。\n" +
+        "また、語彙ごとにも専用のエディタ領域があるため、相関図など、さまざまな情報を記載することができます。"
+    );
+    expect(t("en", USAGE_TOUR_STEPS[6].titleKey)).toBe("Editor");
+    expect(t("en", USAGE_TOUR_STEPS[6].bodyKey)).toBe(
+      "This area is the Editor.\n" +
+        "Document files support Markdown by default.\n" +
+        "To edit plain text files, enable Text Files in Application Settings.\n" +
+        "You can also use File Import to bring existing text files into the project."
+    );
+    expect(t("en", USAGE_TOUR_STEPS[13].titleKey)).toBe("Preview area");
+    expect(t("en", USAGE_TOUR_STEPS[13].bodyKey)).toBe(
+      "This area is the Preview.\n" +
+        "Markdown supports Mermaid and KaTeX notation.\n" +
+        "You can use them to include diagrams and mathematical expressions in your manuscript.\n" +
+        "Glossary entries also have their own editor area, where you can record information such as relationship diagrams and other reference material."
+    );
+  });
+
 
   it("resolves exact Japanese FIX copy for all steps", () => {
     expect(t("ja", USAGE_TOUR_STEPS[0].titleKey)).toBe("ようこそ");
@@ -98,55 +157,55 @@ describe("USAGE_TOUR_STEPS", () => {
       "原稿の分量や文章の状態を把握したいときに利用してください。"
     );
 
-    expect(t("ja", USAGE_TOUR_STEPS[6].titleKey)).toBe("コマンドパレット");
-    expect(t("ja", USAGE_TOUR_STEPS[6].bodyKey)).toBe(
+    expect(t("ja", USAGE_TOUR_STEPS[7].titleKey)).toBe("コマンドパレット");
+    expect(t("ja", USAGE_TOUR_STEPS[7].bodyKey)).toBe(
       "これは【コマンドパレット】です。\n" +
       "Pergamumのさまざまな機能を、名前から探して実行できます。\n" +
       "「>」で始まるときはコマンド一覧を表示しますが、モードを切り替えることで、さまざまな機能を利用できます。\n" +
       "「あの機能はどこにあったかな？」というときは、まずここを開いてみてください。"
     );
 
-    expect(t("ja", USAGE_TOUR_STEPS[7].titleKey)).toBe("画像の挿入");
-    expect(t("ja", USAGE_TOUR_STEPS[7].bodyKey)).toBe(
+    expect(t("ja", USAGE_TOUR_STEPS[8].titleKey)).toBe("画像の挿入");
+    expect(t("ja", USAGE_TOUR_STEPS[8].bodyKey)).toBe(
       "これは【画像の挿入】です。\n" +
       "Markdown文書へ画像を挿入するときに利用します。\n" +
       "挿入したい位置にカーソルを置いて、このボタンから画像を選択してください。\n" +
       "クリップボードからの画像ペーストにも対応しています。"
     );
 
-    expect(t("ja", USAGE_TOUR_STEPS[8].titleKey)).toBe("コールアウト");
-    expect(t("ja", USAGE_TOUR_STEPS[8].bodyKey)).toBe(
+    expect(t("ja", USAGE_TOUR_STEPS[9].titleKey)).toBe("コールアウト");
+    expect(t("ja", USAGE_TOUR_STEPS[9].bodyKey)).toBe(
       "これは【コールアウト】です。\n" +
       "Note、Tip、Warningなど、本文中に目立つ囲み表示を挿入できます。\n" +
       "補足や注意書きなどを本文と区別して表現したいときに利用します。\n" +
       "コールアウトはMarkdownの方言にあたる記法のため、利用する環境によっては意図したとおりに表示されない場合があります。"
     );
 
-    expect(t("ja", USAGE_TOUR_STEPS[9].titleKey)).toBe("Markdown Linter");
-    expect(t("ja", USAGE_TOUR_STEPS[9].bodyKey)).toBe(
+    expect(t("ja", USAGE_TOUR_STEPS[10].titleKey)).toBe("Markdown Linter");
+    expect(t("ja", USAGE_TOUR_STEPS[10].bodyKey)).toBe(
       "これは【Markdown Linter】です。\n" +
       "Markdownの書式や記述を確認し、問題のある箇所を見つけるための機能です。\n" +
       "Markdownとして正しく記述できているか確認したいときに利用します。"
     );
 
-    expect(t("ja", USAGE_TOUR_STEPS[10].titleKey)).toBe("日本語 Linter");
-    expect(t("ja", USAGE_TOUR_STEPS[10].bodyKey)).toBe(
+    expect(t("ja", USAGE_TOUR_STEPS[11].titleKey)).toBe("日本語 Linter");
+    expect(t("ja", USAGE_TOUR_STEPS[11].bodyKey)).toBe(
       "これは【日本語 Linter】です。\n" +
       "日本語の文章を確認し、表記や文章上の問題を見つけるための機能です。\n" +
       "生成AIを使用せずにチェックを行うため、文章量に応じてCPUへの負荷が増加します。\n" +
       "原稿を見直す際のチェックとして利用してください。"
     );
 
-    expect(t("ja", USAGE_TOUR_STEPS[11].titleKey)).toBe("プレビュー");
-    expect(t("ja", USAGE_TOUR_STEPS[11].bodyKey)).toBe(
+    expect(t("ja", USAGE_TOUR_STEPS[12].titleKey)).toBe("プレビュー");
+    expect(t("ja", USAGE_TOUR_STEPS[12].bodyKey)).toBe(
       "これは【プレビュー】です。\n" +
       "Markdownで書いた原稿がどのように表示されるか、本文と並べて確認できます。\n" +
       "このボタンでプレビューの表示・非表示を切り替えられます。\n" +
       "プレビューの既定の表示方法は、アプリケーション設定から変更できます。"
     );
 
-    expect(t("ja", USAGE_TOUR_STEPS[12].titleKey)).toBe("ツアー完了");
-    expect(t("ja", USAGE_TOUR_STEPS[12].bodyKey)).toBe(
+    expect(t("ja", USAGE_TOUR_STEPS[14].titleKey)).toBe("ツアー完了");
+    expect(t("ja", USAGE_TOUR_STEPS[14].bodyKey)).toBe(
       "使い方ツアーは以上です。\n" +
       "Pergamumには、このほかにも執筆を支援するさまざまな機能があります。\n" +
       "本ツアーを再度見たくなったときは、「ヘルプ」→「使い方ツアー」から実行できます。"
@@ -165,7 +224,7 @@ describe("USAGE_TOUR_STEPS", () => {
     }
 
     expect(t("en", USAGE_TOUR_STEPS[0].titleKey)).toBe("Welcome");
-    expect(t("en", USAGE_TOUR_STEPS[6].titleKey)).toBe("Command Palette");
-    expect(t("en", USAGE_TOUR_STEPS[12].titleKey)).toBe("Tour Complete");
+    expect(t("en", USAGE_TOUR_STEPS[7].titleKey)).toBe("Command Palette");
+    expect(t("en", USAGE_TOUR_STEPS[14].titleKey)).toBe("Tour Complete");
   });
 });

@@ -39,6 +39,7 @@ import {
   type CurrentEditor
 } from "./currentEditor";
 import { GlossaryDescriptionMetadataPanel } from "./GlossaryDescriptionMetadataPanel";
+import { USAGE_TOUR_TARGETS } from "./usageTour/usageTourTypes";
 import type { GlossaryEntryDraft } from "./glossaryEntryDraft";
 import type { GlossaryTag } from "../shared/glossary";
 import {
@@ -3437,6 +3438,7 @@ function MarkdownEditorSurface({
         className="pane"
         aria-label={translate("workspace.markdownEditor")}
         ref={editorPaneRef}
+        data-usage-tour-target={USAGE_TOUR_TARGETS.editorSurface}
       >
         <div className="paneHeader">
           {translate("workspace.editor")}
@@ -3566,6 +3568,7 @@ function MarkdownEditorSurface({
           aria-label={translate("workspace.markdownPreview")}
           ref={previewPaneRef}
           aria-busy={isPreviewRendererSwitching ? "true" : undefined}
+          data-usage-tour-target={USAGE_TOUR_TARGETS.previewSurface}
         >
           <div className="paneHeader">
             {translate("workspace.preview")}

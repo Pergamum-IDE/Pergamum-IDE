@@ -2442,6 +2442,9 @@ export const enTranslations = {
   "usageTour.step.documentMetrics.title": "Document Metrics",
   "usageTour.step.documentMetrics.body":
     "This is [Document Metrics].\nYou can check information about the active document, including character count.\nUse this when you want to track manuscript volume and document status.",
+  "usageTour.step.editor.title": "Editor",
+  "usageTour.step.editor.body":
+    "This area is the Editor.\nDocument files support Markdown by default.\nTo edit plain text files, enable Text Files in Application Settings.\nYou can also use File Import to bring existing text files into the project.",
   "usageTour.step.commandPalette.title": "Command Palette",
   "usageTour.step.commandPalette.body":
     "This is the [Command Palette].\nYou can find and execute various Pergamum features by name.\nWhen starting with \">\", it displays the command list, but switching modes lets you access many other functions.\nWhenever you wonder where a feature was, try opening this first.",
@@ -2460,6 +2463,9 @@ export const enTranslations = {
   "usageTour.step.preview.title": "Preview",
   "usageTour.step.preview.body":
     "This is the [Preview].\nYou can see how your Markdown manuscript renders side-by-side with your text.\nToggle preview visibility on and off with this button.\nThe default preview display behavior can be customized in Application Settings.",
+  "usageTour.step.previewArea.title": "Preview area",
+  "usageTour.step.previewArea.body":
+    "This area is the Preview.\nMarkdown supports Mermaid and KaTeX notation.\nYou can use them to include diagrams and mathematical expressions in your manuscript.\nGlossary entries also have their own editor area, where you can record information such as relationship diagrams and other reference material.",
   "usageTour.step.completed.title": "Tour Complete",
   "usageTour.step.completed.body":
     "That concludes the usage tour.\nPergamum includes many more features to assist your creative writing.\nIf you ever want to view this tour again, run it anytime from \"Help\" -> \"Usage Tour\"."

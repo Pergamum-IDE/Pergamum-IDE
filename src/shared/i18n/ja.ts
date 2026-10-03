@@ -2441,6 +2441,9 @@ export const jaTranslations = {
   "usageTour.step.documentMetrics.title": "文書メトリクス",
   "usageTour.step.documentMetrics.body":
     "これは【文書メトリクス】です。\n文書の文字数など、現在の文書に関する情報を確認できます。\n原稿の分量や文章の状態を把握したいときに利用してください。",
+  "usageTour.step.editor.title": "エディタ",
+  "usageTour.step.editor.body":
+    "この領域が【エディタ】です。\n文書ファイルは、初期設定ではMarkdown形式に対応しています。\nテキストファイルを編集する場合は、アプリケーション設定からテキストファイルへの対応を有効にしてください。\n「ファイルのインポート」を使うことで、既存のテキストファイルをプロジェクトへ取り込むこともできます。",
   "usageTour.step.commandPalette.title": "コマンドパレット",
   "usageTour.step.commandPalette.body":
     "これは【コマンドパレット】です。\nPergamumのさまざまな機能を、名前から探して実行できます。\n「>」で始まるときはコマンド一覧を表示しますが、モードを切り替えることで、さまざまな機能を利用できます。\n「あの機能はどこにあったかな？」というときは、まずここを開いてみてください。",
@@ -2459,6 +2462,9 @@ export const jaTranslations = {
   "usageTour.step.preview.title": "プレビュー",
   "usageTour.step.preview.body":
     "これは【プレビュー】です。\nMarkdownで書いた原稿がどのように表示されるか、本文と並べて確認できます。\nこのボタンでプレビューの表示・非表示を切り替えられます。\nプレビューの既定の表示方法は、アプリケーション設定から変更できます。",
+  "usageTour.step.previewArea.title": "プレビュー領域",
+  "usageTour.step.previewArea.body":
+    "この領域が【プレビュー】です。\nMarkdown形式では、Mermaid記法とKaTeX記法に対応しています。\nチャートや数式を原稿内に記述できます。\nまた、語彙ごとにも専用のエディタ領域があるため、相関図など、さまざまな情報を記載することができます。",
   "usageTour.step.completed.title": "ツアー完了",
   "usageTour.step.completed.body":
     "使い方ツアーは以上です。\nPergamumには、このほかにも執筆を支援するさまざまな機能があります。\n本ツアーを再度見たくなったときは、「ヘルプ」→「使い方ツアー」から実行できます。"
