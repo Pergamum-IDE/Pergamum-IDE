@@ -93,6 +93,8 @@ describe("ColorThemeSettingControl (#623)", () => {
     expect(rows.map((row) => row.dataset.themeId)).toEqual([
       "pergamum-light",
       "night-dark",
+      "shine-moon",
+      "ginza-night",
       "resistance-blue",
       "enlightened-green",
       "banana-yellow",
@@ -104,6 +106,8 @@ describe("ColorThemeSettingControl (#623)", () => {
     expect(rows.map((row) => row.getAttribute("aria-selected"))).toEqual([
       "false",
       "true",
+      "false",
+      "false",
       "false",
       "false",
       "false",
@@ -142,6 +146,12 @@ describe("ColorThemeSettingControl (#623)", () => {
     const night = container.querySelector<HTMLElement>(
       '[data-theme-id="night-dark"]'
     )!;
+    const shine = container.querySelector<HTMLElement>(
+      '[data-theme-id="shine-moon"]'
+    )!;
+    const ginza = container.querySelector<HTMLElement>(
+      '[data-theme-id="ginza-night"]'
+    )!;
     const blue = container.querySelector<HTMLElement>(
       '[data-theme-id="resistance-blue"]'
     )!;
@@ -156,6 +166,14 @@ describe("ColorThemeSettingControl (#623)", () => {
     expect(previewOf(night)).toEqual({
       background: "#1a1e25",
       foreground: "#d7dde5"
+    });
+    expect(previewOf(shine)).toEqual({
+      background: "#171d27",
+      foreground: "#dce5ef"
+    });
+    expect(previewOf(ginza)).toEqual({
+      background: "#0d1015",
+      foreground: "#f4f6fa"
     });
     expect(previewOf(blue)).toEqual({
       background: "#e6eef7",

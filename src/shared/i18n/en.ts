@@ -1985,6 +1985,8 @@ export const enTranslations = {
   "settings.workbench.colorTheme.label": "Color theme",
   "settings.workbench.colorTheme.option.pergamumLight.label": "Pergamum Light",
   "settings.workbench.colorTheme.option.nightDark.label": "Night Dark",
+  "settings.workbench.colorTheme.option.shineMoon.label": "Shine Moon",
+  "settings.workbench.colorTheme.option.ginzaNight.label": "Ginza Night",
   "settings.workbench.colorTheme.option.resistanceBlue.label": "Resistance Blue",
   "settings.workbench.colorTheme.option.enlightenedGreen.label": "Enlightened Green",
   "settings.workbench.colorTheme.option.bananaYellow.label": "Banana Yellow",

@@ -19,6 +19,8 @@
 export const builtInThemeIds = [
   "pergamum-light",
   "night-dark",
+  "shine-moon",
+  "ginza-night",
   "resistance-blue",
   "enlightened-green",
   "banana-yellow",
@@ -88,6 +90,32 @@ const builtInThemeById: Record<BuiltInThemeId, BuiltInTheme> = {
       foreground: "#d7dde5",
       border: "#3b4452",
       accent: "#5b9bd5"
+    }
+  },
+  "shine-moon": {
+    id: "shine-moon",
+    label: "Shine Moon",
+    kind: "dark",
+    cssClassName: "theme-shine-moon",
+    accentColor: "#5ea8f8",
+    preview: {
+      background: "#171d27",
+      foreground: "#dce5ef",
+      border: "#354359",
+      accent: "#5ea8f8"
+    }
+  },
+  "ginza-night": {
+    id: "ginza-night",
+    label: "Ginza Night",
+    kind: "dark",
+    cssClassName: "theme-ginza-night",
+    accentColor: "#00d4ff",
+    preview: {
+      background: "#0d1015",
+      foreground: "#f4f6fa",
+      border: "#4d5d75",
+      accent: "#00d4ff"
     }
   },
   "resistance-blue": {

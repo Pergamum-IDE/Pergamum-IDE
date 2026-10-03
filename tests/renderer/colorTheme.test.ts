@@ -42,6 +42,32 @@ describe("built-in color theme registry (#621)", () => {
         }
       },
       {
+        id: "shine-moon",
+        label: "Shine Moon",
+        kind: "dark",
+        cssClassName: "theme-shine-moon",
+        accentColor: "#5ea8f8",
+        preview: {
+          background: "#171d27",
+          foreground: "#dce5ef",
+          border: "#354359",
+          accent: "#5ea8f8"
+        }
+      },
+      {
+        id: "ginza-night",
+        label: "Ginza Night",
+        kind: "dark",
+        cssClassName: "theme-ginza-night",
+        accentColor: "#00d4ff",
+        preview: {
+          background: "#0d1015",
+          foreground: "#f4f6fa",
+          border: "#4d5d75",
+          accent: "#00d4ff"
+        }
+      },
+      {
         id: "resistance-blue",
         label: "Resistance Blue",
         kind: "light",
@@ -148,6 +174,8 @@ describe("built-in color theme registry (#621)", () => {
   it("isBuiltInThemeId only accepts registered ids", () => {
     expect(isBuiltInThemeId("pergamum-light")).toBe(true);
     expect(isBuiltInThemeId("night-dark")).toBe(true);
+    expect(isBuiltInThemeId("shine-moon")).toBe(true);
+    expect(isBuiltInThemeId("ginza-night")).toBe(true);
     expect(isBuiltInThemeId("resistance-blue")).toBe(true);
     expect(isBuiltInThemeId("enlightened-green")).toBe(true);
     expect(isBuiltInThemeId("banana-yellow")).toBe(true);
